@@ -42,8 +42,19 @@ BATCH_STATES = {}
 
 
 def get_batch_state(batch_id):
-    """获取批次状态，不存在则初始化。"""
+    """获取批次状态，不存在则初始化。
+
+    服务重启后 BATCH_STATES 为空 → 先从 state.json 恢复，避免丢失已配置数据。
+    """
     if batch_id not in BATCH_STATES:
+        state_file = OUTPUT_ROOT / batch_id / "state.json"
+        if state_file.exists():
+            try:
+                with open(state_file, encoding="utf-8") as f:
+                    BATCH_STATES[batch_id] = json.load(f)
+                    return BATCH_STATES[batch_id]
+            except Exception:
+                pass
         BATCH_STATES[batch_id] = {
             "id": batch_id,
             "name": "",
@@ -284,18 +295,38 @@ def run_step1(batch_id):
 
 @app.route("/api/batch/<batch_id>/run/step2", methods=["POST"])
 def run_step2(batch_id):
-    """执行 Step 2: DeepSeek 生成提示词。"""
+    """执行 Step 2: DeepSeek 生成提示词。
+
+    幂等设计：若该批次提示词已生成且覆盖所有菜品，直接复用（不重复调用 LLM）。
+    传 force=true 可强制重新生成。
+    """
     state = get_batch_state(batch_id)
     state["current_step"] = 2
     save_state(batch_id)
+
+    force = request.json.get("force", False) if request.is_json else False
+    batch_dir = OUTPUT_ROOT / batch_id
+    dirs = batch_subdirs(batch_dir)
+
+    # 幂等检查：已有 manifest 且覆盖所有菜品 → 直接返回，不调 LLM
+    # 注意：dishes 为空时（服务重启未恢复）只要 manifest 有数据也复用，避免误覆盖
+    if not force:
+        existing = load_manifest(dirs, "prompts") or []
+        dish_names = {d["name"] for d in state.get("dishes", [])}
+        existing_dishes = {p.get("dish") for p in existing}
+        if existing_dishes and (not dish_names or dish_names.issubset(existing_dishes)):
+            state["step_progress"]["step2"] = {"status": "done", "result": existing, "reused": True}
+            save_state(batch_id)
+            return jsonify({"status": "reused", "count": len(existing), "message": "提示词已存在，直接复用"})
 
     def worker():
         try:
             from pipeline.step2_gen_prompts import call_deepseek, build_full_prompt
             from pipeline.config import NEGATIVE_PROMPT
 
-            batch_dir = OUTPUT_ROOT / batch_id
-            dirs = batch_subdirs(batch_dir)
+            # 保护：dishes 为空时（配置丢失/异常）不清空已有 manifest
+            if not state.get("dishes"):
+                raise RuntimeError("批次菜品配置为空，无法生成提示词（请先在菜品配置步骤添加菜品）")
 
             all_results = []
             for dish in state["dishes"]:
