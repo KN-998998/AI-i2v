@@ -841,18 +841,24 @@ function renderStep2() {
     </div>
   `);
 
-  // 如果已有菜品数据，加载
+  // 如果已有菜品数据，加载；否则保留当前全局 dishes（含用户已填未提交的内容）
   if (currentBatch) {
     api(`/api/batch/${currentBatch}`).then(state => {
       if (state.dishes && state.dishes.length) {
+        // 后端有已保存的菜 → 以它为准
         dishes = state.dishes;
         renderDishes();
-      } else {
+      } else if (!dishes.length) {
+        // 后端空且全局也没有 → 给一个默认空行
         addDish();
+      } else {
+        // 后端空但全局已有（用户填了没提交 / 多次往返）→ 保留，不加菜
+        renderDishes();
       }
     });
   } else {
-    addDish();
+    if (!dishes.length) addDish();
+    else renderDishes();
   }
 }
 
