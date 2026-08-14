@@ -4,22 +4,19 @@ Step 3: 图片 + 提示词 → Kling API 批量图生视频
 ================================================
 
 输入：01_images/ 预处理图片 + 02_prompts/ 提示词
-输出：03_clips/ 每道菜的 4-5s 无声 9:16 视频片段（每菜 ROLL_COUNT 个版本）
+输出：03_clips/ 每道菜的 5s 无声 9:16 视频片段（每菜 ROLL_COUNT 个版本）
 
-可灵官方 API：
-  - Base URL: https://api.klingai.com
-  - 认证: JWT（AccessKey + SecretKey, HS256, 30min TTL）
+可灵官方 API（v2.6）：
+  - 认证: API Key + Bearer Token（一个 Key）
   - 图生视频: POST /v1/videos/image2video
-  - 轮询任务: GET /v1/tasks/{task_id}
-
-注意：Kling API 要求 image 参数为公开可访问的 URL，不支持本地路径。
-      需要先上传图片到图床或云存储。当前提供两种上传方式：
-      1. sm.ms 免费图床（默认，无需注册即可用，有速率限制）
-      2. 自定义上传（修改 upload_image 函数）
+  - 任务查询: GET /v1/videos/image2video/{task_id}
+  - 图片: 支持 base64 直传（无需图床！）
+  - 时长: 精确 5s 或 10s
+  - 分辨率: mode=pro → 1080p
+  - 宽高比: 自动跟随输入图（预处理为 9:16 则输出 9:16）
 
 用法：
-  set KLING_ACCESS_KEY=xxxx
-  set KLING_SECRET_KEY=xxxx
+  set KLING_API_KEY=你的key
   python pipeline/step3_gen_videos.py --config pipeline/batch_20260814.yaml
 """
 import argparse
@@ -37,50 +34,31 @@ from requests.adapters import HTTPAdapter
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.config import (
-    KLING_API_KEY, KLING_API_SECRET, KLING_BASE_URL, KLING_MODEL,
+    KLING_API_KEY, KLING_BASE_URL, KLING_MODEL,
     VIDEO_RESOLUTION, VIDEO_DURATION, VIDEO_SILENT, ROLL_COUNT,
     NEGATIVE_PROMPT,
     get_batch_dir, batch_subdirs,
 )
 
-# ── Kling API 配置 ────────────────────────────────────────────────
-KLING_ACCESS_KEY = os.environ.get("KLING_ACCESS_KEY", KLING_API_KEY)
-KLING_SECRET_KEY = os.environ.get("KLING_SECRET_KEY", KLING_API_SECRET)
+POLL_INTERVAL = 5        # 轮询间隔（秒）
+POLL_TIMEOUT  = 300      # 超时 5 分钟
+MAX_CONCURRENT = 3       # 最大并发
 
-# 根据账号区域选择：国内用 api.klingai.com，国际用 api-singapore.klingai.com
-KLING_API_BASE = os.environ.get("KLING_API_BASE", "https://api.klingai.com")
-
-POLL_INTERVAL = 10       # 轮询间隔（秒）
-POLL_TIMEOUT  = 600      # 超时 10 分钟
-MAX_CONCURRENT = 3       # 最大并发（可灵个人限流 3 并发）
+# 图片大小限制（10MB，API 要求）
+MAX_IMAGE_SIZE = 10 * 1024 * 1024
 
 
 def check_credentials():
-    """检查 API 凭证。"""
-    if not KLING_ACCESS_KEY or not KLING_SECRET_KEY:
+    """检查 API Key。"""
+    if not KLING_API_KEY:
         print("=" * 60)
-        print("[错误] 未配置 KLING_ACCESS_KEY / KLING_SECRET_KEY")
+        print("[错误] 未配置 KLING_API_KEY")
         print()
         print("配置方式：")
-        print("  1. 登录 klingai.com → 开发者中心 → 创建 API 应用")
-        print("  2. 获取 AccessKey 和 SecretKey")
-        print("  3. 设置环境变量：")
-        print("     set KLING_ACCESS_KEY=xxxx")
-        print("     set KLING_SECRET_KEY=xxxx")
+        print("  1. 登录 klingai.com → 控制台 → 新建 API Key")
+        print("  2. 设置环境变量：set KLING_API_KEY=你的key")
         print("=" * 60)
         sys.exit(1)
-
-
-def generate_jwt() -> str:
-    """用 AccessKey + SecretKey 生成 JWT Token（HS256, 30min TTL）。"""
-    import jwt
-    headers = {"alg": "HS256", "typ": "JWT"}
-    payload = {
-        "iss": KLING_ACCESS_KEY,
-        "exp": int(time.time()) + 1800,
-        "nbf": int(time.time()) - 5,
-    }
-    return jwt.encode(payload, KLING_SECRET_KEY, algorithm="HS256", headers=headers)
 
 
 def session_with_retry():
@@ -91,64 +69,36 @@ def session_with_retry():
     return s
 
 
-# ── 图片上传 ──────────────────────────────────────────────────────
-
-def upload_image_smms(image_path: str) -> str:
-    """上传图片到 sm.ms 免费图床，返回公开 URL。"""
-    url = "https://sm.ms/api/v2/upload"
-    headers = {"Authorization": ""}  # 匿名上传
+def image_to_base64(image_path: str) -> str:
+    """读取图片并转换为 base64（不带 data: 前缀）。"""
     with open(image_path, "rb") as f:
-        files = {"smfile": f}
-        resp = requests.post(url, headers=headers, files=files, timeout=60)
-    # sm.ms 有时返回 200 + 已存在链接
-    data = resp.json()
-    if data.get("success"):
-        return data["data"]["url"]
-    elif data.get("code") == "image_repeated":
-        return data["images"]
-    else:
-        raise RuntimeError(f"sm.ms 上传失败: {data.get('message', resp.text[:200])}")
+        data = f.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        raise RuntimeError(f"图片过大: {len(data)/1024/1024:.1f}MB > 10MB 限制")
+    return base64.b64encode(data).decode("utf-8")
 
 
-def upload_image(image_path: str) -> str:
-    """上传图片到公开可访问的 URL。默认用 sm.ms，可替换为其他方案。"""
-    # 方案1: sm.ms 免费图床
-    try:
-        return upload_image_smms(image_path)
-    except Exception as e:
-        print(f"    [上传] sm.ms 失败: {e}")
-
-    # 方案2: 如有自己的图床/OSS，在此添加
-    # from your_upload_module import upload_to_oss
-    # return upload_to_oss(image_path)
-
-    raise RuntimeError("图片上传失败，请配置图床或云存储")
-
-
-# ── Kling API 调用 ────────────────────────────────────────────────
-
-def create_task(session, image_url, prompt, negative_prompt,
-                duration=5, mode="standard"):
+def create_task(session, image_base64, prompt, negative_prompt,
+                duration=5, mode="pro", sound="off"):
     """创建图生视频任务，返回 task_id。"""
-    token = generate_jwt()
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {KLING_API_KEY}",
     }
     payload = {
         "model_name": KLING_MODEL,
-        "image": image_url,
+        "image": image_base64,
         "prompt": prompt,
         "negative_prompt": negative_prompt,
-        "duration": str(duration),
-        "aspect_ratio": "9:16",
+        "duration": duration,
         "mode": mode,
-        "callback_url": "",  # 可选回调 URL
+        "sound": sound,
+        "watermark": {"enabled": False},
     }
 
     resp = session.post(
-        f"{KLING_API_BASE}/v1/videos/image2video",
-        headers=headers, json=payload, timeout=60,
+        f"{KLING_BASE_URL}/v1/videos/image2video",
+        headers=headers, json=payload, timeout=120,
     )
     data = resp.json()
 
@@ -162,10 +112,9 @@ def create_task(session, image_url, prompt, negative_prompt,
 
 def query_task(session, task_id):
     """查询任务状态。"""
-    token = generate_jwt()
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {KLING_API_KEY}"}
     resp = session.get(
-        f"{KLING_API_BASE}/v1/tasks/{task_id}",
+        f"{KLING_BASE_URL}/v1/videos/image2video/{task_id}",
         headers=headers, timeout=30,
     )
     data = resp.json()
@@ -191,7 +140,8 @@ def wait_for_video(session, task_id):
                 return videos[0]["url"], data
             return None, data
         if status == "failed":
-            return None, data
+            msg = data.get("data", {}).get("task_status_msg", "")
+            return None, {"error": msg or "任务失败"}
 
         time.sleep(POLL_INTERVAL)
 
@@ -222,7 +172,6 @@ def run(config_path: str):
     batch_dir = get_batch_dir(batch_date)
     dirs = batch_subdirs(batch_dir)
 
-    # 读取 step1 和 step2 的清单
     images_manifest = dirs["images"] / "manifest.json"
     prompts_manifest = dirs["prompts"] / "manifest.json"
 
@@ -235,7 +184,6 @@ def run(config_path: str):
     with open(prompts_manifest, encoding="utf-8") as f:
         prompts_data = json.load(f)
 
-    # 合并数据：菜名 → {image_path, prompt, negative_prompt}
     prompt_map = {p["dish"]: p for p in prompts_data if "video_prompt" in p}
 
     tasks = []
@@ -261,8 +209,7 @@ def run(config_path: str):
     print(f"Step 3: Kling API 批量图生视频")
     print(f"  菜品数: {len(prompt_map)}")
     print(f"  总任务数: {len(tasks)}（{len(prompt_map)} 菜 × {ROLL_COUNT} roll）")
-    print(f"  规格: {VIDEO_RESOLUTION} / {VIDEO_DURATION}s / {'无声' if VIDEO_SILENT else '有声'} / 9:16")
-    print(f"  并发: {MAX_CONCURRENT}")
+    print(f"  规格: 1080p / 5s / 无声 / 9:16")
     print(f"  输出: {dirs['clips']}")
     print(f"{'='*60}")
 
@@ -280,15 +227,15 @@ def run(config_path: str):
         print(f"  提示词: {prompt[:60]}...")
 
         try:
-            # 1. 上传图片到公开 URL
-            print(f"  [上传] 上传图片到图床...", end="")
-            image_url = upload_image(img_path)
-            print(f" OK: {image_url[:60]}...")
+            # 1. 图片转 base64（直传，无需图床）
+            print(f"  [编码] 图片转 base64...", end="")
+            img_b64 = image_to_base64(img_path)
+            print(f" OK ({len(img_b64)/1024:.0f}KB base64)")
 
             # 2. 创建生成任务
             task_id = create_task(
-                session, image_url, prompt, task["negative_prompt"],
-                duration=VIDEO_DURATION,
+                session, img_b64, prompt, task["negative_prompt"],
+                duration=VIDEO_DURATION, mode="pro", sound="off",
             )
             print(f"  [任务] task_id: {task_id}")
 
@@ -296,14 +243,13 @@ def run(config_path: str):
             video_url, info = wait_for_video(session, task_id)
 
             if not video_url:
-                err = (info.get("data", {}).get("task_status_msg", "")
-                       or str(info)[:300])
+                err = info.get("error", str(info)[:300])
                 print(f"  [失败] {err}")
                 results.append({**task, "status": "failed", "error": err})
                 continue
 
             # 4. 下载视频
-            out_name = f"{dish}_roll{roll}_{VIDEO_RESOLUTION}_{VIDEO_DURATION}s.mp4"
+            out_name = f"{dish}_roll{roll}_1080p_5s.mp4"
             out_path = str(dirs["clips"] / out_name)
             size = download_video(session, video_url, out_path)
             print(f"  [完成] {out_path} ({size/1024/1024:.1f}MB)")
@@ -320,7 +266,6 @@ def run(config_path: str):
             print(f"  [异常] {e}")
             results.append({**task, "status": "error", "error": str(e)})
 
-    # 汇总清单
     manifest_path = dirs["clips"] / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)

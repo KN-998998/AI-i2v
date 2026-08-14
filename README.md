@@ -1,100 +1,201 @@
-# AI-i2v · 餐饮图生视频批量生产流水线
+# AI 引流视频批量生产流水线
 
-利用 AI 图生视频模型（可灵 Kling / 阿里百炼 wan2.6 等），把**菜品静态照片**批量生成**动态视频片段**，再自动**合成剪辑**为完整的竖版引流视频（9:16, 1080p）。
+餐饮品牌引流短视频自动化生产：**静态菜品图片 → AI 动态视频片段 → 合成成片 → 配音配乐**。
+
+## 项目目标
+
+每天批量产出 **~10 条** 引流短视频，供抖音/小红书等平台投放。
+- **生产规模**：10 条/天（混合模式：不同菜品组合 + 同菜变体）
+- **视频规格**：1080p / 9:16 竖版 / 10-12s
+- **人工介入**：仅在片段审核环节（挑选每道菜最佳版本）
+
+## Pipeline 流程
 
 ```
-菜品照片 → 找图匹配 → AI 写提示词 → API 生成片段 → 人工审核 → ffmpeg 合成 → 配音配乐 → 成片
+┌─────────────────────────────────────────────────────────┐
+│  Step 1: 匹配素材 + 预处理                                │
+│  菜品清单 → 素材库按菜名找图 → 9:16 / 1080p 裁切缩放       │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 2: AI 生成提示词                                   │
+│  DeepSeek 根据菜名+类型+亮点 → 生成图生视频提示词+字幕文案  │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 3: Kling API 批量图生视频                           │
+│  图片 + 提示词 → 可灵 2.6 API → 4-5s 无声 9:16 视频       │
+│  每道菜生成 3 个版本供挑选                                │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 4: 人工审核                                        │
+│  生成 HTML 审核页 + CSV 清单，运营挑选每道菜最佳片段        │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 5: ffmpeg 合成无声成片                              │
+│  掐头去尾 → 硬切拼接 → 字幕叠加 → 片尾 CTA → 无声成片       │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  Step 6: AI 配音 + 固定 BGM                               │
+│  DeepSeek 文案 → edge-tts 配音 → 固定 BGM 混音 → 最终成片  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## 项目结构
+## 技术栈
 
-```
-pipeline/                 # 主流水线（批量生产）
-  config.py               # 全局配置（路径/API Key/视频规格，支持环境变量）
-  batch_template.yaml     # 批量配置模板（菜品清单 + 视频编排）
-  run_batch.py            # 批处理入口（按参数运行不同阶段）
-  step1_match_images.py   # 菜品清单 → 匹配素材图片 → 预处理 9:16/1080p
-  step2_gen_prompts.py    # 菜名 → DeepSeek 生成图生视频提示词 + 字幕文案
-  step3_gen_videos.py     # 调图生视频 API（可灵/Kling）批量生成片段
-  step4_manual_review.py  # 人工审核挑选最佳片段
-  step5_compose.py        # ffmpeg 按编排模板合成无声成片
-  step6_voice_bgm.py      # AI 文案 + TTS 配音 + BGM 混音 → 最终成片
-scripts/                  # 独立工具脚本
-  01_prep.py              # 备料：选图 + 压缩裁切 + 生成批次清单
-  prep_images.py          # 图片预处理（大图 → API 可接受尺寸 + 9:16 裁切）
-  check_image_sizes.py    # 检查素材库图片尺寸分布
-  wan26_flash_api.py      # 阿里百炼 wan2.6-i2v-flash 图生视频 API 调用
-```
+| 环节 | 工具 | 说明 |
+|------|------|------|
+| 图生视频 | **可灵 Kling 2.6** | 5s / 1080p / 无声 / 9:16，API Key 鉴权 |
+| 提示词生成 | **DeepSeek** | 动态描述 + 固定约束词 |
+| 文案生成 | **DeepSeek** | 配音文案 + 发布文案 |
+| TTS 配音 | **edge-tts** | 免费微软语音（可替换为 CosyVoice/火山引擎） |
+| BGM | 固定音频文件 | 后续可升级为 AI 生成 |
+| 视频合成 | **ffmpeg** | 裁切/拼接/字幕/混音 |
+| 图片处理 | **Pillow** | 9:16 裁切、尺寸缩放、锐化 |
+| 图床 | **无需** | Kling API 支持 base64 图片直传 |
+| 配置管理 | **PyYAML** | batch.yaml 驱动全流程 |
 
 ## 快速开始
 
-### 1. 配置
-
-所有 API Key 走**环境变量**（不硬编码在代码里）：
+### 1. 安装依赖
 
 ```bash
-# Windows (cmd)
-set DEEPSEEK_API_KEY=sk-xxxx      # DeepSeek（提示词生成）
-set KLING_API_KEY=xxxx            # 可灵（图生视频）
-set KLING_API_SECRET=xxxx
-set DASHSCOPE_API_KEY=sk-xxxx     # 阿里百炼（wan2.6，可选）
-
-# macOS / Linux
-export DEEPSEEK_API_KEY=sk-xxxx
-export KLING_API_KEY=xxxx
-export KLING_API_SECRET=xxxx
-export DASHSCOPE_API_KEY=sk-xxxx
+pip install requests PyJWT pyyaml edge-tts Pillow
 ```
 
-素材库路径（可选，默认相对路径）：
+ffmpeg 已预装在系统中。
+
+### 2. 配置 API Key
 
 ```bash
-export IMAGE_LIBRARY="D:/素材库/菜品照片"    # 图生视频主库，按菜名分文件夹
-export BGM_FILE="D:/音乐/结尾音乐.mp3"        # 固定 BGM
+# 必须：DeepSeek（Step 2 + Step 6 文案生成）
+set DEEPSEEK_API_KEY=sk-你的key
+
+# 必须：可灵（Step 3 图生视频）
+set KLING_API_KEY=你的kling_api_key
+
+# 可选：自定义 TTS（不设则用 edge-tts 免费版）
+set TTS_API_KEY=你的tts_key
 ```
 
-> 也可以在 `pipeline/` 下放一个 `config.local.py`（已被 .gitignore 忽略）覆盖路径变量。
+### 3. 创建批量配置
 
-### 2. 准备批量配置
-
-复制 `pipeline/batch_template.yaml`，填入当天菜品清单：
+复制模板并修改：
 
 ```bash
-cp pipeline/batch_template.yaml batch_20260814.yaml
-# 编辑：dishes（菜名/类型/亮点）、videos（编排）、brand（品牌信息）
+copy pipeline\batch_template.yaml pipeline\batch_20260814.yaml
 ```
 
-### 3. 运行
+编辑 `batch_20260814.yaml`：
+
+```yaml
+batch:
+  date: "2026-08-14"
+
+dishes:
+  - name: "海胆天妇罗"
+    category: "烤物/炸物"
+    highlight: "酥脆外皮"
+  # ... 添加更多菜品
+
+videos:
+  - id: v01
+    type: multi_dish
+    template: 5_dish
+    dishes: [海胆天妇罗, 松叶蟹三吃, ...]
+    hook_dish: 海胆天妇罗
+  # ... 10条视频编排
+```
+
+### 4. 运行流水线
 
 ```bash
-# 只跑某一步（推荐先用单步调试）
-python pipeline/step1_match_images.py --config batch_20260814.yaml
-python pipeline/step2_gen_prompts.py  --config batch_20260814.yaml
-python pipeline/step3_gen_videos.py   --config batch_20260814.yaml
-python pipeline/step4_manual_review.py --config batch_20260814.yaml
-python pipeline/step5_compose.py      --config batch_20260814.yaml
-python pipeline/step6_voice_bgm.py    --config batch_20260814.yaml
+# 方式一：全流程（Step 4 后暂停等人工审核）
+python pipeline/run_batch.py --config pipeline/batch_20260814.yaml
 
-# 或一键跑完整流程
-python pipeline/run_batch.py --config batch_20260814.yaml --stage all
+# 方式二：分步执行
+python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --only 1   # 仅 Step 1
+python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --only 2   # 仅 Step 2
+
+# 方式三：从指定步骤开始
+python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --start 5   # 审核后继续
 ```
+
+### 5. 人工审核
+
+Step 4 完成后：
+1. 打开 `output/batch_YYYYMMDD/04_selected/review.html` 查看所有视频片段
+2. 打开 `output/batch_YYYYMMDD/04_selected/checklist.csv`
+3. 在 `selected` 列填 `y` 标记每道菜选用的片段
+4. 运行 Step 5-6 继续
+
+## 代码结构
+
+```
+pipeline/
+├── config.py              # 全局配置（API Key、路径、规格、约束词、成片模板）
+├── batch_template.yaml    # 批量配置模板
+├── run_batch.py           # 统一入口脚本
+├── step1_match_images.py  # 菜品→素材库找图→9:16/1080p 预处理
+├── step2_gen_prompts.py   # DeepSeek 生成图生视频提示词 + 字幕
+├── step3_gen_videos.py    # Kling API 批量图生视频（JWT 认证 + 轮询）
+├── step4_manual_review.py # 生成 HTML 审核页 + CSV 清单
+├── step5_compose.py       # ffmpeg 掐头去尾 + 拼接 + 字幕 + CTA
+└── step6_voice_bgm.py     # DeepSeek 文案 + edge-tts 配音 + BGM 混音
+```
+
+## 输出目录结构
+
+```
+output/batch_YYYYMMDD/
+├── 01_images/       # 预处理后的 9:16 图片
+├── 02_prompts/      # 每道菜的提示词(.txt) + 元数据(.json)
+├── 03_clips/        # Kling 生成的原始视频片段
+├── 04_selected/     # 审核清单（review.html + checklist.csv）
+├── 05_composed/     # ffmpeg 合成的无声成片
+└── 06_final/        # 最终有声成片
+```
+
+## 关键设计决策
+
+| 决策 | 理由 |
+|------|------|
+| **提示词 = 固定约束词 + AI 动态描述** | 负向约束（不变形/不生成文字等）必须强制生效，动态描述交给 AI 灵活生成 |
+| **每菜 3 roll** | 可灵一次生成多个版本，人工挑选最佳，废片率高时可回退 |
+| **先生成无声，后期配音** | 图生视频模型有声生成成本翻倍，且配音内容可控 |
+| **生成 5s，成片只用 2-3s** | Kling API 固定 5s，AI 动态在开头最自然，掐头去尾取精华 |
+| **硬切无转场** | 保证节奏感，转场在后续需要时再升级 |
+| **edge-tts 免费配音** | 验证流程用，后续可无缝替换为 CosyVoice/火山引擎 |
+| **base64 图片直传** | Kling API 原生支持，无需图床，简化流程 |
+
+## 固定约束词（不可变）
+
+所有提示词自动追加以下约束，不交给 AI 生成：
+
+- **前缀**：`真实餐饮广告质感，`
+- **后缀**：`画面稳定，高清，食欲感强，暖色餐厅灯光，浅景深，不生成文字，不生成Logo，不出现人物`
+- **负向约束**：`不要改变菜品主体，不要让食物变形，不要凭空增加新食材，不要生成文字，不要生成Logo，不要生成二维码，不要出现人物手部，不要夸张动画，不要卡通风格，不要低清画质`
 
 ## 视频规格
 
-| 项 | 值 |
-|---|---|
-| 分辨率 | 1080p（9:16 竖版）|
-| 单段时长 | 4-5s（每道菜生成 3 个版本供挑选）|
-| 成片时长 | 10-12s（钩子 3s + 每道菜 2s + 片尾 CTA 1-2s）|
-| 提示词 | DeepSeek 按菜名/类型/亮点自动生成，统一负向约束 |
+| 参数 | 值 |
+|------|-----|
+| 分辨率 | 1080p |
+| 比例 | 9:16 竖版 |
+| 每段时长 | 5s（API 固定）→ 2-3s（成片掐头去尾） |
+| 成片时长 | 10-12s |
+| 帧率 | 30fps |
+| 音频 | 无声生成 → 后期配音 |
 
-## 环境依赖
+## 待办事项
 
-- Python 3.10+
-- `pip install pillow opencv-python requests pyyaml`
-- ffmpeg（合成阶段必需）
-
-## 免责声明
-
-- 本仓库仅包含代码与模板，**不含任何品牌素材、图片、视频、字体或业务数据**，请自行准备素材。
-- 使用即代表你已获得所用素材的合法使用授权。
+- [x] Pipeline 框架搭建
+- [x] Step 1-6 代码实现
+- [ ] 可灵 API Key 申请（等开会定档位）
+- [ ] TTS 工具选型确认（edge-tts 可用，或换 CosyVoice/火山引擎）
+- [ ] 首个批次实测 + 调优
+- [ ] 提示词效果数据收集 + 固化模板
+- [ ] 发布到 GitHub 仓库

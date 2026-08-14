@@ -1,25 +1,41 @@
-# ── Python ──
+# Python
 __pycache__/
-*.py[cod]
-*.egg-info/
+*.pyc
+*.pyo
 .venv/
-venv/
 
-# ── 本地配置（含本地路径/密钥，勿提交）──
-config.local.py
+# 环境变量（含 API Key）
 .env
-*.env
+.env.local
+.env.*
 
-# ── 输出/临时产物 ──
+# 输出产物
 output/
-batches/
-*.log
-*.tmp
-.DS_Store
-Thumbs.db
+output_*/
 
-# ── 素材与业务数据（不进公开仓库）──
-素材库/
-图片素材/
-视频素材/
-品牌素材/
+# 大文件
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.mp3
+*.wav
+
+# 系统文件
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.hermes/
+
+# 临时文件
+*.tmp
+*.bak
+~*
+
+# 历史归档（含品牌素材/业务文档，不提交公开仓库；本地保留）
+_archive/

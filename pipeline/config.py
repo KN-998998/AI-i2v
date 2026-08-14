@@ -7,7 +7,6 @@
 环境变量（推荐）：
   set DEEPSEEK_API_KEY=sk-xxxx
   set KLING_API_KEY=xxxx
-  set KLING_API_SECRET=xxxx
 
 或直接编辑下方变量。
 """
@@ -39,10 +38,9 @@ DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 DEEPSEEK_MODEL    = "deepseek-chat"
 
-KLING_API_KEY    = os.environ.get("KLING_API_KEY", "")
-KLING_API_SECRET = os.environ.get("KLING_API_SECRET", "")
-KLING_BASE_URL   = "https://api.klingai.com"
-KLING_MODEL      = "kling-v2.6"          # 可灵 2.6
+KLING_API_KEY  = os.environ.get("KLING_API_KEY", "")
+KLING_BASE_URL = "https://api.klingai.com"
+KLING_MODEL    = "kling-v2.6"          # 可灵 2.6
 
 # TTS 配置（待选型，先留占位）
 TTS_PROVIDER = ""        # 待定：cosyvoice / volcengine / doubao
