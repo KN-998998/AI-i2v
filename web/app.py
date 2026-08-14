@@ -340,9 +340,64 @@ def run_step2(batch_id):
     return jsonify({"status": "started"})
 
 
+# ── API: 提示词编辑（供同事修改后保存） ──────────────────────────
+
+@app.route("/api/batch/<batch_id>/prompts", methods=["GET"])
+def get_prompts(batch_id):
+    """获取当前批次的所有提示词（供前端编辑）。"""
+    batch_dir = OUTPUT_ROOT / batch_id
+    dirs = batch_subdirs(batch_dir)
+    prompts_data = load_manifest(dirs, "prompts") or []
+
+    # 读取已编辑的提示词（如果存在）
+    edited_path = dirs["prompts"] / "edited_prompts.json"
+    edited = {}
+    if edited_path.exists():
+        with open(edited_path, encoding="utf-8") as f:
+            edited = json.load(f)
+
+    result = []
+    for p in prompts_data:
+        dish = p["dish"]
+        item = {
+            "dish": dish,
+            "video_prompt": edited.get(dish, {}).get("video_prompt", p["video_prompt"]),
+            "negative_prompt": edited.get(dish, {}).get("negative_prompt", p.get("negative_prompt", "")),
+            "subtitle": p.get("subtitle", dish),
+            "caption": p.get("caption", ""),
+        }
+        result.append(item)
+
+    return jsonify(result)
+
+
+@app.route("/api/batch/<batch_id>/prompts", methods=["POST"])
+def save_prompts(batch_id):
+    """保存同事编辑后的提示词。"""
+    prompts = request.json.get("prompts", [])
+    batch_dir = OUTPUT_ROOT / batch_id
+    dirs = batch_subdirs(batch_dir)
+
+    edited = {}
+    for p in prompts:
+        dish = p["dish"]
+        edited[dish] = {
+            "video_prompt": p["video_prompt"],
+            "negative_prompt": p.get("negative_prompt", ""),
+        }
+
+    edited_path = dirs["prompts"] / "edited_prompts.json"
+    with open(edited_path, "w", encoding="utf-8") as f:
+        json.dump(edited, f, ensure_ascii=False, indent=2)
+
+    return jsonify({"status": "saved"})
+
+
+# ── API: 执行 Step 3（Kling 生成视频） ──────────────────────────
+
 @app.route("/api/batch/<batch_id>/run/step3", methods=["POST"])
 def run_step3(batch_id):
-    """执行 Step 3: Kling API 批量图生视频。"""
+    """执行 Step 3: Kling API 批量图生视频。使用编辑后的提示词。"""
     state = get_batch_state(batch_id)
     state["current_step"] = 3
     save_state(batch_id)
@@ -361,7 +416,24 @@ def run_step3(batch_id):
             # 读取 step1 和 step2 结果
             images_data = load_manifest(dirs, "images") or []
             prompts_data = load_manifest(dirs, "prompts") or []
-            prompt_map = {p["dish"]: p for p in prompts_data if "video_prompt" in p}
+
+            # 读取同事编辑后的提示词（优先使用）
+            edited_path = dirs["prompts"] / "edited_prompts.json"
+            edited_prompts = {}
+            if edited_path.exists():
+                with open(edited_path, encoding="utf-8") as f:
+                    edited_prompts = json.load(f)
+
+            prompt_map = {}
+            for p in prompts_data:
+                dish = p["dish"]
+                if dish in edited_prompts:
+                    prompt_map[dish] = edited_prompts[dish]
+                else:
+                    prompt_map[dish] = {
+                        "video_prompt": p["video_prompt"],
+                        "negative_prompt": p.get("negative_prompt", NEGATIVE_PROMPT),
+                    }
 
             tasks = []
             for img_info in images_data:

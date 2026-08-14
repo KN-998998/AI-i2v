@@ -4,14 +4,42 @@
 ========================================
 所有 step 脚本共享此配置。
 
-环境变量（推荐）：
-  set DEEPSEEK_API_KEY=sk-xxxx
-  set KLING_API_KEY=xxxx
+密钥统一从 .env 文件读取（.env 已被 .gitignore 忽略，不会进仓库）：
+  .env 格式：
+    DEEPSEEK_API_KEY=sk-xxxx
+    KLING_API_KEY=xxxx
 
-或直接编辑下方变量。
+也可以直接用系统环境变量覆盖（export / set 优先级最高）。
 """
 import os
 from pathlib import Path
+
+
+def load_dotenv(env_path=None):
+    """零依赖 .env 加载器：把 .env 中的 KEY=VALUE 写入 os.environ（不覆盖已有）。
+
+    支持：
+      - 空行 / # 注释行自动跳过
+      - 值可带引号（'xxx' 或 "xxx"）
+    """
+    if env_path is None:
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+    env_path = Path(env_path)
+    if not env_path.exists():
+        return
+    with open(env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k = k.strip()
+            v = v.strip().strip("\"'")
+            if k and k not in os.environ:   # 不覆盖已存在的系统环境变量
+                os.environ[k] = v
+
+
+load_dotenv()
 
 # ── 项目路径 ──────────────────────────────────────────────────────
 # 所有路径优先读环境变量（可移植），未设置时用下方通用默认值。
@@ -33,19 +61,19 @@ EXTRA_IMAGE_LIBS = [p for p in EXTRA_IMAGE_LIBS if str(p)]
 # 固定 BGM
 BGM_FILE = Path(os.environ.get("BGM_FILE", "结尾音乐.mp3"))
 
-# ── API Keys ──────────────────────────────────────────────────────
+# ── API Keys（从 .env / 环境变量读取，代码里不硬编码）──────────────
 DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
-DEEPSEEK_MODEL    = "deepseek-chat"
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+DEEPSEEK_MODEL    = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
 KLING_API_KEY  = os.environ.get("KLING_API_KEY", "")
-KLING_BASE_URL = "https://api.klingai.com"
-KLING_MODEL    = "kling-v2.6"          # 可灵 2.6
+KLING_BASE_URL = os.environ.get("KLING_BASE_URL", "https://api.klingai.com")
+KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-v2.6")          # 可灵 2.6
 
 # TTS 配置（待选型，先留占位）
-TTS_PROVIDER = ""        # 待定：cosyvoice / volcengine / doubao
+TTS_PROVIDER = ""
 TTS_API_KEY  = os.environ.get("TTS_API_KEY", "")
-TTS_VOICE    = "female_warm"  # 音色标识
+TTS_VOICE    = os.environ.get("TTS_VOICE", "female_warm")  # 音色标识
 
 # ── 视频规格 ──────────────────────────────────────────────────────
 VIDEO_RESOLUTION = "1080p"     # 1080p

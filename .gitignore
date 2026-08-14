@@ -8,6 +8,7 @@ __pycache__/
 .env
 .env.local
 .env.*
+!.env.example
 
 # 输出产物
 output/

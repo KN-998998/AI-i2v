@@ -660,9 +660,9 @@ let currentStep = 0;
 const STEPS = [
   { num: 1, label: "创建批次" },
   { num: 2, label: "菜品配置" },
-  { num: 3, label: "生成视频" },
-  { num: 4, label: "审核挑选" },
-  { num: 5, label: "文案编辑" },
+  { num: 3, label: "提示词编辑" },
+  { num: 4, label: "生成视频" },
+  { num: 5, label: "审核挑选" },
   { num: 6, label: "合成下载" },
 ];
 
@@ -811,8 +811,8 @@ async function openBatch(batchId) {
     currentBatch = batchId;
     // 根据状态跳到对应步骤
     const statusMap = {
-      created: 2, configured: 2, generating: 3,
-      reviewing: 4, selected: 5, composing: 6, done: 6, error: 3
+      created: 2, configured: 2, generating: 4,
+      reviewing: 5, selected: 6, composing: 6, done: 6, error: 4
     };
     currentStep = statusMap[state.status] || 2;
     renderSteps();
@@ -837,7 +837,7 @@ function renderStep2() {
 
     <div class="action-bar">
       <button class="btn btn-ghost" onclick="goStep(1); renderStep1();">← 上一步</button>
-      <button class="btn btn-primary" onclick="submitDishes()">生成视频 →</button>
+      <button class="btn btn-primary" onclick="submitDishes()">下一步：AI生成提示词 →</button>
     </div>
   `);
 
@@ -959,43 +959,131 @@ async function submitDishes() {
     toast("菜品配置已保存", "ok");
     currentStep = 3;
     renderSteps();
-    startGeneration();
+    renderStep3();
   } catch(e) {
     toast("保存失败", "err");
   }
 }
 
-// ── Step 3: 生成视频 ─────────────────────────────────────────────
+// ── Step 3: 提示词编辑 ─────────────────────────────────────────────
 
-async function startGeneration() {
-  renderStep3();
+let promptsData = [];
 
+async function renderStep3() {
+  showPanel(`
+    <div class="panel-title">提示词编辑</div>
+    <div class="panel-desc">AI 已为每道菜生成图生视频提示词，请审阅修改后点击"生成视频"</div>
+    <div id="promptsContainer">
+      <div class="progress-container" style="padding:32px;">
+        <div class="progress-ring">
+          <svg width="64" height="64">
+            <circle class="track" cx="32" cy="32" r="26" />
+            <circle class="bar" cx="32" cy="32" r="26"
+                    stroke-dasharray="163.4" stroke-dashoffset="163.4" id="promptsProgress" />
+          </svg>
+          <div class="progress-text" id="promptsText">0%</div>
+        </div>
+        <div class="progress-label" id="promptsLabel">正在生成提示词...</div>
+        <div class="progress-detail" id="promptsDetail">图片预处理 · AI 生成提示词</div>
+      </div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-ghost" onclick="goStep(2); renderStep2();">← 上一步</button>
+      <button class="btn btn-primary" id="generateBtn" onclick="generateVideos()" disabled>生成视频 →</button>
+    </div>
+  `);
+
+  // 自动执行 step1（图片预处理）→ step2（AI 生成提示词）
   try {
-    // 依次执行 step1 → step2 → step3
     await api(`/api/batch/${currentBatch}/run/step1`, { method: "POST" });
     await pollStep("step1");
-    addLog("图片预处理完成", "ok");
+    updateProgress3(50, "正在生成提示词...", "调用 DeepSeek");
 
     await api(`/api/batch/${currentBatch}/run/step2`, { method: "POST" });
     await pollStep("step2");
-    addLog("提示词生成完成", "ok");
+    updateProgress3(100, "提示词已生成", "");
 
+    // 读取生成的提示词
+    promptsData = await api(`/api/batch/${currentBatch}/prompts`);
+    renderPromptsEditor();
+  } catch(e) {
+    document.getElementById("promptsContainer").innerHTML =
+      `<div class="empty"><div class="empty-icon">❌</div><div class="empty-text">生成失败: ${e.message}</div></div>`;
+  }
+}
+
+function updateProgress3(percent, label, detail) {
+  const bar = document.getElementById("promptsProgress");
+  const text = document.getElementById("promptsText");
+  const lbl = document.getElementById("promptsLabel");
+  const det = document.getElementById("promptsDetail");
+  if (bar) bar.style.strokeDashoffset = 163.4 * (1 - percent / 100);
+  if (text) text.textContent = percent + "%";
+  if (lbl) lbl.textContent = label;
+  if (det) det.textContent = detail || "";
+}
+
+function renderPromptsEditor() {
+  const container = document.getElementById("promptsContainer");
+
+  if (!promptsData.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-text">暂无提示词</div></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="margin-bottom:16px; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text-dim);">
+      💡 提示词已自动填充固定约束词（保证菜品不变形），可自由修改描述部分。修改完成后点击右下角"生成视频"按钮。
+    </div>
+    ${promptsData.map((p, i) => `
+      <div class="caption-card">
+        <div class="caption-dish">${p.dish}</div>
+        <div class="caption-field">
+          <label class="field-label">图生视频提示词（可修改）</label>
+          <textarea class="textarea" style="min-height:100px;" onchange="promptsData[${i}].video_prompt = this.value">${p.video_prompt}</textarea>
+        </div>
+      </div>
+    `).join("")}
+  `;
+
+  document.getElementById("generateBtn").disabled = false;
+}
+
+async function generateVideos() {
+  // 保存编辑后的提示词
+  try {
+    await api(`/api/batch/${currentBatch}/prompts`, {
+      method: "POST",
+      body: JSON.stringify({ prompts: promptsData }),
+    });
+    toast("提示词已保存，开始生成视频", "ok");
+  } catch(e) {
+    toast("保存提示词失败", "err");
+    return;
+  }
+
+  // 进入 Step 4：生成视频进度页
+  currentStep = 4;
+  renderSteps();
+  renderStep4();
+
+  try {
     await api(`/api/batch/${currentBatch}/run/step3`, { method: "POST" });
-    await pollStep3();
-    addLog("视频生成完成！", "ok");
+    await pollStep4();
 
     setTimeout(() => {
-      currentStep = 4;
+      currentStep = 5;
       renderSteps();
-      renderStep4();
+      renderStep5();
     }, 1000);
-
   } catch(e) {
     addLog("生成失败: " + e.message, "err");
   }
 }
 
-function renderStep3() {
+// ── Step 4: 生成视频 ─────────────────────────────────────────────
+
+function renderStep4() {
   showPanel(`
     <div class="progress-container">
       <div class="progress-ring">
@@ -1007,10 +1095,56 @@ function renderStep3() {
         <div class="progress-text" id="progressText">0%</div>
       </div>
       <div class="progress-label" id="progressLabel">正在生成视频...</div>
-      <div class="progress-detail" id="progressDetail">准备中</div>
+      <div class="progress-detail" id="progressDetail">调用 Kling API 生成 4-5s 无声视频</div>
       <div class="progress-log" id="progressLog"></div>
     </div>
   `);
+}
+
+async function pollStep4() {
+  while (true) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const state = await api(`/api/batch/${currentBatch}/status`);
+      const sp = state.step_progress?.step3;
+      if (!sp) continue;
+
+      const total = sp.total || 1;
+      const done = sp.done || 0;
+      const percent = (done / total) * 100;
+
+      const results = sp.results || [];
+      const lastResult = results[results.length - 1];
+      let detail = `${done}/${total} 个片段`;
+      if (lastResult) {
+        detail += ` · ${lastResult.dish} roll${lastResult.roll} ${lastResult.status === "ok" ? "✓" : "✕"}`;
+      }
+
+      updateProgress(percent, "正在调用 Kling API 生成视频...", detail);
+
+      if (results.length > 0) {
+        const newLogs = results.filter(r => !r._logged);
+        newLogs.forEach(r => {
+          addLog(`${r.dish} roll${r.roll}: ${r.status === "ok" ? "成功" : "失败"}`,
+                 r.status === "ok" ? "ok" : "err");
+          r._logged = true;
+        });
+      }
+
+      if (sp.status === "done") {
+        updateProgress(100, "视频生成完成", `${done}/${total} 成功`);
+        return;
+      }
+      if (sp.status === "error") throw new Error(sp.error);
+    } catch(e) {
+      if (e.message.includes("状态查询")) {
+        // 忽略状态查询错误
+      } else {
+        addLog("生成失败: " + e.message, "err");
+        throw e;
+      }
+    }
+  }
 }
 
 function updateProgress(percent, label, detail) {
@@ -1054,49 +1188,58 @@ async function pollStep(stepName) {
   }
 }
 
-async function pollStep3() {
+async function pollStep4() {
   while (true) {
     await new Promise(r => setTimeout(r, 3000));
-    const state = await api(`/api/batch/${currentBatch}/status`);
-    const sp = state.step_progress?.step3;
-    if (!sp) continue;
+    try {
+      const state = await api(`/api/batch/${currentBatch}/status`);
+      const sp = state.step_progress?.step3;
+      if (!sp) continue;
 
-    const total = sp.total || 1;
-    const done = sp.done || 0;
-    const percent = 30 + (done / total) * 60;  // 30% → 90%
+      const total = sp.total || 1;
+      const done = sp.done || 0;
+      const percent = (done / total) * 100;
 
-    const results = sp.results || [];
-    const lastResult = results[results.length - 1];
-    let detail = `${done}/${total} 个片段`;
-    if (lastResult) {
-      detail += ` · ${lastResult.dish} roll${lastResult.roll} ${lastResult.status === "ok" ? "✓" : "✕"}`;
+      const results = sp.results || [];
+      const lastResult = results[results.length - 1];
+      let detail = `${done}/${total} 个片段`;
+      if (lastResult) {
+        detail += ` · ${lastResult.dish} roll${lastResult.roll} ${lastResult.status === "ok" ? "✓" : "✕"}`;
+      }
+
+      updateProgress(percent, "正在调用 Kling API 生成视频...", detail);
+
+      if (results.length > 0) {
+        const newLogs = results.filter(r => !r._logged);
+        newLogs.forEach(r => {
+          addLog(`${r.dish} roll${r.roll}: ${r.status === "ok" ? "成功" : "失败"}`,
+                 r.status === "ok" ? "ok" : "err");
+          r._logged = true;
+        });
+      }
+
+      if (sp.status === "done") {
+        updateProgress(100, "视频生成完成", `${done}/${total} 成功`);
+        return;
+      }
+      if (sp.status === "error") throw new Error(sp.error);
+    } catch(e) {
+      if (e.message.includes("状态查询")) {
+        // 忽略状态查询错误
+      } else {
+        addLog("生成失败: " + e.message, "err");
+        throw e;
+      }
     }
-
-    updateProgress(percent, "正在调用 Kling API 生成视频...", detail);
-
-    if (done > 0 && results.length > 0) {
-      const newLogs = results.filter(r => !r._logged);
-      newLogs.forEach(r => {
-        addLog(`${r.dish} roll${r.roll}: ${r.status === "ok" ? "成功" : "失败"}`,
-               r.status === "ok" ? "ok" : "err");
-        r._logged = true;
-      });
-    }
-
-    if (sp.status === "done") {
-      updateProgress(90, "视频生成完成", `${done}/${total} 成功`);
-      return;
-    }
-    if (sp.status === "error") throw new Error(sp.error);
   }
 }
 
-// ── Step 4: 审核挑选 ─────────────────────────────────────────────
+// ── Step 5: 审核挑选 ─────────────────────────────────────────────
 
 let selectedClips = {};
 let clipsData = {};
 
-async function renderStep4() {
+async function renderStep5() {
   selectedClips = {};
   clipsData = {};
 
@@ -1180,19 +1323,19 @@ async function confirmSelection() {
       body: JSON.stringify({ selected: selectedClips }),
     });
     toast("已确认选用", "ok");
-    currentStep = 5;
+    currentStep = 6;
     renderSteps();
-    renderStep5();
+    renderStep6();
   } catch(e) {
     toast("提交失败", "err");
   }
 }
 
-// ── Step 5: 文案编辑 ─────────────────────────────────────────────
+// ── Step 6: 文案编辑 + 合成 ─────────────────────────────────────
 
 let captionsData = {};
 
-async function renderStep5() {
+async function renderStep6() {
   showPanel(`
     <div class="panel-title">文案编辑</div>
     <div class="panel-desc">AI 已生成字幕和发布文案，可直接编辑修改</div>
@@ -1200,7 +1343,7 @@ async function renderStep5() {
       <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">加载中...</div></div>
     </div>
     <div class="action-bar">
-      <button class="btn btn-ghost" onclick="goStep(4); renderStep4();">← 上一步</button>
+      <button class="btn btn-ghost" onclick="goStep(5); renderStep5();">← 上一步</button>
       <button class="btn btn-primary" onclick="submitCaptions()">合成成片 →</button>
     </div>
   `);
