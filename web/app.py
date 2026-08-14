@@ -428,10 +428,106 @@ def save_prompts(batch_id):
 
 @app.route("/api/batch/<batch_id>/run/step3", methods=["POST"])
 def run_step3(batch_id):
-    """执行 Step 3: Kling API 批量图生视频。使用编辑后的提示词。"""
+    """执行 Step 3: Kling API 批量图生视频。使用编辑后的提示词。
+
+    幂等设计：
+      - 已有成功片段且提示词未变 → 复用（不重复调用 Kling API）
+      - 提示词被编辑过的菜 → 只重新生成该菜
+      - force=true → 全部重新生成
+    """
     state = get_batch_state(batch_id)
     state["current_step"] = 3
     save_state(batch_id)
+
+    force = request.json.get("force", False) if request.is_json else False
+    batch_dir = OUTPUT_ROOT / batch_id
+    dirs = batch_subdirs(batch_dir)
+
+    def build_tasks():
+        """构建全部任务（图 × roll），供幂等对比和 worker 使用。"""
+        from pipeline.config import ROLL_COUNT
+        images_data = load_manifest(dirs, "images") or []
+        prompts_data = load_manifest(dirs, "prompts") or []
+
+        edited_path = dirs["prompts"] / "edited_prompts.json"
+        edited_prompts = {}
+        if edited_path.exists():
+            with open(edited_path, encoding="utf-8") as f:
+                edited_prompts = json.load(f)
+
+        prompt_map = {}
+        for p in prompts_data:
+            dish = p["dish"]
+            if dish in edited_prompts:
+                prompt_map[dish] = edited_prompts[dish]
+            else:
+                prompt_map[dish] = {
+                    "video_prompt": p["video_prompt"],
+                    "negative_prompt": p.get("negative_prompt", ""),
+                }
+
+        tasks = []
+        for img_info in images_data:
+            if img_info["status"] != "ok":
+                continue
+            dish = img_info["dish"]
+            if dish not in prompt_map:
+                continue
+            p = prompt_map[dish]
+            for img_path in img_info["images"]:
+                for roll in range(1, ROLL_COUNT + 1):
+                    tasks.append({
+                        "dish": dish,
+                        "image_path": img_path,
+                        "prompt": p["video_prompt"],
+                        "negative_prompt": p.get("negative_prompt", ""),
+                        "roll": roll,
+                    })
+        return tasks
+
+    tasks = build_tasks()
+
+    # 幂等检查：已有成功片段且 prompt 一致 → 复用；只生成缺失/变化的
+    pending = tasks
+    if not force:
+        existing_clips = load_manifest(dirs, "clips") or []
+        success_map = {}
+        for c in existing_clips:
+            if c["status"] == "ok" and c.get("prompt"):
+                key = f"{c['dish']}|{c['roll']}"
+                success_map[key] = c["prompt"]
+
+        pending = []
+        reused = []
+        for t in tasks:
+            key = f"{t['dish']}|{t['roll']}"
+            if key in success_map and success_map[key] == t["prompt"]:
+                reused.append(t)   # 已生成且提示词未变 → 复用
+            else:
+                pending.append(t)  # 缺失 / 提示词变了 → 重新生成
+
+        if not pending:
+            # 全部已生成且未变 → 直接返回
+            state["step_progress"]["step3"] = {
+                "status": "done", "total": len(tasks), "done": len(tasks),
+                "results": existing_clips, "reused": True,
+            }
+            save_state(batch_id)
+            return jsonify({
+                "status": "reused", "total": len(tasks), "pending": 0,
+                "message": f"所有片段已生成且提示词未变（{len(tasks)} 条复用），未调用 Kling API",
+            })
+
+        # 部分复用：把已成功片段并入初始 results
+        initial_results = [c for c in existing_clips if c["status"] == "ok"]
+        state["step_progress"]["step3"] = {
+            "status": "running", "total": len(tasks),
+            "done": len(initial_results),
+            "results": initial_results,
+            "reused_count": len(reused),
+            "pending": len(pending),
+        }
+        save_state(batch_id)
 
     def worker():
         try:
@@ -439,63 +535,14 @@ def run_step3(batch_id):
                 image_to_base64, create_task, wait_for_video, download_video,
                 session_with_retry,
             )
-            from pipeline.config import VIDEO_DURATION, ROLL_COUNT, NEGATIVE_PROMPT
-
-            batch_dir = OUTPUT_ROOT / batch_id
-            dirs = batch_subdirs(batch_dir)
-
-            # 读取 step1 和 step2 结果
-            images_data = load_manifest(dirs, "images") or []
-            prompts_data = load_manifest(dirs, "prompts") or []
-
-            # 读取同事编辑后的提示词（优先使用）
-            edited_path = dirs["prompts"] / "edited_prompts.json"
-            edited_prompts = {}
-            if edited_path.exists():
-                with open(edited_path, encoding="utf-8") as f:
-                    edited_prompts = json.load(f)
-
-            prompt_map = {}
-            for p in prompts_data:
-                dish = p["dish"]
-                if dish in edited_prompts:
-                    prompt_map[dish] = edited_prompts[dish]
-                else:
-                    prompt_map[dish] = {
-                        "video_prompt": p["video_prompt"],
-                        "negative_prompt": p.get("negative_prompt", NEGATIVE_PROMPT),
-                    }
-
-            tasks = []
-            for img_info in images_data:
-                if img_info["status"] != "ok":
-                    continue
-                dish = img_info["dish"]
-                if dish not in prompt_map:
-                    continue
-                p = prompt_map[dish]
-                for img_path in img_info["images"]:
-                    for roll in range(1, ROLL_COUNT + 1):
-                        tasks.append({
-                            "dish": dish,
-                            "image_path": img_path,
-                            "prompt": p["video_prompt"],
-                            "negative_prompt": p.get("negative_prompt", NEGATIVE_PROMPT),
-                            "roll": roll,
-                        })
-
-            state["step_progress"]["step3"] = {
-                "status": "running",
-                "total": len(tasks),
-                "done": 0,
-                "results": [],
-            }
-            save_state(batch_id)
+            from pipeline.config import VIDEO_DURATION, NEGATIVE_PROMPT
 
             session = session_with_retry()
-            results = []
+            results = list(state["step_progress"]["step3"].get("results", []))
+            done = state["step_progress"]["step3"].get("done", 0)
+            total = state["step_progress"]["step3"].get("total", len(pending))
 
-            for i, task in enumerate(tasks, 1):
+            for task in pending:
                 try:
                     img_b64 = image_to_base64(task["image_path"])
                     task_id = create_task(
@@ -509,13 +556,17 @@ def run_step3(batch_id):
                         out_name = f"{task['dish']}_roll{task['roll']}_1080p_5s.mp4"
                         out_path = str(dirs["clips"] / out_name)
                         download_video(session, video_url, out_path)
-                        results.append({**task, "status": "ok", "output": out_path})
+                        results.append({
+                            **task, "status": "ok", "output": out_path,
+                            "prompt": task["prompt"],   # 记录 prompt 快照供幂等对比
+                        })
                     else:
                         results.append({**task, "status": "failed", "error": str(info)[:200]})
                 except Exception as e:
                     results.append({**task, "status": "error", "error": str(e)})
 
-                state["step_progress"]["step3"]["done"] = i
+                done += 1
+                state["step_progress"]["step3"]["done"] = done
                 state["step_progress"]["step3"]["results"] = results
                 save_state(batch_id)
 
@@ -530,9 +581,16 @@ def run_step3(batch_id):
             state["step_progress"]["step3"] = {"status": "error", "error": str(e)}
             save_state(batch_id)
 
+    if pending == tasks:
+        # 全新生成（无任何复用）→ 初始化进度
+        state["step_progress"]["step3"] = {
+            "status": "running", "total": len(tasks), "done": 0, "results": [],
+        }
+        save_state(batch_id)
+
     t = threading.Thread(target=worker, daemon=True)
     t.start()
-    return jsonify({"status": "started"})
+    return jsonify({"status": "started", "total": len(tasks), "pending": len(pending)})
 
 
 # ── API: 审核挑选 ─────────────────────────────────────────────────
