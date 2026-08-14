@@ -1,0 +1,25 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── 本地配置（含本地路径/密钥，勿提交）──
+config.local.py
+.env
+*.env
+
+# ── 输出/临时产物 ──
+output/
+batches/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# ── 素材与业务数据（不进公开仓库）──
+素材库/
+图片素材/
+视频素材/
+品牌素材/
