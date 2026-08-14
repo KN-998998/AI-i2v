@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>引流视频生产平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0F0E0D;
+  --surface: #1A1816;
+  --surface-2: #232020;
+  --border: #2D2A28;
+  --text: #F5F0EB;
+  --text-dim: #8A8580;
+  --text-mute: #5C5853;
+  --primary: #E8730C;
+  --primary-dim: #B85A08;
+  --primary-glow: rgba(232, 115, 12, 0.15);
+  --green: #7FB069;
+  --red: #E63946;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "Noto Sans SC", -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── 氛围背景 ── */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(232,115,12,0.06), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(127,176,105,0.03), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── 顶部导航 ── */
+.topbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 14, 13, 0.85);
+  backdrop-filter: blur(12px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary), #FF9F1C);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 16px; color: #1A1816;
+}
+
+.brand-text {
+  font-size: 17px; font-weight: 700; letter-spacing: 0.5px;
+}
+
+.brand-sub {
+  font-size: 12px; color: var(--text-mute);
+  font-family: "DM Mono", monospace;
+}
+
+.config-badges {
+  display: flex; gap: 8px;
+}
+
+.config-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.config-badge.ok { color: var(--green); border-color: rgba(127,176,105,0.3); }
+.config-badge.no { color: var(--red); border-color: rgba(230,57,70,0.3); }
+
+.config-badge::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── 步骤指示器 ── */
+.steps-bar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  padding: 24px 32px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.step-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: var(--transition);
+  opacity: 0.4;
+}
+
+.step-item.active { opacity: 1; }
+.step-item.done { opacity: 0.7; }
+.step-item:hover { opacity: 0.8; }
+
+.step-num {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  transition: var(--transition);
+}
+
+.step-item.active .step-num {
+  border-color: var(--primary);
+  background: var(--primary-glow);
+  color: var(--primary);
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+
+.step-item.done .step-num {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--bg);
+}
+
+.step-label {
+  font-size: 13px; font-weight: 500;
+}
+
+.step-line {
+  width: 40px; height: 2px;
+  background: var(--border);
+  margin: 0 -8px;
+}
+
+.step-item.done + .step-line { background: var(--green); }
+
+/* ── 主内容区 ── */
+.main {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px;
+  min-height: calc(100vh - 180px);
+}
+
+.step-panel {
+  display: none;
+  animation: fadeUp 0.4s ease;
+}
+
+.step-panel.active { display: block; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 通用组件 ── */
+.panel-title {
+  font-size: 24px; font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.panel-desc {
+  color: var(--text-dim); font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 600;
+  font-family: inherit;
+  border: none; cursor: pointer;
+  transition: var(--transition);
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #1A1816;
+}
+
+.btn-primary:hover {
+  background: #FF9F1C;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--primary-glow);
+}
+
+.btn-primary:disabled {
+  background: var(--surface-2);
+  color: var(--text-mute);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-ghost {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+/* ── 输入框 ── */
+.input, .textarea, .select {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.input:focus, .textarea:focus, .select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.textarea { resize: vertical; min-height: 80px; }
+
+.field-label {
+  display: block;
+  font-size: 13px; font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text-dim);
+}
+
+.field-group { margin-bottom: 16px; }
+
+/* ── 菜品卡片 ── */
+.dish-list {
+  display: flex; flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.dish-card {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.dish-card:hover {
+  border-color: var(--primary-dim);
+}
+
+.dish-drag {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px;
+  background: var(--surface-2);
+  cursor: grab;
+  color: var(--text-mute);
+  font-size: 18px;
+}
+
+.dish-drag:active { cursor: grabbing; }
+
+.dish-rank {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px;
+  font-family: "DM Mono", monospace;
+  font-size: 18px; font-weight: 500;
+  color: var(--primary);
+}
+
+.dish-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 2fr auto;
+  gap: 12px;
+  padding: 12px 16px;
+  align-items: center;
+}
+
+.dish-img-preview {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.dish-img-placeholder {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mute); font-size: 20px;
+  border: 1px dashed var(--border);
+}
+
+.dish-remove {
+  background: none; border: none;
+  color: var(--text-mute);
+  cursor: pointer; font-size: 18px;
+  padding: 8px;
+  transition: var(--transition);
+}
+
+.dish-remove:hover { color: var(--red); }
+
+/* ── 上传区 ── */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-glow);
+  color: var(--primary);
+}
+
+.upload-zone input { display: none; }
+
+/* ── 进度区 ── */
+.progress-container {
+  text-align: center;
+  padding: 48px 32px;
+}
+
+.progress-ring {
+  width: 80px; height: 80px;
+  margin: 0 auto 24px;
+  position: relative;
+}
+
+.progress-ring svg {
+  transform: rotate(-90deg);
+}
+
+.progress-ring circle {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.progress-ring .track { stroke: var(--border); }
+.progress-ring .bar { stroke: var(--primary); transition: stroke-dashoffset 0.5s; }
+
+.progress-text {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: "DM Mono", monospace;
+  font-size: 16px; font-weight: 700;
+  color: var(--primary);
+}
+
+.progress-label {
+  font-size: 16px; font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.progress-detail {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-family: "DM Mono", monospace;
+}
+
+.progress-log {
+  margin-top: 24px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: "DM Mono", monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.log-line { padding: 2px 0; }
+.log-line.ok { color: var(--green); }
+.log-line.err { color: var(--red); }
+
+/* ── 审核区 ── */
+.review-group {
+  margin-bottom: 32px;
+}
+
+.review-dish-name {
+  font-size: 18px; font-weight: 700;
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.review-dish-name::before {
+  content: ""; width: 4px; height: 20px;
+  background: var(--primary); border-radius: 2px;
+}
+
+.clips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.clip-card {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+.clip-card:hover { border-color: var(--primary-dim); }
+
+.clip-card.selected {
+  border-color: var(--green);
+  box-shadow: 0 0 16px rgba(127, 176, 105, 0.2);
+}
+
+.clip-card.selected::after {
+  content: "✓ 已选用";
+  position: absolute;
+  top: 8px; right: 8px;
+  background: var(--green);
+  color: var(--bg);
+  font-size: 11px; font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.clip-card video {
+  width: 100%; display: block;
+  aspect-ratio: 9/16;
+  background: #000;
+}
+
+.clip-info {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex; justify-content: space-between;
+}
+
+/* ── 文案编辑 ── */
+.caption-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.caption-dish {
+  font-size: 15px; font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--primary);
+}
+
+.caption-field { margin-bottom: 12px; }
+.caption-field:last-child { margin-bottom: 0; }
+
+/* ── 成片展示 ── */
+.final-container {
+  text-align: center;
+  padding: 32px;
+}
+
+.final-video {
+  max-width: 320px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin: 0 auto 24px;
+  display: block;
+}
+
+.final-caption {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin: 16px auto;
+  max-width: 480px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+/* ── 底部操作栏 ── */
+.action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── 批次历史 ── */
+.batch-list {
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+
+.batch-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.batch-item:hover {
+  border-color: var(--primary-dim);
+  background: var(--surface-2);
+}
+
+.batch-info { display: flex; flex-direction: column; gap: 2px; }
+.batch-name { font-size: 14px; font-weight: 500; }
+.batch-date { font-size: 12px; color: var(--text-mute); font-family: "DM Mono", monospace; }
+
+.batch-status {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.batch-status.done { background: rgba(127,176,105,0.15); color: var(--green); }
+.batch-status.reviewing { background: rgba(232,115,12,0.15); color: var(--primary); }
+.batch-status.composing { background: rgba(232,115,12,0.15); color: var(--primary); }
+.batch-status.error { background: rgba(230,57,70,0.15); color: var(--red); }
+.batch-status.created, .batch-status.configured { background: var(--surface-2); color: var(--text-dim); }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 32px; left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 24px;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  opacity: 0;
+  transition: var(--transition);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast.ok { border-color: var(--green); }
+.toast.err { border-color: var(--red); }
+
+/* ── 空状态 ── */
+.empty {
+  text-align: center;
+  padding: 64px 32px;
+  color: var(--text-mute);
+}
+
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-text { font-size: 15px; }
+
+/* ── 滚动条 ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
+</style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">鮨</div>
+    <div>
+      <div class="brand-text">引流视频生产平台</div>
+      <div class="brand-sub">AI Video Pipeline</div>
+    </div>
+  </div>
+  <div class="config-badges" id="configBadges"></div>
+</div>
+
+<!-- 步骤指示器 -->
+<div class="steps-bar" id="stepsBar"></div>
+
+<!-- 主内容 -->
+<div class="main" id="main"></div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 全局状态 ──────────────────────────────────────────────────────
+let currentBatch = null;
+let currentStep = 0;
+
+const STEPS = [
+  { num: 1, label: "创建批次" },
+  { num: 2, label: "菜品配置" },
+  { num: 3, label: "生成视频" },
+  { num: 4, label: "审核挑选" },
+  { num: 5, label: "文案编辑" },
+  { num: 6, label: "合成下载" },
+];
+
+// ── 工具函数 ──────────────────────────────────────────────────────
+
+async function api(url, options = {}) {
+  const resp = await fetch(url, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options.headers },
+  });
+  if (!resp.ok) throw new Error(`API ${resp.status}`);
+  return resp.json();
+}
+
+function toast(msg, type = "") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast show " + type;
+  setTimeout(() => el.className = "toast", 3000);
+}
+
+function renderSteps() {
+  const bar = document.getElementById("stepsBar");
+  bar.innerHTML = STEPS.map((s, i) => {
+    const cls = s.num === currentStep ? "active" : (s.num < currentStep ? "done" : "");
+    const check = s.num < currentStep ? "✓" : s.num;
+    return `
+      <div class="step-item ${cls}" onclick="goStep(${s.num})">
+        <div class="step-num">${check}</div>
+        <div class="step-label">${s.label}</div>
+      </div>
+      ${i < STEPS.length - 1 ? '<div class="step-line"></div>' : ""}
+    `;
+  }).join("");
+}
+
+function goStep(n) {
+  if (!currentBatch && n > 1) return;
+  if (currentBatch && n <= currentStep + 1) {
+    currentStep = n;
+    renderSteps();
+    renderPanel();
+  }
+}
+
+function showPanel(html) {
+  document.getElementById("main").innerHTML = html;
+}
+
+// ── 配置检查 ──────────────────────────────────────────────────────
+
+async function checkConfig() {
+  const cfg = await api("/api/config");
+  const badges = document.getElementById("configBadges");
+  badges.innerHTML = `
+    <div class="config-badge ${cfg.deepseek ? 'ok' : 'no'}">DeepSeek</div>
+    <div class="config-badge ${cfg.kling ? 'ok' : 'no'}">Kling</div>
+    <div class="config-badge ${cfg.image_library_exists ? 'ok' : 'no'}">素材库</div>
+  `;
+}
+
+// ── Step 1: 创建批次 ─────────────────────────────────────────────
+
+function renderStep1() {
+  showPanel(`
+    <div class="panel-title">创建新批次</div>
+    <div class="panel-desc">输入批次信息，开始今天的视频生产</div>
+
+    <div class="field-group">
+      <label class="field-label">批次名称</label>
+      <input class="input" id="batchName" placeholder="如：8月14日午市引流" />
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">日期</label>
+      <input class="input" id="batchDate" type="date" value="${new Date().toISOString().split('T')[0]}" />
+    </div>
+
+    <div style="margin: 32px 0 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+      <div class="panel-title" style="font-size: 18px;">历史批次</div>
+    </div>
+    <div id="batchList" class="batch-list"></div>
+
+    <div class="action-bar">
+      <div></div>
+      <button class="btn btn-primary" onclick="createBatch()">下一步 →</button>
+    </div>
+  `);
+  loadBatches();
+}
+
+async function loadBatches() {
+  try {
+    const batches = await api("/api/batches");
+    const el = document.getElementById("batchList");
+    if (!batches.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-text">暂无历史批次</div></div>';
+      return;
+    }
+    el.innerHTML = batches.map(b => `
+      <div class="batch-item" onclick="openBatch('${b.id}')">
+        <div class="batch-info">
+          <div class="batch-name">${b.name || b.id}</div>
+          <div class="batch-date">${b.date} · ${b.dish_count} 道菜</div>
+        </div>
+        <div class="batch-status ${b.status}">${statusText(b.status)}</div>
+      </div>
+    `).join("");
+  } catch(e) {
+    document.getElementById("batchList").innerHTML = '<div class="empty"><div class="empty-text">加载失败</div></div>';
+  }
+}
+
+function statusText(s) {
+  const map = {
+    created: "已创建", configured: "已配置", generating: "生成中",
+    reviewing: "待审核", selected: "已挑选", composing: "合成中",
+    done: "已完成", error: "出错"
+  };
+  return map[s] || s;
+}
+
+async function createBatch() {
+  const name = document.getElementById("batchName").value.trim();
+  const date = document.getElementById("batchDate").value.replace(/-/g, "");
+
+  if (!name) { toast("请填写批次名称", "err"); return; }
+
+  try {
+    const result = await api("/api/batch", {
+      method: "POST",
+      body: JSON.stringify({ name, date }),
+    });
+    currentBatch = result.id;
+    currentStep = 2;
+    renderSteps();
+    renderStep2();
+  } catch(e) {
+    toast("创建失败: " + e.message, "err");
+  }
+}
+
+async function openBatch(batchId) {
+  try {
+    const state = await api(`/api/batch/${batchId}`);
+    currentBatch = batchId;
+    // 根据状态跳到对应步骤
+    const statusMap = {
+      created: 2, configured: 2, generating: 3,
+      reviewing: 4, selected: 5, composing: 6, done: 6, error: 3
+    };
+    currentStep = statusMap[state.status] || 2;
+    renderSteps();
+    renderPanel();
+  } catch(e) {
+    toast("打开失败", "err");
+  }
+}
+
+// ── Step 2: 菜品配置 ─────────────────────────────────────────────
+
+let dishes = [];
+
+function renderStep2() {
+  showPanel(`
+    <div class="panel-title">菜品配置</div>
+    <div class="panel-desc">添加菜品、上传图片、拖拽调整展示顺序（第一个 = 开场钩子镜头）</div>
+
+    <div class="dish-list" id="dishList"></div>
+
+    <button class="btn btn-ghost" onclick="addDish()">+ 添加菜品</button>
+
+    <div class="action-bar">
+      <button class="btn btn-ghost" onclick="goStep(1); renderStep1();">← 上一步</button>
+      <button class="btn btn-primary" onclick="submitDishes()">生成视频 →</button>
+    </div>
+  `);
+
+  // 如果已有菜品数据，加载
+  if (currentBatch) {
+    api(`/api/batch/${currentBatch}`).then(state => {
+      if (state.dishes && state.dishes.length) {
+        dishes = state.dishes;
+        renderDishes();
+      } else {
+        addDish();
+      }
+    });
+  } else {
+    addDish();
+  }
+}
+
+function renderDishes() {
+  const el = document.getElementById("dishList");
+  el.innerHTML = dishes.map((d, i) => `
+    <div class="dish-card" draggable="true" data-index="${i}"
+         ondragstart="dragStart(event)" ondragover="dragOver(event)" ondrop="drop(event)">
+      <div class="dish-drag">⋮⋮</div>
+      <div class="dish-rank">${i + 1}</div>
+      <div class="dish-body">
+        <input class="input" placeholder="菜名" value="${d.name || ''}"
+               onchange="updateDish(${i}, 'name', this.value)" />
+        <input class="input" placeholder="类型（如：烤物/刺身）" value="${d.category || ''}"
+               onchange="updateDish(${i}, 'category', this.value)" />
+        <input class="input" placeholder="亮点（如：酥脆爆浆）" value="${d.highlight || ''}"
+               onchange="updateDish(${i}, 'highlight', this.value)" />
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="dish-img-placeholder" id="imgPreview${i}" onclick="document.getElementById('fileInput${i}').click()">📷</div>
+          <input type="file" id="fileInput${i}" accept="image/*" style="display:none"
+                 onchange="uploadDishImage(${i}, this.files)" />
+          <button class="dish-remove" onclick="removeDish(${i})">✕</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function addDish() {
+  dishes.push({ name: "", category: "", highlight: "", images: [] });
+  renderDishes();
+}
+
+function removeDish(i) {
+  dishes.splice(i, 1);
+  renderDishes();
+}
+
+function updateDish(i, field, value) {
+  dishes[i][field] = value;
+}
+
+async function uploadDishImage(i, files) {
+  if (!files.length) return;
+  const formData = new FormData();
+  formData.append("dish", dishes[i].name || `dish_${i}`);
+  for (const f of files) formData.append("files", f);
+
+  try {
+    const resp = await fetch(`/api/batch/${currentBatch}/upload`, {
+      method: "POST", body: formData,
+    });
+    const result = await resp.json();
+    dishes[i].images = result.images;
+    // 显示预览
+    const preview = document.getElementById(`imgPreview${i}`);
+    preview.innerHTML = `<img class="dish-img-preview" src="/api/library/preview?path=${encodeURIComponent(result.images[0])}" />`;
+    preview.onclick = null;
+    toast("图片已上传", "ok");
+  } catch(e) {
+    toast("上传失败", "err");
+  }
+}
+
+// 拖拽排序
+let dragIndex = null;
+
+function dragStart(e) {
+  dragIndex = parseInt(e.currentTarget.dataset.index);
+}
+
+function dragOver(e) {
+  e.preventDefault();
+}
+
+function drop(e) {
+  e.preventDefault();
+  const dropIndex = parseInt(e.currentTarget.dataset.index);
+  if (dragIndex !== null && dragIndex !== dropIndex) {
+    const item = dishes.splice(dragIndex, 1)[0];
+    dishes.splice(dropIndex, 0, item);
+    renderDishes();
+  }
+  dragIndex = null;
+}
+
+async function submitDishes() {
+  // 过滤空菜品
+  dishes = dishes.filter(d => d.name.trim());
+
+  if (!dishes.length) { toast("请至少添加一道菜", "err"); return; }
+
+  try {
+    await api(`/api/batch/${currentBatch}/dishes`, {
+      method: "POST",
+      body: JSON.stringify({ dishes }),
+    });
+    toast("菜品配置已保存", "ok");
+    currentStep = 3;
+    renderSteps();
+    startGeneration();
+  } catch(e) {
+    toast("保存失败", "err");
+  }
+}
+
+// ── Step 3: 生成视频 ─────────────────────────────────────────────
+
+async function startGeneration() {
+  renderStep3();
+
+  try {
+    // 依次执行 step1 → step2 → step3
+    await api(`/api/batch/${currentBatch}/run/step1`, { method: "POST" });
+    await pollStep("step1");
+    addLog("图片预处理完成", "ok");
+
+    await api(`/api/batch/${currentBatch}/run/step2`, { method: "POST" });
+    await pollStep("step2");
+    addLog("提示词生成完成", "ok");
+
+    await api(`/api/batch/${currentBatch}/run/step3`, { method: "POST" });
+    await pollStep3();
+    addLog("视频生成完成！", "ok");
+
+    setTimeout(() => {
+      currentStep = 4;
+      renderSteps();
+      renderStep4();
+    }, 1000);
+
+  } catch(e) {
+    addLog("生成失败: " + e.message, "err");
+  }
+}
+
+function renderStep3() {
+  showPanel(`
+    <div class="progress-container">
+      <div class="progress-ring">
+        <svg width="80" height="80">
+          <circle class="track" cx="40" cy="40" r="34" />
+          <circle class="bar" cx="40" cy="40" r="34"
+                  stroke-dasharray="213.6" stroke-dashoffset="213.6" id="progressBar" />
+        </svg>
+        <div class="progress-text" id="progressText">0%</div>
+      </div>
+      <div class="progress-label" id="progressLabel">正在生成视频...</div>
+      <div class="progress-detail" id="progressDetail">准备中</div>
+      <div class="progress-log" id="progressLog"></div>
+    </div>
+  `);
+}
+
+function updateProgress(percent, label, detail) {
+  const bar = document.getElementById("progressBar");
+  const text = document.getElementById("progressText");
+  const lbl = document.getElementById("progressLabel");
+  const det = document.getElementById("progressDetail");
+
+  const offset = 213.6 * (1 - percent / 100);
+  if (bar) bar.style.strokeDashoffset = offset;
+  if (text) text.textContent = Math.round(percent) + "%";
+  if (lbl) lbl.textContent = label;
+  if (det) det.textContent = detail || "";
+}
+
+function addLog(msg, type = "") {
+  const log = document.getElementById("progressLog");
+  if (!log) return;
+  const line = document.createElement("div");
+  line.className = "log-line " + type;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function pollStep(stepName) {
+  const stepProgress = { step1: 15, step2: 30 };
+  const targetPercent = stepProgress[stepName] || 0;
+  const labels = {
+    step1: "正在预处理图片...",
+    step2: "正在生成提示词...",
+  };
+  updateProgress(targetPercent, labels[stepName] || "", "");
+
+  while (true) {
+    await new Promise(r => setTimeout(r, 2000));
+    const state = await api(`/api/batch/${currentBatch}/status`);
+    const sp = state.step_progress?.[stepName];
+    if (sp?.status === "done") return;
+    if (sp?.status === "error") throw new Error(sp.error);
+  }
+}
+
+async function pollStep3() {
+  while (true) {
+    await new Promise(r => setTimeout(r, 3000));
+    const state = await api(`/api/batch/${currentBatch}/status`);
+    const sp = state.step_progress?.step3;
+    if (!sp) continue;
+
+    const total = sp.total || 1;
+    const done = sp.done || 0;
+    const percent = 30 + (done / total) * 60;  // 30% → 90%
+
+    const results = sp.results || [];
+    const lastResult = results[results.length - 1];
+    let detail = `${done}/${total} 个片段`;
+    if (lastResult) {
+      detail += ` · ${lastResult.dish} roll${lastResult.roll} ${lastResult.status === "ok" ? "✓" : "✕"}`;
+    }
+
+    updateProgress(percent, "正在调用 Kling API 生成视频...", detail);
+
+    if (done > 0 && results.length > 0) {
+      const newLogs = results.filter(r => !r._logged);
+      newLogs.forEach(r => {
+        addLog(`${r.dish} roll${r.roll}: ${r.status === "ok" ? "成功" : "失败"}`,
+               r.status === "ok" ? "ok" : "err");
+        r._logged = true;
+      });
+    }
+
+    if (sp.status === "done") {
+      updateProgress(90, "视频生成完成", `${done}/${total} 成功`);
+      return;
+    }
+    if (sp.status === "error") throw new Error(sp.error);
+  }
+}
+
+// ── Step 4: 审核挑选 ─────────────────────────────────────────────
+
+let selectedClips = {};
+let clipsData = {};
+
+async function renderStep4() {
+  selectedClips = {};
+  clipsData = {};
+
+  showPanel(`
+    <div class="panel-title">审核挑选</div>
+    <div class="panel-desc">查看每道菜的视频片段，选择最佳版本（点击卡片选用）</div>
+    <div id="clipsContainer">
+      <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">加载中...</div></div>
+    </div>
+    <div class="action-bar">
+      <div></div>
+      <button class="btn btn-primary" id="confirmSelect" onclick="confirmSelection()" disabled>确认选用 →</button>
+    </div>
+  `);
+
+  try {
+    clipsData = await api(`/api/batch/${currentBatch}/clips`);
+    renderClips();
+  } catch(e) {
+    document.getElementById("clipsContainer").innerHTML =
+      '<div class="empty"><div class="empty-text">加载失败</div></div>';
+  }
+}
+
+function renderClips() {
+  const container = document.getElementById("clipsContainer");
+  const dishNames = Object.keys(clipsData);
+
+  if (!dishNames.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-text">暂无视频片段</div></div>';
+    return;
+  }
+
+  container.innerHTML = dishNames.map(dish => {
+    const clips = clipsData[dish];
+    return `
+      <div class="review-group">
+        <div class="review-dish-name">${dish}</div>
+        <div class="clips-grid">
+          ${clips.map(c => `
+            <div class="clip-card" data-dish="${dish}" data-file="${c.filename}"
+                 onclick="toggleClip('${dish}', '${c.filename}', this)">
+              <video src="/api/batch/${currentBatch}/clips/${c.filename}"
+                     preload="metadata" controls></video>
+              <div class="clip-info">
+                <span>roll ${c.roll}</span>
+                <span>9:16 · 5s</span>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function toggleClip(dish, filename, card) {
+  // 每道菜只能选一个
+  if (selectedClips[dish] === filename) {
+    delete selectedClips[dish];
+    card.classList.remove("selected");
+  } else {
+    // 取消同组其他选中
+    document.querySelectorAll(`.clip-card[data-dish="${dish}"]`).forEach(c => {
+      c.classList.remove("selected");
+    });
+    selectedClips[dish] = filename;
+    card.classList.add("selected");
+  }
+
+  const hasSelection = Object.keys(selectedClips).length > 0;
+  document.getElementById("confirmSelect").disabled = !hasSelection;
+}
+
+async function confirmSelection() {
+  if (!Object.keys(selectedClips).length) { toast("请至少选择一个片段", "err"); return; }
+
+  try {
+    await api(`/api/batch/${currentBatch}/select`, {
+      method: "POST",
+      body: JSON.stringify({ selected: selectedClips }),
+    });
+    toast("已确认选用", "ok");
+    currentStep = 5;
+    renderSteps();
+    renderStep5();
+  } catch(e) {
+    toast("提交失败", "err");
+  }
+}
+
+// ── Step 5: 文案编辑 ─────────────────────────────────────────────
+
+let captionsData = {};
+
+async function renderStep5() {
+  showPanel(`
+    <div class="panel-title">文案编辑</div>
+    <div class="panel-desc">AI 已生成字幕和发布文案，可直接编辑修改</div>
+    <div id="captionsContainer">
+      <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">加载中...</div></div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-ghost" onclick="goStep(4); renderStep4();">← 上一步</button>
+      <button class="btn btn-primary" onclick="submitCaptions()">合成成片 →</button>
+    </div>
+  `);
+
+  try {
+    captionsData = await api(`/api/batch/${currentBatch}/captions`);
+    renderCaptions();
+  } catch(e) {
+    document.getElementById("captionsContainer").innerHTML =
+      '<div class="empty"><div class="empty-text">加载失败</div></div>';
+  }
+}
+
+function renderCaptions() {
+  const container = document.getElementById("captionsContainer");
+  const dishes = Object.keys(captionsData);
+
+  container.innerHTML = dishes.map(dish => {
+    const c = captionsData[dish];
+    return `
+      <div class="caption-card">
+        <div class="caption-dish">${dish}</div>
+        <div class="caption-field">
+          <label class="field-label">字幕（显示在视频上）</label>
+          <input class="input" value="${c.subtitle || ''}"
+                 onchange="captionsData['${dish}'].subtitle = this.value" />
+        </div>
+        <div class="caption-field">
+          <label class="field-label">发布文案（配音 + 平台文案）</label>
+          <textarea class="textarea" onchange="captionsData['${dish}'].caption = this.value">${c.caption || ''}</textarea>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function submitCaptions() {
+  try {
+    await api(`/api/batch/${currentBatch}/captions`, {
+      method: "POST",
+      body: JSON.stringify({ captions: captionsData }),
+    });
+
+    // 获取选用的菜品顺序
+    const dishOrder = Object.keys(selectedClips);
+    const template = dishOrder.length >= 4 ? "5_dish" : "3_dish";
+
+    await api(`/api/batch/${currentBatch}/run/compose`, {
+      method: "POST",
+      body: JSON.stringify({
+        video_config: {
+          dish_order: dishOrder,
+          template,
+          brand: { name: "示例品牌", cta: "评论区领优惠券" },
+        },
+      }),
+    });
+
+    currentStep = 6;
+    renderSteps();
+    renderStep6();
+  } catch(e) {
+    toast("合成失败: " + e.message, "err");
+  }
+}
+
+// ── Step 6: 合成下载 ─────────────────────────────────────────────
+
+async function renderStep6() {
+  showPanel(`
+    <div class="progress-container">
+      <div class="progress-ring">
+        <svg width="80" height="80">
+          <circle class="track" cx="40" cy="40" r="34" />
+          <circle class="bar" cx="40" cy="40" r="34"
+                  stroke-dasharray="213.6" stroke-dashoffset="213.6" id="composeBar" />
+        </svg>
+        <div class="progress-text" id="composeText">0%</div>
+      </div>
+      <div class="progress-label" id="composeLabel">正在合成视频...</div>
+      <div class="progress-detail" id="composeDetail">拼接片段 · 添加字幕 · 配音配乐</div>
+    </div>
+  `);
+
+  // 轮询合成进度
+  while (true) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const state = await api(`/api/batch/${currentBatch}/status`);
+      const sp = state.step_progress?.compose;
+
+      if (state.status === "done") {
+        const bar = document.getElementById("composeBar");
+        const text = document.getElementById("composeText");
+        if (bar) bar.style.strokeDashoffset = "0";
+        if (text) text.textContent = "100%";
+        showFinalVideo(state);
+        return;
+      }
+      if (state.status === "error") {
+        document.getElementById("composeLabel").textContent = "合成失败";
+        document.getElementById("composeDetail").textContent = state.error || "";
+        toast("合成失败: " + (state.error || ""), "err");
+        return;
+      }
+
+      // 更新进度
+      const bar = document.getElementById("composeBar");
+      const text = document.getElementById("composeText");
+      if (bar) bar.style.strokeDashoffset = "106.8"; // 50%
+      if (text) text.textContent = "50%";
+
+    } catch(e) {
+      toast("状态查询失败", "err");
+      return;
+    }
+  }
+}
+
+function showFinalVideo(state) {
+  const video = state.videos?.[0];
+  const caption = video?.caption || "";
+
+  showPanel(`
+    <div class="final-container">
+      <div class="panel-title">视频已完成 🎉</div>
+      <div class="panel-desc">成片已生成，可直接下载</div>
+
+      <video class="final-video" src="/api/batch/${currentBatch}/final" controls autoplay></video>
+
+      <div class="final-caption">
+        <strong>配音文案：</strong><br/>${caption}
+      </div>
+
+      <div style="margin-top: 24px;">
+        <a class="btn btn-primary" href="/api/batch/${currentBatch}/final" download>
+          ⬇ 下载视频
+        </a>
+        <button class="btn btn-ghost" onclick="newBatch()" style="margin-left: 12px;">
+          新建批次
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+function newBatch() {
+  currentBatch = null;
+  currentStep = 1;
+  dishes = [];
+  selectedClips = {};
+  captionsData = {};
+  renderSteps();
+  renderStep1();
+}
+
+// ── 路由 ──────────────────────────────────────────────────────────
+
+function renderPanel() {
+  switch(currentStep) {
+    case 1: renderStep1(); break;
+    case 2: renderStep2(); break;
+    case 3: renderStep3(); break;
+    case 4: renderStep4(); break;
+    case 5: renderStep5(); break;
+    case 6: renderStep6(); break;
+  }
+}
+
+// ── 初始化 ────────────────────────────────────────────────────────
+
+async function init() {
+  await checkConfig();
+  currentStep = 1;
+  renderSteps();
+  renderStep1();
+}
+
+init();
+</script>
+</body>
+</html>
