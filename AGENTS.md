@@ -27,6 +27,10 @@ set DEEPSEEK_API_KEY=sk-xxxx          # Step 2 + Step 6
 set KLING_API_KEY=xxxx                # Step 3
 ```
 
+## Git 推送授权
+- 代码改动完成并经过审查后，若未发现重大泄露风险（例如 API Key、`.env`、隐私数据、大型素材库、批量输出成片等不应入仓内容），授权 Agent 直接提交并推送到当前项目已配置的远程分支，无需用户再次手动确认。
+- 如平台或沙箱权限机制强制要求确认，仍按平台权限流程执行。
+
 ## 运行
 ```bash
 python pipeline/run_batch.py --config pipeline/batch_template.yaml
