@@ -20,6 +20,7 @@ TTS 工具待选型，当前提供占位接口，选定后在此实现。
   python pipeline/step6_voice_bgm.py --config pipeline/batch_20260814.yaml
 """
 import argparse
+import asyncio
 import json
 import os
 import subprocess
@@ -93,9 +94,15 @@ def generate_tts(text, out_path):
     # 方案1: edge-tts（免费，推荐先用这个验证流程）
     try:
         import edge_tts
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         communicate = edge_tts.Communicate(text, voice="zh-CN-XiaoxiaoNeural")
-        communicate.save(out_path)
-        return out_path
+        result = communicate.save(out_path)
+        if asyncio.iscoroutine(result) or hasattr(result, "__await__"):
+            asyncio.run(result)
+        if os.path.exists(out_path):
+            return out_path
+        print(f"    [TTS] 音频未生成: {out_path}")
+        return None
     except ImportError:
         pass
     except Exception as e:

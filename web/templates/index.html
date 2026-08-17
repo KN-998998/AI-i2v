@@ -798,6 +798,10 @@ async function createBatch() {
     });
     currentBatch = result.id;
     currentStep = 2;
+    selectedClips = {};
+    promptsData = [];
+    captionsData = {};
+    step6Mode = "edit";
     renderSteps();
     renderStep2();
   } catch(e) {
@@ -809,12 +813,14 @@ async function openBatch(batchId) {
   try {
     const state = await api(`/api/batch/${batchId}`);
     currentBatch = batchId;
+    selectedClips = state.selected_clips || {};
     // 根据状态跳到对应步骤
     const statusMap = {
       created: 2, configured: 2, generating: 4,
       reviewing: 5, selected: 6, composing: 6, done: 6, error: 4
     };
     currentStep = statusMap[state.status] || 2;
+    step6Mode = (state.status === "composing" || state.status === "done") ? "compose" : "edit";
     renderSteps();
     renderPanel();
   } catch(e) {
@@ -1201,59 +1207,13 @@ async function pollStep(stepName) {
   }
 }
 
-async function pollStep4() {
-  while (true) {
-    await new Promise(r => setTimeout(r, 3000));
-    try {
-      const state = await api(`/api/batch/${currentBatch}/status`);
-      const sp = state.step_progress?.step3;
-      if (!sp) continue;
-
-      const total = sp.total || 1;
-      const done = sp.done || 0;
-      const percent = (done / total) * 100;
-
-      const results = sp.results || [];
-      const lastResult = results[results.length - 1];
-      let detail = `${done}/${total} 个片段`;
-      if (lastResult) {
-        detail += ` · ${lastResult.dish} roll${lastResult.roll} ${lastResult.status === "ok" ? "✓" : "✕"}`;
-      }
-
-      updateProgress(percent, "正在调用 Kling API 生成视频...", detail);
-
-      if (results.length > 0) {
-        const newLogs = results.filter(r => !r._logged);
-        newLogs.forEach(r => {
-          addLog(`${r.dish} roll${r.roll}: ${r.status === "ok" ? "成功" : "失败"}`,
-                 r.status === "ok" ? "ok" : "err");
-          r._logged = true;
-        });
-      }
-
-      if (sp.status === "done") {
-        updateProgress(100, "视频生成完成", `${done}/${total} 成功`);
-        return;
-      }
-      if (sp.status === "error") throw new Error(sp.error);
-    } catch(e) {
-      if (e.message.includes("状态查询")) {
-        // 忽略状态查询错误
-      } else {
-        addLog("生成失败: " + e.message, "err");
-        throw e;
-      }
-    }
-  }
-}
-
 // ── Step 5: 审核挑选 ─────────────────────────────────────────────
 
 let selectedClips = {};
 let clipsData = {};
+let step6Mode = "edit";
 
 async function renderStep5() {
-  selectedClips = {};
   clipsData = {};
 
   showPanel(`
@@ -1307,6 +1267,8 @@ function renderClips() {
       </div>
     `;
   }).join("");
+
+  syncSelectedClipState();
 }
 
 function toggleClip(dish, filename, card) {
@@ -1327,6 +1289,19 @@ function toggleClip(dish, filename, card) {
   document.getElementById("confirmSelect").disabled = !hasSelection;
 }
 
+function syncSelectedClipState() {
+  document.querySelectorAll(".clip-card").forEach(card => {
+    const dish = card.dataset.dish;
+    const file = card.dataset.file;
+    card.classList.toggle("selected", selectedClips[dish] === file);
+  });
+
+  const confirmBtn = document.getElementById("confirmSelect");
+  if (confirmBtn) {
+    confirmBtn.disabled = !Object.keys(selectedClips).length;
+  }
+}
+
 async function confirmSelection() {
   if (!Object.keys(selectedClips).length) { toast("请至少选择一个片段", "err"); return; }
 
@@ -1337,6 +1312,7 @@ async function confirmSelection() {
     });
     toast("已确认选用", "ok");
     currentStep = 6;
+    step6Mode = "edit";
     renderSteps();
     renderStep6();
   } catch(e) {
@@ -1349,6 +1325,7 @@ async function confirmSelection() {
 let captionsData = {};
 
 async function renderStep6() {
+  step6Mode = "edit";
   showPanel(`
     <div class="panel-title">文案编辑</div>
     <div class="panel-desc">AI 已生成字幕和发布文案，可直接编辑修改</div>
@@ -1395,6 +1372,11 @@ function renderCaptions() {
 
 async function submitCaptions() {
   try {
+    if (!Object.keys(selectedClips).length) {
+      toast("请先选择要合成的片段", "err");
+      return;
+    }
+
     await api(`/api/batch/${currentBatch}/captions`, {
       method: "POST",
       body: JSON.stringify({ captions: captionsData }),
@@ -1416,8 +1398,9 @@ async function submitCaptions() {
     });
 
     currentStep = 6;
+    step6Mode = "compose";
     renderSteps();
-    renderStep6();
+    renderComposeProgress();
   } catch(e) {
     toast("合成失败: " + e.message, "err");
   }
@@ -1425,7 +1408,8 @@ async function submitCaptions() {
 
 // ── Step 6: 合成下载 ─────────────────────────────────────────────
 
-async function renderStep6() {
+async function renderComposeProgress() {
+  step6Mode = "compose";
   showPanel(`
     <div class="progress-container">
       <div class="progress-ring">
@@ -1508,7 +1492,9 @@ function newBatch() {
   currentStep = 1;
   dishes = [];
   selectedClips = {};
+  promptsData = [];
   captionsData = {};
+  step6Mode = "edit";
   renderSteps();
   renderStep1();
 }
@@ -1522,7 +1508,7 @@ function renderPanel() {
     case 3: renderStep3(); break;
     case 4: renderStep4(); break;
     case 5: renderStep5(); break;
-    case 6: renderStep6(); break;
+    case 6: step6Mode === "compose" ? renderComposeProgress() : renderStep6(); break;
   }
 }
 

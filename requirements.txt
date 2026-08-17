@@ -1,0 +1,12 @@
+# 短视频生产提效 —— Python 3.11 依赖清单
+# 安装：python -m pip install -r requirements.txt
+# 版本对齐自当前 3.11 环境（pip show 实测），可正常升级到兼容新版本。
+
+Pillow==12.3.0            # PIL：图片处理（预处理、压缩）
+opencv-python==5.0.0.93   # cv2：图片/视频处理
+edge-tts==7.2.7           # 语音合成（step6）
+Flask==3.0.3              # Web 界面（web/app.py）
+numpy==2.4.3              # 数值计算
+requests==2.33.0          # HTTP 调用（Kling / LLM 等 API）
+urllib3==2.7.0            # requests 底层（代码中有直接 import）
+PyYAML==6.0.3             # yaml：批量配置（batch_template.yaml 等）

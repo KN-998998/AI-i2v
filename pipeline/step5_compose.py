@@ -75,6 +75,18 @@ def trim_clip(clip_path, out_path, start=0.5, duration=3.0):
     return out_path
 
 
+def _escape_drawtext(text: str) -> str:
+    """转义 ffmpeg drawtext 的特殊字符。"""
+    return (
+        str(text)
+        .replace("\\", r"\\")
+        .replace(":", r"\:")
+        .replace("'", r"\'")
+        .replace("%", r"\%")
+        .replace("\n", " ")
+    )
+
+
 def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
     """拼接多个片段 + 叠加字幕 + 片尾 CTA。"""
     w, h = FINAL_RESOLUTION
@@ -87,16 +99,30 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
 
     # 构建字幕滤镜（drawtext）
     filters = []
-    if subtitles:
-        for i, text in enumerate(subtitles):
+    subtitle_items = []
+    for item in subtitles or []:
+        if isinstance(item, dict):
+            subtitle_items.append({
+                "text": item.get("text", ""),
+                "duration": float(item.get("duration", 0) or 0),
+            })
+        else:
+            subtitle_items.append({
+                "text": str(item),
+                "duration": 0.0,
+            })
+
+    if subtitle_items:
+        start_time = 0.0
+        for item in subtitle_items:
+            text = item["text"]
+            duration = item["duration"]
             if not text:
+                start_time += duration
                 continue
-            # 在每个片段底部居中显示字幕
-            # 使用 escape 避免特殊字符问题
-            safe_text = text.replace(":", r"\:").replace("'", r"'\''")
-            # 简化：所有字幕统一叠加在底部
-            start_time = sum(subtitles[j]["duration"] for j in range(i))
-            end_time = start_time + subtitles[i]["duration"]
+
+            safe_text = _escape_drawtext(text)
+            end_time = start_time + duration
             filters.append(
                 f"drawtext=text='{safe_text}':"
                 f"fontfile='C\\\\:/Windows/Fonts/msyh.ttc':"
@@ -104,12 +130,13 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 f"x=(w-text_w)/2:y=h-80:"
                 f"enable='between(t,{start_time},{end_time})'"
             )
+            start_time = end_time
 
     # 片尾 CTA
     if brand_info:
         cta_text = f"{brand_info.get('name','')} | {brand_info.get('cta','')}"
-        safe_cta = cta_text.replace(":", r"\:").replace("'", r"'\''")
-        total_duration = sum(s["duration"] for s in subtitles) if subtitles else 10
+        safe_cta = _escape_drawtext(cta_text)
+        total_duration = sum(s["duration"] for s in subtitle_items) if subtitle_items else 10
         filters.append(
             f"drawtext=text='{safe_cta}':"
             f"fontfile='C\\\\:/Windows/Fonts/msyh.ttc':"
