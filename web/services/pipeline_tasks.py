@@ -365,10 +365,18 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
 
 def run_compose(batch_id: str, video_config: dict[str, Any]) -> dict[str, Any]:
     state = get_batch_state(batch_id)
+    selected = state.get("selected_clips", {})
+    try:
+        min_dishes = int(video_config.get("min_dishes") or 5)
+    except (TypeError, ValueError):
+        min_dishes = 5
+    min_dishes = max(1, min(min_dishes, 20))
+    selected_count = sum(1 for filename in selected.values() if filename)
+    if selected_count < min_dishes:
+        raise ValueError(f"当前已选择 {selected_count} 道菜，至少需要选择 {min_dishes} 道菜才能合成")
+
     state["status"] = "composing"
     state["current_step"] = 5
-
-    selected = state.get("selected_clips", {})
     video_plan = build_video_plan(state, selected, video_config)
     if not video_plan:
         raise ValueError("请先选择可合成的片段")
