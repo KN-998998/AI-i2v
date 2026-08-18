@@ -493,6 +493,58 @@ body::before {
   display: flex; justify-content: space-between;
 }
 
+/* ── 提示词卡片 ── */
+.prompt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.prompt-card {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+.prompt-card:hover { border-color: var(--primary-dim); }
+
+.prompt-card.selected {
+  border-color: var(--green);
+  box-shadow: 0 0 16px rgba(127, 176, 105, 0.2);
+}
+
+.prompt-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.variant-badge {
+  background: var(--primary-glow);
+  color: var(--primary);
+  font-size: 12px; font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.prompt-card.selected .variant-badge {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.prompt-check {
+  font-size: 12px; font-weight: 600;
+  color: var(--text-mute);
+}
+
+.prompt-card.selected .prompt-check { color: var(--green); }
+.prompt-card .textarea { cursor: text; }
+
 /* ── 文案编辑 ── */
 .caption-card {
   background: var(--surface);
@@ -536,6 +588,43 @@ body::before {
   font-size: 14px;
   color: var(--text-dim);
   line-height: 1.6;
+}
+
+.final-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+  margin: 24px 0;
+  text-align: left;
+}
+
+.final-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.final-card video {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+.final-card-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.final-card-meta {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* ── 底部操作栏 ── */
@@ -1003,9 +1092,13 @@ async function renderStep3() {
   try {
     promptsData = await api(`/api/batch/${currentBatch}/prompts`);
     if (promptsData && promptsData.length) {
-      // 已有 → 直接显示编辑页，不再自动生成
-      updateProgress3(100, "提示词已生成", "直接复用已有结果");
-      renderPromptsEditor();
+      if (hasCompletePromptVariants(promptsData)) {
+        // 已有完整方案时直接复用，不再重复调用 LLM。
+        updateProgress3(100, "提示词已生成", "直接复用已有结果");
+        renderPromptsEditor();
+      } else {
+        renderPromptUpgradeRequired();
+      }
       return;
     }
   } catch(e) {
@@ -1042,6 +1135,46 @@ function updateProgress3(percent, label, detail) {
   if (det) det.textContent = detail || "";
 }
 
+function hasCompletePromptVariants(prompts) {
+  const countByDish = {};
+  prompts.forEach(p => {
+    countByDish[p.dish] = (countByDish[p.dish] || 0) + 1;
+  });
+  return Object.values(countByDish).every(count => count >= 3);
+}
+
+function renderPromptUpgradeRequired() {
+  const container = document.getElementById("promptsContainer");
+  container.innerHTML = `
+    <div class="empty">
+      <div class="empty-text">这个旧批次只有单条提示词，尚未生成推近、环绕、横移 3 个方案。</div>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="regeneratePromptVariants()">生成 3 个方案</button>
+    </div>
+  `;
+  document.getElementById("generateBtn").disabled = true;
+}
+
+async function regeneratePromptVariants() {
+  const container = document.getElementById("promptsContainer");
+  container.innerHTML = `
+    <div class="progress-container" style="padding:32px;">
+      <div class="progress-label">正在生成 3 个提示词方案...</div>
+      <div class="progress-detail" id="promptsDetail"></div>
+    </div>
+  `;
+  try {
+    await api(`/api/batch/${currentBatch}/run/step2`, {
+      method: "POST",
+      body: JSON.stringify({ force: true }),
+    });
+    await pollStep("step2");
+    promptsData = await api(`/api/batch/${currentBatch}/prompts`);
+    renderPromptsEditor();
+  } catch(e) {
+    container.innerHTML = `<div class="empty"><div class="empty-text">生成失败: ${e.message}</div></div>`;
+  }
+}
+
 function renderPromptsEditor() {
   const container = document.getElementById("promptsContainer");
 
@@ -1050,32 +1183,83 @@ function renderPromptsEditor() {
     return;
   }
 
+  // 按菜分组（后端每菜 3 个 variant）
+  const byDish = {};
+  promptsData.forEach((p, index) => {
+    (byDish[p.dish] = byDish[p.dish] || []).push({ p, index });
+  });
+
+  // 默认勾选：没有任何勾选时，每菜勾第 1 条（variant v1）
+  const anySelected = promptsData.some(p => p.selected);
+  if (!anySelected) {
+    promptsData.forEach(p => {
+      p.selected = (byDish[p.dish][0].p === p);
+    });
+  }
+
   container.innerHTML = `
     <div style="margin-bottom:16px; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text-dim);">
-      💡 提示词已自动填充固定约束词（保证菜品不变形），可自由修改描述部分。修改完成后点击右下角"生成视频"按钮。
+      💡 每道菜已生成 3 个不同运镜方向的提示词卡片（推近 / 环绕 / 横移），可点卡片勾选或取消。
+      生成 1 段视频选 1 张、生成 2 段选 2 张、最多 3 张全选；<b>只有勾选的卡片才会调用可灵 API 生成视频</b>。提示词可直接在卡片内修改。
     </div>
-    ${promptsData.map((p, i) => `
-      <div class="caption-card">
-        <div class="caption-dish">${p.dish}</div>
-        <div class="caption-field">
-          <label class="field-label">图生视频提示词（可修改）</label>
-          <textarea class="textarea" style="min-height:100px;" onchange="promptsData[${i}].video_prompt = this.value">${p.video_prompt}</textarea>
+    ${Object.keys(byDish).map(dish => `
+      <div class="review-group">
+        <div class="review-dish-name">${dish}</div>
+        <div class="prompt-grid">
+          ${byDish[dish].map(({ p, index }) => `
+            <div class="prompt-card ${p.selected ? "selected" : ""}"
+                 data-dish="${dish}" data-variant="${p.variant_id || "v1"}"
+                 onclick="togglePromptCard(${index}, this)">
+              <div class="prompt-card-head">
+                <span class="variant-badge">${p.variant_label || p.variant_id || "方案"}</span>
+                <span class="prompt-check">${p.selected ? "✓ 已选" : "未选"}</span>
+              </div>
+              <textarea class="textarea" style="min-height:110px;" onclick="event.stopPropagation()"
+                        onchange="promptsData[${index}].video_prompt = this.value">${p.video_prompt}</textarea>
+            </div>
+          `).join("")}
         </div>
       </div>
     `).join("")}
   `;
 
+  updateGenerateHint();
   document.getElementById("generateBtn").disabled = false;
 }
 
+function togglePromptCard(index, card) {
+  const p = promptsData[index];
+  if (!p) return;
+  p.selected = !p.selected;
+  card.classList.toggle("selected", p.selected);
+  const check = card.querySelector(".prompt-check");
+  if (check) check.textContent = p.selected ? "✓ 已选" : "未选";
+  updateGenerateHint();
+}
+
+function updateGenerateHint() {
+  const n = promptsData.filter(p => p.selected).length;
+  const btn = document.getElementById("generateBtn");
+  if (!btn) return;
+  btn.textContent = n ? `生成视频（${n} 个片段）→` : "生成视频 →";
+  btn.disabled = n === 0;
+}
+
 async function generateVideos() {
-  // 保存编辑后的提示词
+  // 校验：至少勾选 1 张提示词卡片，否则后端会生成 0 个任务
+  const selectedCount = promptsData.filter(p => p.selected).length;
+  if (!selectedCount) {
+    toast("请至少勾选 1 张提示词卡片", "err");
+    return;
+  }
+
+  // 保存编辑后的提示词（含勾选状态）
   try {
     await api(`/api/batch/${currentBatch}/prompts`, {
       method: "POST",
       body: JSON.stringify({ prompts: promptsData }),
     });
-    toast("提示词已保存，开始生成视频", "ok");
+    toast(`已勾选 ${selectedCount} 个提示词，开始生成视频`, "ok");
   } catch(e) {
     toast("保存提示词失败", "err");
     return;
@@ -1136,7 +1320,8 @@ async function pollStep4() {
       const lastResult = results[results.length - 1];
       let detail = `${done}/${total} 个片段`;
       if (lastResult) {
-        detail += ` · ${lastResult.dish} roll${lastResult.roll} ${lastResult.status === "ok" ? "✓" : "✕"}`;
+        const label = lastResult.variant_label || lastResult.variant_id || `方案${lastResult.roll || ""}`;
+        detail += ` · ${lastResult.dish} ${label} ${lastResult.status === "ok" ? "✓" : "✕"}`;
       }
 
       updateProgress(percent, "正在调用 Kling API 生成视频...", detail);
@@ -1144,7 +1329,8 @@ async function pollStep4() {
       if (results.length > 0) {
         const newLogs = results.filter(r => !r._logged);
         newLogs.forEach(r => {
-          addLog(`${r.dish} roll${r.roll}: ${r.status === "ok" ? "成功" : "失败"}`,
+          const label = r.variant_label || r.variant_id || `方案${r.roll || ""}`;
+          addLog(`${r.dish} ${label}: ${r.status === "ok" ? "成功" : "失败"}`,
                  r.status === "ok" ? "ok" : "err");
           r._logged = true;
         });
@@ -1190,20 +1376,32 @@ function addLog(msg, type = "") {
 }
 
 async function pollStep(stepName) {
-  const stepProgress = { step1: 15, step2: 30 };
+  const stepProgress = { step1: 15, step2: 50 };
   const targetPercent = stepProgress[stepName] || 0;
   const labels = {
     step1: "正在预处理图片...",
     step2: "正在生成提示词...",
   };
-  updateProgress(targetPercent, labels[stepName] || "", "");
+  updateProgress3(targetPercent, labels[stepName] || "", "");
 
   while (true) {
     await new Promise(r => setTimeout(r, 2000));
     const state = await api(`/api/batch/${currentBatch}/status`);
     const sp = state.step_progress?.[stepName];
-    if (sp?.status === "done") return;
-    if (sp?.status === "error") throw new Error(sp.error);
+    if (!sp) continue;
+
+    const total = sp.total || 1;
+    const done = sp.done || 0;
+    const percent = sp.status === "done"
+      ? 100
+      : Math.max(targetPercent, Math.min(99, Math.round((done / total) * 100)));
+    const detail = stepName === "step1"
+      ? `${done}/${total} 张图片`
+      : `${done}/${total} 条提示词`;
+    updateProgress3(percent, labels[stepName] || "", detail);
+
+    if (sp.status === "done") return;
+    if (sp.status === "error") throw new Error(sp.error);
   }
 }
 
@@ -1258,7 +1456,7 @@ function renderClips() {
               <video src="/api/batch/${currentBatch}/clips/${c.filename}"
                      preload="metadata" controls></video>
               <div class="clip-info">
-                <span>roll ${c.roll}</span>
+                <span>${c.variant_label || c.variant_id || `方案 ${c.roll}`}</span>
                 <span>9:16 · 5s</span>
               </div>
             </div>
@@ -1327,14 +1525,28 @@ let captionsData = {};
 async function renderStep6() {
   step6Mode = "edit";
   showPanel(`
-    <div class="panel-title">文案编辑</div>
-    <div class="panel-desc">AI 已生成字幕和发布文案，可直接编辑修改</div>
+    <div class="panel-title">批量文案与合成</div>
+    <div class="panel-desc">从已审核菜品池随机组合成片；每条 5-6 个菜品，甜品如出现只放最后</div>
+    <div class="field-group">
+      <label class="field-label">本批次生成条数</label>
+      <input class="input" id="batchVideoCount" type="number" min="1" max="50" value="10" />
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="field-group">
+        <label class="field-label">每条最少菜品数</label>
+        <input class="input" id="minDishesPerVideo" type="number" min="1" max="20" value="5" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">每条最多菜品数</label>
+        <input class="input" id="maxDishesPerVideo" type="number" min="1" max="20" value="6" />
+      </div>
+    </div>
     <div id="captionsContainer">
       <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">加载中...</div></div>
     </div>
     <div class="action-bar">
       <button class="btn btn-ghost" onclick="goStep(5); renderStep5();">← 上一步</button>
-      <button class="btn btn-primary" onclick="submitCaptions()">合成成片 →</button>
+      <button class="btn btn-primary" onclick="submitCaptions()">批量合成 →</button>
     </div>
   `);
 
@@ -1382,16 +1594,23 @@ async function submitCaptions() {
       body: JSON.stringify({ captions: captionsData }),
     });
 
-    // 获取选用的菜品顺序
     const dishOrder = Object.keys(selectedClips);
-    const template = dishOrder.length >= 4 ? "5_dish" : "3_dish";
+    const countInput = document.getElementById("batchVideoCount");
+    const rawCount = parseInt(countInput?.value || "10", 10);
+    const count = Math.max(1, Math.min(Number.isFinite(rawCount) ? rawCount : 10, 50));
+    const rawMinDishes = parseInt(document.getElementById("minDishesPerVideo")?.value || "5", 10);
+    const rawMaxDishes = parseInt(document.getElementById("maxDishesPerVideo")?.value || "6", 10);
+    const minDishes = Math.max(1, Math.min(Number.isFinite(rawMinDishes) ? rawMinDishes : 5, 20));
+    const maxDishes = Math.max(minDishes, Math.min(Number.isFinite(rawMaxDishes) ? rawMaxDishes : 6, 20));
 
     await api(`/api/batch/${currentBatch}/run/compose`, {
       method: "POST",
       body: JSON.stringify({
         video_config: {
           dish_order: dishOrder,
-          template,
+          count,
+          min_dishes: minDishes,
+          max_dishes: maxDishes,
           brand: { name: "示例品牌", cta: "评论区领优惠券" },
         },
       }),
@@ -1420,7 +1639,7 @@ async function renderComposeProgress() {
         </svg>
         <div class="progress-text" id="composeText">0%</div>
       </div>
-      <div class="progress-label" id="composeLabel">正在合成视频...</div>
+      <div class="progress-label" id="composeLabel">正在批量合成视频...</div>
       <div class="progress-detail" id="composeDetail">拼接片段 · 添加字幕 · 配音配乐</div>
     </div>
   `);
@@ -1430,7 +1649,7 @@ async function renderComposeProgress() {
     await new Promise(r => setTimeout(r, 2000));
     try {
       const state = await api(`/api/batch/${currentBatch}/status`);
-      const sp = state.step_progress?.compose;
+      const sp = state.step_progress?.compose || {};
 
       if (state.status === "done") {
         const bar = document.getElementById("composeBar");
@@ -1450,8 +1669,13 @@ async function renderComposeProgress() {
       // 更新进度
       const bar = document.getElementById("composeBar");
       const text = document.getElementById("composeText");
-      if (bar) bar.style.strokeDashoffset = "106.8"; // 50%
-      if (text) text.textContent = "50%";
+      const total = sp.total || 1;
+      const done = sp.done || 0;
+      const percent = Math.round((done / total) * 100);
+      if (bar) bar.style.strokeDashoffset = 213.6 * (1 - percent / 100);
+      if (text) text.textContent = percent + "%";
+      const detail = document.getElementById("composeDetail");
+      if (detail) detail.textContent = `${done}/${total} 条成片`;
 
     } catch(e) {
       toast("状态查询失败", "err");
@@ -1461,23 +1685,34 @@ async function renderComposeProgress() {
 }
 
 function showFinalVideo(state) {
-  const video = state.videos?.[0];
-  const caption = video?.caption || "";
+  const videos = state.videos || [];
+  const okVideos = videos.filter(v => v.status === "ok");
+  const cards = okVideos.map(v => `
+    <div class="final-card">
+      <video src="/api/batch/${currentBatch}/final/${encodeURIComponent(v.filename)}" controls></video>
+      <div class="final-card-title">
+        <span>${v.id || v.filename}</span>
+        <a href="/api/batch/${currentBatch}/final/${encodeURIComponent(v.filename)}" download>下载</a>
+      </div>
+      <div class="final-card-meta">
+        ${v.dishes ? v.dishes.join(" / ") : ""}<br/>
+        ${v.caption || ""}
+      </div>
+    </div>
+  `).join("");
 
   showPanel(`
     <div class="final-container">
-      <div class="panel-title">视频已完成 🎉</div>
-      <div class="panel-desc">成片已生成，可直接下载</div>
+      <div class="panel-title">批量视频已完成</div>
+      <div class="panel-desc">已生成 ${okVideos.length}/${videos.length || okVideos.length} 条成片，可逐条预览或打包下载</div>
 
-      <video class="final-video" src="/api/batch/${currentBatch}/final" controls autoplay></video>
-
-      <div class="final-caption">
-        <strong>配音文案：</strong><br/>${caption}
+      <div class="final-grid">
+        ${cards || '<div class="empty"><div class="empty-text">暂无可预览成片</div></div>'}
       </div>
 
       <div style="margin-top: 24px;">
         <a class="btn btn-primary" href="/api/batch/${currentBatch}/final" download>
-          ⬇ 下载视频
+          下载全部
         </a>
         <button class="btn btn-ghost" onclick="newBatch()" style="margin-left: 12px;">
           新建批次

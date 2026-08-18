@@ -33,6 +33,9 @@ Desktop.ini
 *.swp
 .hermes/
 
+# 日志
+logs/
+
 # 临时文件
 *.tmp
 *.bak

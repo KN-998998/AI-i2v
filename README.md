@@ -57,13 +57,14 @@
 | 图片处理 | **Pillow** | 9:16 裁切、尺寸缩放、锐化 |
 | 图床 | **无需** | Kling API 支持 base64 图片直传 |
 | 配置管理 | **PyYAML** | batch.yaml 驱动全流程 |
+| Web 后端 | **FastAPI + Uvicorn** | 运营工作台 API、文件服务、后台任务编排 |
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-pip install requests PyJWT pyyaml edge-tts Pillow
+pip install -r requirements.txt
 ```
 
 ffmpeg 已预装在系统中。
@@ -110,7 +111,17 @@ videos:
   # ... 10条视频编排
 ```
 
-### 4. 运行流水线
+### 4. 启动 Web 工作台
+
+```bash
+python web/app.py
+```
+
+浏览器打开：`http://127.0.0.1:5000`
+
+FastAPI 文档：`http://127.0.0.1:5000/docs`
+
+### 5. 运行流水线（CLI 可选）
 
 ```bash
 # 方式一：全流程（Step 4 后暂停等人工审核）
@@ -124,7 +135,7 @@ python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --only 2   # 
 python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --start 5   # 审核后继续
 ```
 
-### 5. 人工审核
+### 6. 人工审核
 
 Step 4 完成后：
 1. 打开 `output/batch_YYYYMMDD/04_selected/review.html` 查看所有视频片段
@@ -145,6 +156,13 @@ pipeline/
 ├── step4_manual_review.py # 生成 HTML 审核页 + CSV 清单
 ├── step5_compose.py       # ffmpeg 掐头去尾 + 拼接 + 字幕 + CTA
 └── step6_voice_bgm.py     # DeepSeek 文案 + edge-tts 配音 + BGM 混音
+
+web/
+├── app.py                 # FastAPI 应用入口
+├── api/routes.py          # HTTP 路由层（保持 /api 契约）
+├── core/settings.py       # Web 配置与项目路径
+├── core/logging.py        # 控制台 + 文件轮转日志
+└── services/              # 状态、编排、后台任务服务
 ```
 
 ## 输出目录结构

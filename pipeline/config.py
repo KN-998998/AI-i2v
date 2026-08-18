@@ -35,7 +35,7 @@ def load_dotenv(env_path=None):
             k, _, v = line.partition("=")
             k = k.strip()
             v = v.strip().strip("\"'")
-            if k and k not in os.environ:   # 不覆盖已存在的系统环境变量
+            if k and not os.environ.get(k):   # 不覆盖已存在的非空系统环境变量
                 os.environ[k] = v
 
 
@@ -66,9 +66,11 @@ DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 DEEPSEEK_MODEL    = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
-KLING_API_KEY  = os.environ.get("KLING_API_KEY", "")
-KLING_BASE_URL = os.environ.get("KLING_BASE_URL", "https://api.klingai.com")
-KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-v2.6")          # 可灵 2.6
+KLING_API_KEY     = os.environ.get("KLING_API_KEY", "")
+KLING_ACCESS_KEY  = os.environ.get("KLING_ACCESS_KEY", "")
+KLING_SECRET_KEY  = os.environ.get("KLING_SECRET_KEY", "")
+KLING_BASE_URL    = os.environ.get("KLING_BASE_URL", "https://api-beijing.klingai.com")
+KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-v2-6")          # 可灵 2.6
 
 # TTS 配置（待选型，先留占位）
 TTS_PROVIDER = ""
@@ -105,7 +107,7 @@ PROMPT_PREFIX = "真实餐饮广告质感，"
 
 # 提示词固定约束后缀
 PROMPT_SUFFIX = (
-    "画面稳定，高清，食欲感强，暖色餐厅灯光，浅景深，"
+    "运动平滑稳定，高清，食欲感强，暖色餐厅灯光，浅景深，"
     "不生成文字，不生成Logo，不出现人物"
 )
 

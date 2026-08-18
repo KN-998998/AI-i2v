@@ -5,8 +5,12 @@
 Pillow==12.3.0            # PIL：图片处理（预处理、压缩）
 opencv-python==5.0.0.93   # cv2：图片/视频处理
 edge-tts==7.2.7           # 语音合成（step6）
-Flask==3.0.3              # Web 界面（web/app.py）
+fastapi==0.141.1          # Web API 框架（web/app.py）
+uvicorn[standard]==0.52.0 # ASGI 服务（FastAPI 启动）
+python-multipart==0.0.32  # FastAPI 文件上传表单解析
+httpx2==2.10.0             # FastAPI TestClient 烟测依赖
 numpy==2.4.3              # 数值计算
 requests==2.33.0          # HTTP 调用（Kling / LLM 等 API）
 urllib3==2.7.0            # requests 底层（代码中有直接 import）
+PyJWT==2.10.1             # 可灵 AK/SK JWT 鉴权
 PyYAML==6.0.3             # yaml：批量配置（batch_template.yaml 等）

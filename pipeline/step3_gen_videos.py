@@ -7,10 +7,11 @@ Step 3: 图片 + 提示词 → Kling API 批量图生视频
 输出：03_clips/ 每道菜的 5s 无声 9:16 视频片段（每菜 ROLL_COUNT 个版本）
 
 可灵官方 API（v2.6）：
-  - 认证: API Key + Bearer Token（一个 Key）
+  - 认证: API Key + Bearer Token
   - 图生视频: POST /v1/videos/image2video
   - 任务查询: GET /v1/videos/image2video/{task_id}
   - 图片: 支持 base64 直传（无需图床！）
+  - 模型: 可灵 2.6 对应 model_name=kling-v2-6
   - 时长: 精确 5s 或 10s
   - 分辨率: mode=pro → 1080p
   - 宽高比: 自动跟随输入图（预处理为 9:16 则输出 9:16）
@@ -27,6 +28,7 @@ import sys
 import time
 from pathlib import Path
 
+import jwt
 import requests
 import yaml
 from urllib3.util.retry import Retry
@@ -34,7 +36,8 @@ from requests.adapters import HTTPAdapter
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.config import (
-    KLING_API_KEY, KLING_BASE_URL, KLING_MODEL,
+    KLING_API_KEY, KLING_ACCESS_KEY, KLING_SECRET_KEY,
+    KLING_BASE_URL, KLING_MODEL,
     VIDEO_RESOLUTION, VIDEO_DURATION, VIDEO_SILENT, ROLL_COUNT,
     NEGATIVE_PROMPT,
     get_batch_dir, batch_subdirs,
@@ -50,15 +53,50 @@ MAX_IMAGE_SIZE = 10 * 1024 * 1024
 
 def check_credentials():
     """检查 API Key。"""
-    if not KLING_API_KEY:
+    if not ((KLING_ACCESS_KEY and KLING_SECRET_KEY) or KLING_API_KEY):
         print("=" * 60)
-        print("[错误] 未配置 KLING_API_KEY")
+        print("[错误] 未配置 Kling 鉴权信息")
         print()
         print("配置方式：")
-        print("  1. 登录 klingai.com → 控制台 → 新建 API Key")
-        print("  2. 设置环境变量：set KLING_API_KEY=你的key")
+        print("  1. 登录可灵开发者平台 → API 密钥")
+        print("  2. 设置环境变量：KLING_API_KEY=你的key")
+        print("  3. 新版接口域名建议：KLING_BASE_URL=https://api-beijing.klingai.com")
         print("=" * 60)
         sys.exit(1)
+
+
+def build_auth_token():
+    """生成 Kling Authorization token。优先按官方 AK/SK 生成 JWT。"""
+    if KLING_ACCESS_KEY and KLING_SECRET_KEY:
+        now = int(time.time())
+        payload = {
+            "iss": KLING_ACCESS_KEY,
+            "exp": now + 1800,
+            "nbf": now - 5,
+        }
+        headers = {
+            "alg": "HS256",
+            "typ": "JWT",
+        }
+        return jwt.encode(payload, KLING_SECRET_KEY, algorithm="HS256", headers=headers)
+    return KLING_API_KEY
+
+
+def auth_headers(content_type=False):
+    """构造请求头。"""
+    headers = {"Authorization": f"Bearer {build_auth_token()}"}
+    if content_type:
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
+def parse_json_response(resp, action):
+    """解析 JSON，保留非 JSON 响应正文，方便定位鉴权/网关错误。"""
+    try:
+        return resp.json()
+    except ValueError:
+        text = resp.text.strip().replace("\n", " ")
+        raise RuntimeError(f"{action}失败: HTTP {resp.status_code} 非JSON响应: {text[:300]}")
 
 
 def session_with_retry():
@@ -81,10 +119,7 @@ def image_to_base64(image_path: str) -> str:
 def create_task(session, image_base64, prompt, negative_prompt,
                 duration=5, mode="pro", sound="off"):
     """创建图生视频任务，返回 task_id。"""
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {KLING_API_KEY}",
-    }
+    headers = auth_headers(content_type=True)
     payload = {
         "model_name": KLING_MODEL,
         "image": image_base64,
@@ -100,7 +135,7 @@ def create_task(session, image_base64, prompt, negative_prompt,
         f"{KLING_BASE_URL}/v1/videos/image2video",
         headers=headers, json=payload, timeout=120,
     )
-    data = resp.json()
+    data = parse_json_response(resp, "创建任务")
 
     if resp.status_code != 200 or data.get("code") != 0:
         err = data.get("message", resp.text[:300])
@@ -112,12 +147,12 @@ def create_task(session, image_base64, prompt, negative_prompt,
 
 def query_task(session, task_id):
     """查询任务状态。"""
-    headers = {"Authorization": f"Bearer {KLING_API_KEY}"}
+    headers = auth_headers()
     resp = session.get(
         f"{KLING_BASE_URL}/v1/videos/image2video/{task_id}",
         headers=headers, timeout=30,
     )
-    data = resp.json()
+    data = parse_json_response(resp, "查询任务")
     return data
 
 
