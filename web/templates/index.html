@@ -1068,6 +1068,10 @@ async function renderStep3() {
   showPanel(`
     <div class="panel-title">提示词编辑</div>
     <div class="panel-desc">AI 已为每道菜生成图生视频提示词，请审阅修改后点击"生成视频"</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;">
+      <input type="checkbox" id="useTailFrame" checked />
+      <span>环绕方案使用首尾帧（自动用该菜不同角度的第 2 推荐图做尾帧，环绕更真实）</span>
+    </label>
     <div id="promptsContainer">
       <div class="progress-container" style="padding:32px;">
         <div class="progress-ring">
@@ -1253,11 +1257,13 @@ async function generateVideos() {
     return;
   }
 
-  // 保存编辑后的提示词（含勾选状态）
+  // 保存编辑后的提示词（含勾选状态 + 首尾帧开关）
+  const useTailFrame = document.getElementById("useTailFrame")
+    ? document.getElementById("useTailFrame").checked : true;
   try {
     await api(`/api/batch/${currentBatch}/prompts`, {
       method: "POST",
-      body: JSON.stringify({ prompts: promptsData }),
+      body: JSON.stringify({ prompts: promptsData, use_tail_frame: useTailFrame }),
     });
     toast(`已勾选 ${selectedCount} 个提示词，开始生成视频`, "ok");
   } catch(e) {

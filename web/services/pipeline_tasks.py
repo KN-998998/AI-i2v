@@ -177,7 +177,7 @@ def run_step2(batch_id: str, force: bool = False) -> dict[str, Any]:
     return {"status": "started", "total": total_variants}
 
 
-def _build_step3_tasks(dirs: dict[str, Path]) -> list[dict[str, Any]]:
+def _build_step3_tasks(dirs: dict[str, Path], use_tail_frame: bool = True) -> list[dict[str, Any]]:
     images_data = load_manifest(dirs, "images") or []
     prompts_data = load_manifest(dirs, "prompts") or []
     edited_path = dirs["prompts"] / "edited_prompts.json"
@@ -208,13 +208,26 @@ def _build_step3_tasks(dirs: dict[str, Path]) -> list[dict[str, Any]]:
         images = img_info.get("images", [])
         if not images:
             continue
+        assets = img_info.get("assets") or []
         for idx, prompt in enumerate(prompt_map[dish], 1):
             selection = img_info.get("selected_by_variant", {}).get(prompt.get("variant_id", "v1"), {})
             image_path = selection.get("path") if isinstance(selection, dict) else selection
             image_path = image_path or images[0]
+            # 尾帧图：仅环绕方案(v2)且开启首尾帧时，从素材评分里取与首帧不同的最高分图
+            tail_image = None
+            if use_tail_frame and prompt.get("variant_id") == "v2" and len(assets) >= 2:
+                ranked = sorted(
+                    assets,
+                    key=lambda a: a.get("quality_score", 0),
+                    reverse=True,
+                )
+                tail = next((a for a in ranked if a.get("path") != image_path), None)
+                if tail:
+                    tail_image = tail["path"]
             tasks.append({
                 "dish": dish,
                 "image_path": image_path,
+                "tail_image": tail_image,
                 "asset_selection": selection,
                 "prompt": prompt["video_prompt"],
                 "negative_prompt": prompt.get("negative_prompt", ""),
@@ -234,7 +247,8 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
 
     batch_dir = OUTPUT_ROOT / batch_id
     dirs = batch_subdirs(batch_dir)
-    tasks = _build_step3_tasks(dirs)
+    use_tail_frame = bool(state.get("use_tail_frame", True))
+    tasks = _build_step3_tasks(dirs, use_tail_frame=use_tail_frame)
     if not tasks:
         raise ValueError("请至少选择一条提示词后再生成视频")
 
@@ -310,6 +324,12 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
             for task in pending:
                 try:
                     img_b64 = image_to_base64(task["image_path"])
+                    tail_b64 = None
+                    if task.get("tail_image"):
+                        try:
+                            tail_b64 = image_to_base64(task["tail_image"])
+                        except Exception:
+                            logger.warning("Step3 tail image read failed, fallback single-frame dish=%s", task["dish"])
                     task_id = create_task(
                         session,
                         img_b64,
@@ -318,6 +338,7 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
                         duration=VIDEO_DURATION,
                         mode="pro",
                         sound="off",
+                        image_tail_base64=tail_b64,
                     )
                     video_url, info = wait_for_video(session, task_id)
                     if video_url:

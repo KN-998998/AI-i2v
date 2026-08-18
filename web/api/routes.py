@@ -220,6 +220,11 @@ def save_prompts(batch_id: str, payload: dict[str, Any]) -> dict[str, str]:
         }
     with open(dirs["prompts"] / "edited_prompts.json", "w", encoding="utf-8") as f:
         json.dump(edited, f, ensure_ascii=False, indent=2)
+    # 首尾帧全局开关：随保存持久化到批次状态
+    if "use_tail_frame" in payload:
+        state = get_batch_state(batch_id)
+        state["use_tail_frame"] = bool(payload["use_tail_frame"])
+        save_state(batch_id, state)
     logger.info("Prompts saved batch=%s count=%s", batch_id, len(edited))
     return {"status": "saved"}
 

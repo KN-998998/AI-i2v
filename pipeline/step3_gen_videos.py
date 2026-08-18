@@ -6,14 +6,13 @@ Step 3: 图片 + 提示词 → Kling API 批量图生视频
 输入：01_images/ 预处理图片 + 02_prompts/ 提示词
 输出：03_clips/ 每道菜的 5s 无声 9:16 视频片段（每菜 ROLL_COUNT 个版本）
 
-可灵官方 API（v2.6）：
+可灵官方 API（v2.6，新版结构）：
   - 认证: API Key + Bearer Token
-  - 图生视频: POST /v1/videos/image2video
-  - 任务查询: GET /v1/videos/image2video/{task_id}
-  - 图片: 支持 base64 直传（无需图床！）
-  - 模型: 可灵 2.6 对应 model_name=kling-v2-6
-  - 时长: 精确 5s 或 10s
-  - 分辨率: mode=pro → 1080p
+  - 图生视频: POST /image-to-video/kling-2.6
+  - 任务查询: GET /tasks?task_ids={id}
+  - 素材: contents 支持 prompt + first_frame(必) + last_frame(尾帧, 选填)；图片支持 base64 直传（无需图床！）
+  - 首尾帧约束: 使用尾帧时仅支持 1080P
+  - 时长: 5s 或 10s
   - 宽高比: 自动跟随输入图（预处理为 9:16 则输出 9:16）
 
 用法：
@@ -117,22 +116,34 @@ def image_to_base64(image_path: str) -> str:
 
 
 def create_task(session, image_base64, prompt, negative_prompt,
-                duration=5, mode="pro", sound="off"):
-    """创建图生视频任务，返回 task_id。"""
+                duration=5, mode="pro", sound="off", image_tail_base64=None):
+    """创建图生视频任务（新版 API POST /image-to-video/kling-2.6），返回 task_id。
+
+    支持首尾帧：image_tail_base64 非空时自动追加 last_frame 素材。
+    使用尾帧时 API 仅支持 1080P（mode=pro 正好是 1080p）。
+    """
     headers = auth_headers(content_type=True)
+    contents = [
+        {"type": "prompt", "text": prompt},
+        {"type": "first_frame", "url": image_base64},
+    ]
+    if image_tail_base64:
+        contents.append({"type": "last_frame", "url": image_tail_base64})
+
     payload = {
-        "model_name": KLING_MODEL,
-        "image": image_base64,
-        "prompt": prompt,
-        "negative_prompt": negative_prompt,
-        "duration": duration,
-        "mode": mode,
-        "sound": sound,
-        "watermark": {"enabled": False},
+        "contents": contents,
+        "settings": {
+            "audio": "native" if sound != "off" else "off",
+            "resolution": "1080p" if mode == "pro" else "720p",
+            "duration": int(duration),
+        },
+        "options": {
+            "watermark_info": {"enabled": False},
+        },
     }
 
     resp = session.post(
-        f"{KLING_BASE_URL}/v1/videos/image2video",
+        f"{KLING_BASE_URL}/image-to-video/kling-2.6",
         headers=headers, json=payload, timeout=120,
     )
     data = parse_json_response(resp, "创建任务")
@@ -141,19 +152,26 @@ def create_task(session, image_base64, prompt, negative_prompt,
         err = data.get("message", resp.text[:300])
         raise RuntimeError(f"创建任务失败: {err}")
 
-    task_id = data["data"]["task_id"]
+    task_id = data["data"]["id"]
     return task_id
 
 
 def query_task(session, task_id):
-    """查询任务状态。"""
+    """查询任务状态（新版 GET /tasks?task_ids=）。返回任务 dict。"""
     headers = auth_headers()
     resp = session.get(
-        f"{KLING_BASE_URL}/v1/videos/image2video/{task_id}",
+        f"{KLING_BASE_URL}/tasks",
+        params={"task_ids": task_id},
         headers=headers, timeout=30,
     )
     data = parse_json_response(resp, "查询任务")
-    return data
+
+    if resp.status_code != 200 or data.get("code") != 0:
+        err = data.get("message", resp.text[:300])
+        raise RuntimeError(f"查询任务失败: {err}")
+
+    tasks = data.get("data", {}).get("tasks", [])
+    return tasks[0] if tasks else {}
 
 
 def wait_for_video(session, task_id):
@@ -162,21 +180,21 @@ def wait_for_video(session, task_id):
     last_status = ""
     while time.time() - start < POLL_TIMEOUT:
         data = query_task(session, task_id)
-        status = data.get("data", {}).get("task_status", "unknown")
+        status = data.get("status", "unknown")
         elapsed = int(time.time() - start)
 
         if status != last_status:
             last_status = status
             print(f"    [{elapsed:>4}s] 状态: {status}")
 
-        if status == "succeed":
-            videos = data.get("data", {}).get("task_result", {}).get("videos", [])
-            if videos:
-                return videos[0]["url"], data
+        if status == "succeeded":
+            for output in data.get("outputs", []):
+                if output.get("type") == "video" and output.get("url"):
+                    return output["url"], data
             return None, data
         if status == "failed":
-            msg = data.get("data", {}).get("task_status_msg", "")
-            return None, {"error": msg or "任务失败"}
+            msg = data.get("status_detail") or data.get("task_status_msg") or "任务失败"
+            return None, {"error": msg}
 
         time.sleep(POLL_INTERVAL)
 
