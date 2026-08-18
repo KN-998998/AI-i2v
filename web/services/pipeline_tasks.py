@@ -39,7 +39,7 @@ def run_step1(batch_id: str) -> dict[str, Any]:
                 name = dish["name"]
                 images = dish.get("images", [])
                 if not images:
-                    images = find_dish_images(name, [IMAGE_LIBRARY] + EXTRA_IMAGE_LIBS, limit=1)
+                    images = find_dish_images(name, [IMAGE_LIBRARY] + EXTRA_IMAGE_LIBS, limit=0)
                 if not images:
                     results.append({"dish": name, "status": "not_found", "images": []})
                     continue
@@ -208,11 +208,14 @@ def _build_step3_tasks(dirs: dict[str, Path]) -> list[dict[str, Any]]:
         images = img_info.get("images", [])
         if not images:
             continue
-        image_path = images[0]
         for idx, prompt in enumerate(prompt_map[dish], 1):
+            selection = img_info.get("selected_by_variant", {}).get(prompt.get("variant_id", "v1"), {})
+            image_path = selection.get("path") if isinstance(selection, dict) else selection
+            image_path = image_path or images[0]
             tasks.append({
                 "dish": dish,
                 "image_path": image_path,
+                "asset_selection": selection,
                 "prompt": prompt["video_prompt"],
                 "negative_prompt": prompt.get("negative_prompt", ""),
                 "variant_id": prompt.get("variant_id", f"v{idx}"),

@@ -12,6 +12,7 @@ Step 1: 菜品清单 → 匹配素材图片 → 预处理为 9:16 / 1080p
 """
 import argparse
 import glob
+import json
 import os
 import sys
 from pathlib import Path
@@ -26,13 +27,14 @@ from pipeline.config import (
     PREP_TARGET_SHORT, PREP_MAX_LONG, PREP_JPEG_QUALITY,
     get_batch_dir, batch_subdirs,
 )
+from pipeline.asset_selection import build_asset_manifest
 
 TARGET_RATIO = 9 / 16
 BKGD_LIGHT = (248, 246, 244)
 BKGD_DARK  = (28, 26, 24)
 
 
-def find_dish_images(dish_name: str, image_dirs: list, limit: int = 1) -> list:
+def find_dish_images(dish_name: str, image_dirs: list, limit: int | None = 1) -> list:
     """在素材库中按菜名匹配图片文件夹，返回最大的 N 张图片路径。"""
     exts = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]
     candidates = []
@@ -66,7 +68,7 @@ def find_dish_images(dish_name: str, image_dirs: list, limit: int = 1) -> list:
 
     # 按文件大小降序（大图通常清晰度更高）
     candidates.sort(key=lambda f: -os.path.getsize(f))
-    return candidates[:limit]
+    return candidates if not limit or limit < 0 else candidates[:limit]
 
 
 def open_image(path):
@@ -140,7 +142,7 @@ def preprocess_one(src_path, out_path):
     return out_path
 
 
-def run(config_path: str, limit: int = 1):
+def run(config_path: str, limit: int = 0):
     """主入口：读取 batch.yaml → 匹配图片 → 预处理。"""
     with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -177,7 +179,7 @@ def run(config_path: str, limit: int = 1):
             results.append({"dish": name, "status": "not_found", "images": []})
             continue
 
-        processed = []
+        processed_assets = []
         for img_path in images:
             base = Path(img_path).stem
             out_name = f"{name}_{base}_9x16.jpg"
@@ -185,19 +187,35 @@ def run(config_path: str, limit: int = 1):
             # 避免文件名重复
             if os.path.exists(out_path):
                 out_path = str(dirs["images"] / f"{name}_{base}_{i}_9x16.jpg")
-            processed.append(preprocess_one(img_path, out_path))
+            processed_assets.append({"source": img_path, "processed": preprocess_one(img_path, out_path)})
+
+        asset_info = build_asset_manifest(name, processed_assets)
+        processed = [asset["processed"] for asset in processed_assets]
 
         results.append({
             "dish": name,
             "status": "ok",
             "images": processed,
+            "assets": asset_info["assets"],
+            "selected_by_variant": asset_info["selected_by_variant"],
             "category": dish.get("category", ""),
             "highlight": dish.get("highlight", ""),
         })
 
     # 输出清单
+    asset_manifest_path = dirs["images"] / "asset_manifest.json"
+    with open(asset_manifest_path, "w", encoding="utf-8") as f:
+        json.dump([
+            {
+                "dish": result["dish"],
+                "assets": result.get("assets", []),
+                "selected_by_variant": result.get("selected_by_variant", {}),
+            }
+            for result in results
+            if result.get("status") == "ok"
+        ], f, ensure_ascii=False, indent=2)
+
     manifest_path = dirs["images"] / "manifest.json"
-    import json
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     print(f"\n{'='*60}")
@@ -211,6 +229,6 @@ def run(config_path: str, limit: int = 1):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Step 1: 匹配素材图片 + 预处理")
     ap.add_argument("--config", required=True, help="batch.yaml 路径")
-    ap.add_argument("--limit", type=int, default=1, help="每道菜取几张图（默认1）")
+    ap.add_argument("--limit", type=int, default=0, help="每道菜取图数量，0 表示全部")
     args = ap.parse_args()
     run(args.config, args.limit)
