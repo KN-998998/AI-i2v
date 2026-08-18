@@ -123,19 +123,25 @@ def update_dishes(batch_id: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/api/batch/{batch_id}/upload")
-async def upload_images(batch_id: str, dish: str = Form(""), files: list[UploadFile] = File(...)) -> dict[str, Any]:
+async def upload_images(batch_id: str, dish: str = Form(""), tail: str = Form("0"),
+                        files: list[UploadFile] = File(...)) -> dict[str, Any]:
+    """上传菜品图片。tail=1 时作为尾帧图存入 01_images/tail/（环绕方案使用）。"""
     get_batch_state(batch_id)
     dirs = batch_subdirs(OUTPUT_ROOT / batch_id)
+    is_tail = tail == "1"
+    target_dir = dirs["images"] / "tail" if is_tail else dirs["images"]
     uploaded = []
     for upload in files:
         ext = Path(upload.filename or "").suffix
         filename = f"{dish}_{uuid.uuid4().hex[:8]}{ext}"
-        filepath = dirs["images"] / filename
+        filepath = target_dir / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
         with open(filepath, "wb") as f:
             f.write(await upload.read())
         uploaded.append(str(filepath))
-    logger.info("Images uploaded batch=%s dish=%s count=%s", batch_id, dish, len(uploaded))
+    logger.info("Images uploaded batch=%s dish=%s tail=%s count=%s", batch_id, dish, is_tail, len(uploaded))
+    if is_tail:
+        return {"dish": dish, "tail_images": uploaded}
     return {"dish": dish, "images": uploaded}
 
 

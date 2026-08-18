@@ -177,7 +177,11 @@ def run_step2(batch_id: str, force: bool = False) -> dict[str, Any]:
     return {"status": "started", "total": total_variants}
 
 
-def _build_step3_tasks(dirs: dict[str, Path], use_tail_frame: bool = True) -> list[dict[str, Any]]:
+def _build_step3_tasks(dirs: dict[str, Path], state: dict[str, Any] | None = None,
+                       use_tail_frame: bool = True) -> list[dict[str, Any]]:
+    """构建 Step3 任务。尾帧图以用户在 Step2 显式上传的为准（tail_images），
+    仅环绕方案(v2)且开启首尾帧时使用；v1/v3 始终单图。
+    """
     images_data = load_manifest(dirs, "images") or []
     prompts_data = load_manifest(dirs, "prompts") or []
     edited_path = dirs["prompts"] / "edited_prompts.json"
@@ -185,6 +189,13 @@ def _build_step3_tasks(dirs: dict[str, Path], use_tail_frame: bool = True) -> li
     if edited_path.exists():
         with open(edited_path, encoding="utf-8") as f:
             edited_prompts = json.load(f)
+
+    # 每道菜显式上传的尾帧图（Step2 用户上传，非自动猜测）
+    tail_map: dict[str, str] = {}
+    for dish_cfg in (state or {}).get("dishes", []):
+        tails = dish_cfg.get("tail_images") or []
+        if tails:
+            tail_map[dish_cfg.get("name", "")] = tails[0]
 
     prompt_map: dict[str, list[dict[str, Any]]] = {}
     for p in prompts_data:
@@ -208,22 +219,14 @@ def _build_step3_tasks(dirs: dict[str, Path], use_tail_frame: bool = True) -> li
         images = img_info.get("images", [])
         if not images:
             continue
-        assets = img_info.get("assets") or []
         for idx, prompt in enumerate(prompt_map[dish], 1):
             selection = img_info.get("selected_by_variant", {}).get(prompt.get("variant_id", "v1"), {})
             image_path = selection.get("path") if isinstance(selection, dict) else selection
             image_path = image_path or images[0]
-            # 尾帧图：仅环绕方案(v2)且开启首尾帧时，从素材评分里取与首帧不同的最高分图
+            # 尾帧：仅环绕方案(v2) + 开启首尾帧 + 用户已上传尾帧图
             tail_image = None
-            if use_tail_frame and prompt.get("variant_id") == "v2" and len(assets) >= 2:
-                ranked = sorted(
-                    assets,
-                    key=lambda a: a.get("quality_score", 0),
-                    reverse=True,
-                )
-                tail = next((a for a in ranked if a.get("path") != image_path), None)
-                if tail:
-                    tail_image = tail["path"]
+            if use_tail_frame and prompt.get("variant_id") == "v2":
+                tail_image = tail_map.get(dish)
             tasks.append({
                 "dish": dish,
                 "image_path": image_path,
@@ -248,7 +251,7 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
     batch_dir = OUTPUT_ROOT / batch_id
     dirs = batch_subdirs(batch_dir)
     use_tail_frame = bool(state.get("use_tail_frame", True))
-    tasks = _build_step3_tasks(dirs, use_tail_frame=use_tail_frame)
+    tasks = _build_step3_tasks(dirs, state=state, use_tail_frame=use_tail_frame)
     if not tasks:
         raise ValueError("请至少选择一条提示词后再生成视频")
 

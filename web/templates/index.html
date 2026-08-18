@@ -542,6 +542,23 @@ body::before {
   color: var(--text-mute);
 }
 
+.tail-badge {
+  font-size: 11px; font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.tail-badge.ok {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.tail-badge.missing {
+  background: rgba(255, 160, 122, 0.18);
+  color: var(--red);
+}
+
 .prompt-card.selected .prompt-check { color: var(--green); }
 .prompt-card .textarea { cursor: text; }
 
@@ -972,18 +989,36 @@ function renderDishes() {
         <input class="input" placeholder="亮点（如：酥脆爆浆）" value="${d.highlight || ''}"
                onchange="updateDish(${i}, 'highlight', this.value)" />
         <div style="display:flex; align-items:center; gap:8px;">
-          <div class="dish-img-placeholder" id="imgPreview${i}" onclick="document.getElementById('fileInput${i}').click()">📷</div>
+          <div class="dish-img-placeholder" id="imgPreview${i}" title="首帧图（必填）"
+               onclick="document.getElementById('fileInput${i}').click()">📷</div>
           <input type="file" id="fileInput${i}" accept="image/*" style="display:none"
-                 onchange="uploadDishImage(${i}, this.files)" />
+                 onchange="uploadDishImage(${i}, this.files, false)" />
+          <div class="dish-img-placeholder" id="tailPreview${i}" title="尾帧图（可选，环绕方案用）"
+               onclick="document.getElementById('tailInput${i}').click()">🎞️</div>
+          <input type="file" id="tailInput${i}" accept="image/*" style="display:none"
+                 onchange="uploadDishImage(${i}, this.files, true)" />
           <button class="dish-remove" onclick="removeDish(${i})">✕</button>
         </div>
       </div>
     </div>
   `).join("");
+
+  // 回填已上传的预览（首帧/尾帧）
+  dishes.forEach((d, i) => {
+    if (d.images && d.images.length) setDishPreview(i, "img", d.images[0]);
+    if (d.tail_images && d.tail_images.length) setDishPreview(i, "tail", d.tail_images[0]);
+  });
+}
+
+function setDishPreview(i, kind, path) {
+  const el = document.getElementById(`${kind}Preview${i}`);
+  if (!el) return;
+  el.innerHTML = `<img class="dish-img-preview" src="/api/library/preview?path=${encodeURIComponent(path)}" />`;
+  el.onclick = null;
 }
 
 function addDish() {
-  dishes.push({ name: "", category: "", highlight: "", images: [] });
+  dishes.push({ name: "", category: "", highlight: "", images: [], tail_images: [] });
   renderDishes();
 }
 
@@ -996,10 +1031,11 @@ function updateDish(i, field, value) {
   dishes[i][field] = value;
 }
 
-async function uploadDishImage(i, files) {
+async function uploadDishImage(i, files, isTail) {
   if (!files.length) return;
   const formData = new FormData();
   formData.append("dish", dishes[i].name || `dish_${i}`);
+  if (isTail) formData.append("tail", "1");
   for (const f of files) formData.append("files", f);
 
   try {
@@ -1007,12 +1043,15 @@ async function uploadDishImage(i, files) {
       method: "POST", body: formData,
     });
     const result = await resp.json();
-    dishes[i].images = result.images;
-    // 显示预览
-    const preview = document.getElementById(`imgPreview${i}`);
-    preview.innerHTML = `<img class="dish-img-preview" src="/api/library/preview?path=${encodeURIComponent(result.images[0])}" />`;
-    preview.onclick = null;
-    toast("图片已上传", "ok");
+    if (isTail) {
+      dishes[i].tail_images = result.tail_images;
+      setDishPreview(i, "tail", result.tail_images[0]);
+      toast("尾帧图已上传（环绕方案使用）", "ok");
+    } else {
+      dishes[i].images = result.images;
+      setDishPreview(i, "img", result.images[0]);
+      toast("首帧图已上传", "ok");
+    }
   } catch(e) {
     toast("上传失败", "err");
   }
@@ -1063,6 +1102,7 @@ async function submitDishes() {
 // ── Step 3: 提示词编辑 ─────────────────────────────────────────────
 
 let promptsData = [];
+let dishTailMap = {};   // 菜名 -> 是否已上传尾帧图（Step2 显式上传，环绕方案用）
 
 async function renderStep3() {
   showPanel(`
@@ -1099,7 +1139,7 @@ async function renderStep3() {
       if (hasCompletePromptVariants(promptsData)) {
         // 已有完整方案时直接复用，不再重复调用 LLM。
         updateProgress3(100, "提示词已生成", "直接复用已有结果");
-        renderPromptsEditor();
+        await renderPromptsEditor();
       } else {
         renderPromptUpgradeRequired();
       }
@@ -1179,8 +1219,17 @@ async function regeneratePromptVariants() {
   }
 }
 
-function renderPromptsEditor() {
+async function renderPromptsEditor() {
   const container = document.getElementById("promptsContainer");
+
+  // 每道菜是否有显式上传的尾帧图（Step2 上传，环绕方案用）
+  dishTailMap = {};
+  try {
+    const st = await api(`/api/batch/${currentBatch}`);
+    (st.dishes || []).forEach(d => {
+      dishTailMap[d.name] = !!(d.tail_images && d.tail_images.length);
+    });
+  } catch(e) { /* 拿不到尾帧状态时按无处理 */ }
 
   if (!promptsData.length) {
     container.innerHTML = '<div class="empty"><div class="empty-text">暂无提示词</div></div>';
@@ -1216,6 +1265,9 @@ function renderPromptsEditor() {
                  onclick="togglePromptCard(${index}, this)">
               <div class="prompt-card-head">
                 <span class="variant-badge">${p.variant_label || p.variant_id || "方案"}</span>
+                ${p.variant_id === "v2"
+                  ? `<span class="tail-badge ${dishTailMap[dish] ? "ok" : "missing"}">${dishTailMap[dish] ? "尾帧 ✓" : "尾帧 ✗ 单图"}</span>`
+                  : ""}
                 <span class="prompt-check">${p.selected ? "✓ 已选" : "未选"}</span>
               </div>
               <textarea class="textarea" style="min-height:110px;" onclick="event.stopPropagation()"
@@ -1255,6 +1307,12 @@ async function generateVideos() {
   if (!selectedCount) {
     toast("请至少勾选 1 张提示词卡片", "err");
     return;
+  }
+
+  // 环绕方案尾帧检查（警告不阻止，后端自动降级单图）
+  const v2Missing = promptsData.filter(p => p.selected && p.variant_id === "v2" && !dishTailMap[p.dish]);
+  if (v2Missing.length) {
+    toast(`「${v2Missing.map(p => p.dish).join("、")}」的环绕方案未上传尾帧图，将按单图生成；需要首尾帧请回第 2 步上传尾帧图`, "err");
   }
 
   // 保存编辑后的提示词（含勾选状态 + 首尾帧开关）
