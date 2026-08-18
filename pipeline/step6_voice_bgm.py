@@ -39,6 +39,15 @@ from pipeline.config import (
 import requests
 
 
+def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
+    """运行 ffmpeg 并用容错解码保留底层错误。"""
+    result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+    if result.returncode == 0:
+        return
+    raw_detail = result.stderr or result.stdout or b"ffmpeg returned no error output"
+    detail = raw_detail.decode("utf-8", errors="replace").strip()
+    raise RuntimeError(f"{action}失败: {detail[-500:]}")
+
 def generate_caption(dishes, brand_info, video_id):
     """调用 DeepSeek 生成视频配音文案。"""
     if not DEEPSEEK_API_KEY:
@@ -134,9 +143,7 @@ def mix_audio(voice_path, bgm_path, out_path, bgm_volume=0.3, video_duration=12)
         "-c:a", "aac", "-b:a", "192k",
         out_path,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    if result.returncode != 0:
-        print(f"    [ffmpeg mix] {result.stderr[-300:]}")
+    _run_ffmpeg(cmd, timeout=60, action="ffmpeg 音频混合")
     return out_path
 
 
@@ -151,9 +158,7 @@ def merge_audio_video(video_path, audio_path, out_path):
         "-shortest",
         out_path,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    if result.returncode != 0:
-        print(f"    [ffmpeg merge] {result.stderr[-300:]}")
+    _run_ffmpeg(cmd, timeout=60, action="ffmpeg 音视频合并")
     return out_path
 
 
@@ -163,10 +168,13 @@ def get_video_duration(video_path):
         "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_format", video_path,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    result = subprocess.run(cmd, capture_output=True, timeout=10)
     if result.returncode == 0:
-        info = json.loads(result.stdout)
-        return float(info["format"]["duration"])
+        try:
+            info = json.loads((result.stdout or b"").decode("utf-8", errors="replace"))
+            return float(info["format"]["duration"])
+        except (TypeError, ValueError, KeyError):
+            pass
     return 12.0  # 默认
 
 

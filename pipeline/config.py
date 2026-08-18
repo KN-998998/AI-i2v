@@ -59,7 +59,7 @@ EXTRA_IMAGE_LIBS = [
 EXTRA_IMAGE_LIBS = [p for p in EXTRA_IMAGE_LIBS if str(p)]
 
 # 固定 BGM
-BGM_FILE = Path(os.environ.get("BGM_FILE", "结尾音乐.mp3"))
+BGM_FILE = Path(os.environ.get("BGM_FILE") or "结尾音乐.mp3")
 
 # ── API Keys（从 .env / 环境变量读取，代码里不硬编码）──────────────
 DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")

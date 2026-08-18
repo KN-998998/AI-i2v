@@ -55,6 +55,16 @@ def read_subtitles(prompts_dir: Path) -> dict:
     return subtitles
 
 
+def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
+    """执行 ffmpeg，并将底层错误保留给页面与日志。"""
+    result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+    if result.returncode == 0:
+        return
+    raw_detail = result.stderr or result.stdout or b"ffmpeg returned no error output"
+    detail = raw_detail.decode("utf-8", errors="replace").strip()
+    raise RuntimeError(f"{action}失败: {detail[-500:]}")
+
+
 def trim_clip(clip_path, out_path, start=0.5, duration=3.0):
     """用 ffmpeg 截取片段的动态最强部分，统一缩放到 1080x1920。"""
     w, h = FINAL_RESOLUTION
@@ -69,9 +79,7 @@ def trim_clip(clip_path, out_path, start=0.5, duration=3.0):
         "-pix_fmt", "yuv420p",
         out_path,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    if result.returncode != 0:
-        print(f"  [ffmpeg] {result.stderr[-300:]}")
+    _run_ffmpeg(cmd, timeout=60, action="ffmpeg 片段裁切")
     return out_path
 
 
@@ -93,7 +101,7 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
 
     # 生成 concat 文件列表
     list_path = out_path + ".txt"
-    with open(list_path, "w") as f:
+    with open(list_path, "w", encoding="utf-8") as f:
         for p in clip_paths:
             f.write(f"file '{os.path.abspath(p)}'\n")
 
@@ -125,7 +133,7 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
             end_time = start_time + duration
             filters.append(
                 f"drawtext=text='{safe_text}':"
-                f"fontfile='C\\\\:/Windows/Fonts/msyh.ttc':"
+                f"fontfile='C\\:/Windows/Fonts/msyh.ttc':"
                 f"fontsize=42:fontcolor=white:borderw=2:bordercolor=black@0.8:"
                 f"x=(w-text_w)/2:y=h-80:"
                 f"enable='between(t,{start_time},{end_time})'"
@@ -139,7 +147,7 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
         total_duration = sum(s["duration"] for s in subtitle_items) if subtitle_items else 10
         filters.append(
             f"drawtext=text='{safe_cta}':"
-            f"fontfile='C\\\\:/Windows/Fonts/msyh.ttc':"
+            f"fontfile='C\\:/Windows/Fonts/msyh.ttc':"
             f"fontsize=52:fontcolor=#FFD700:borderw=3:bordercolor=black@0.9:"
             f"x=(w-text_w)/2:y=h-120:"
             f"enable='gte(t,{total_duration - 2})'"
@@ -162,13 +170,11 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
         out_path,
     ])
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if result.returncode != 0:
-        print(f"  [ffmpeg concat] {result.stderr[-500:]}")
-
-    # 清理临时文件
-    if os.path.exists(list_path):
-        os.remove(list_path)
+    try:
+        _run_ffmpeg(cmd, timeout=120, action="ffmpeg 片段拼接")
+    finally:
+        if os.path.exists(list_path):
+            os.remove(list_path)
 
     return out_path
 
