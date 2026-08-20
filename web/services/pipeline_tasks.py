@@ -346,7 +346,7 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
                     video_url, info = wait_for_video(session, task_id)
                     if video_url:
                         variant_name = task.get("variant_id") or f"roll{task['roll']}"
-                        out_name = f"{task['dish']}_{variant_name}_1080p_5s.mp4"
+                        out_name = f"{task['dish']}_{variant_name}_1080p_{VIDEO_DURATION}s.mp4"
                         out_path = str(dirs["clips"] / out_name)
                         download_video(session, video_url, out_path)
                         results.append({**task, "status": "ok", "output": out_path, "prompt": task["prompt"]})

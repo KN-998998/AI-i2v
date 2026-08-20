@@ -70,7 +70,7 @@ KLING_API_KEY     = os.environ.get("KLING_API_KEY", "")
 KLING_ACCESS_KEY  = os.environ.get("KLING_ACCESS_KEY", "")
 KLING_SECRET_KEY  = os.environ.get("KLING_SECRET_KEY", "")
 KLING_BASE_URL    = os.environ.get("KLING_BASE_URL", "https://api-beijing.klingai.com")
-KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-v2-6")          # 可灵 2.6
+KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-3")                # 可灵 3.0（端点路径同模型名，如 /image-to-video/kling-3）
 
 # TTS 配置（待选型，先留占位）
 TTS_PROVIDER = ""
@@ -80,7 +80,7 @@ TTS_VOICE    = os.environ.get("TTS_VOICE", "female_warm")  # 音色标识
 # ── 视频规格 ──────────────────────────────────────────────────────
 VIDEO_RESOLUTION = "1080p"     # 1080p
 VIDEO_ASPECT     = "9:16"      # 竖版
-VIDEO_DURATION   = 5           # 每段 4-5s
+VIDEO_DURATION   = 3           # Kling 3.0 最短 3s（3.0 系列支持 3~15s 整数步进）
 VIDEO_SILENT     = True        # 无声生成
 ROLL_COUNT       = 3           # 每道菜生成 3 个版本供挑选
 
@@ -113,11 +113,12 @@ PROMPT_SUFFIX = (
 )
 
 # ── 成片结构模板 ──────────────────────────────────────────────────
-# 半固定模板：镜头1 = 招牌菜（3s），其余 = 2s，片尾 1-2s
+# 半固定模板：镜头1 = 招牌菜（2.5s），其余 = 2s，片尾 1-2s
+# 注意：源片段现为 Kling 3s，掐头 0.5s 后最多可取 2.5s —— 各段时长均 ≤2.5s
 TEMPLATE_5_DISH = {
-    "total_duration": 12,
+    "total_duration": 11,
     "segments": [
-        {"index": 0, "duration": 3.0, "role": "hook"},      # 钩子：最馋的菜
+        {"index": 0, "duration": 2.5, "role": "hook"},      # 钩子：最馋的菜
         {"index": 1, "duration": 2.0, "role": "body"},
         {"index": 2, "duration": 2.0, "role": "body"},
         {"index": 3, "duration": 2.0, "role": "body"},
@@ -127,9 +128,9 @@ TEMPLATE_5_DISH = {
 }
 
 TEMPLATE_3_DISH = {
-    "total_duration": 10,
+    "total_duration": 9.5,
     "segments": [
-        {"index": 0, "duration": 3.0, "role": "hook"},
+        {"index": 0, "duration": 2.5, "role": "hook"},
         {"index": 1, "duration": 2.5, "role": "body"},
         {"index": 2, "duration": 2.5, "role": "body"},
         {"index": 3, "duration": 2.0, "role": "outro"},

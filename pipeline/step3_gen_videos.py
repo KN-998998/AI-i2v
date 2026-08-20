@@ -4,15 +4,15 @@ Step 3: 图片 + 提示词 → Kling API 批量图生视频
 ================================================
 
 输入：01_images/ 预处理图片 + 02_prompts/ 提示词
-输出：03_clips/ 每道菜的 5s 无声 9:16 视频片段（每菜 ROLL_COUNT 个版本）
+输出：03_clips/ 每道菜的 3s 无声 9:16 视频片段（每菜 ROLL_COUNT 个版本）
 
-可灵官方 API（v2.6，新版结构）：
+可灵官方 API（v3.0，新版结构）：
   - 认证: API Key + Bearer Token
-  - 图生视频: POST /image-to-video/kling-2.6
+  - 图生视频: POST /image-to-video/{KLING_MODEL}（默认 kling-3；3.0 系列 3~15s 整数步进）
   - 任务查询: GET /tasks?task_ids={id}
   - 素材: contents 支持 prompt + first_frame(必) + last_frame(尾帧, 选填)；图片支持 base64 直传（无需图床！）
-  - 首尾帧约束: 使用尾帧时仅支持 1080P
-  - 时长: 5s 或 10s
+  - 首尾帧约束: 使用尾帧时仅支持 1080P（3.0 Turbo 不支持尾帧，默认 kling-3 支持）
+  - 时长: 3s（最短，本项目配置）
   - 宽高比: 自动跟随输入图（预处理为 9:16 则输出 9:16）
 
 用法：
@@ -116,8 +116,8 @@ def image_to_base64(image_path: str) -> str:
 
 
 def create_task(session, image_base64, prompt, negative_prompt,
-                duration=5, mode="pro", sound="off", image_tail_base64=None):
-    """创建图生视频任务（新版 API POST /image-to-video/kling-2.6），返回 task_id。
+                duration=3, mode="pro", sound="off", image_tail_base64=None):
+    """创建图生视频任务（新版 API POST /image-to-video/{KLING_MODEL}），返回 task_id。
 
     支持首尾帧：image_tail_base64 非空时自动追加 last_frame 素材。
     使用尾帧时 API 仅支持 1080P（mode=pro 正好是 1080p）。
@@ -143,7 +143,7 @@ def create_task(session, image_base64, prompt, negative_prompt,
     }
 
     resp = session.post(
-        f"{KLING_BASE_URL}/image-to-video/kling-2.6",
+        f"{KLING_BASE_URL}/image-to-video/{KLING_MODEL}",
         headers=headers, json=payload, timeout=120,
     )
     data = parse_json_response(resp, "创建任务")
@@ -262,7 +262,7 @@ def run(config_path: str):
     print(f"Step 3: Kling API 批量图生视频")
     print(f"  菜品数: {len(prompt_map)}")
     print(f"  总任务数: {len(tasks)}（{len(prompt_map)} 菜 × {ROLL_COUNT} roll）")
-    print(f"  规格: 1080p / 5s / 无声 / 9:16")
+    print(f"  规格: 1080p / {VIDEO_DURATION}s / 无声 / 9:16")
     print(f"  输出: {dirs['clips']}")
     print(f"{'='*60}")
 
@@ -302,7 +302,7 @@ def run(config_path: str):
                 continue
 
             # 4. 下载视频
-            out_name = f"{dish}_roll{roll}_1080p_5s.mp4"
+            out_name = f"{dish}_roll{roll}_1080p_{VIDEO_DURATION}s.mp4"
             out_path = str(dirs["clips"] / out_name)
             size = download_video(session, video_url, out_path)
             print(f"  [完成] {out_path} ({size/1024/1024:.1f}MB)")
