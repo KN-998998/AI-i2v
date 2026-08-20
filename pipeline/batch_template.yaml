@@ -41,7 +41,7 @@ videos:
   # --- 多菜组合（不同菜品搭配） ---
   - id: v01
     type: multi_dish
-    template: 5_dish              # 5道菜模板 (12s)
+    template: 5_dish              # 5道菜模板 (12.5s)
     dishes: [海胆天妇罗, 松叶蟹三吃, 蒲烧鳗鱼, 海螺刺身, 红酒鹅肝]
     hook_dish: 海胆天妇罗          # 第一个镜头用哪道菜（视觉冲击最强）
     subtitle_style: "暖色高级感"
@@ -55,15 +55,15 @@ videos:
 
   - id: v03
     type: multi_dish
-    template: 3_dish              # 3道菜模板 (10s)
-    dishes: [海胆天妇罗, 红酒鹅肝, 角切鱼生饭]
+    template: 6_dish              # 6道菜模板 (15s)
+    dishes: [海胆天妇罗, 红酒鹅肝, 角切鱼生饭, 海螺刺身, 松叶蟹三吃, 蒲烧鳗鱼]
     hook_dish: 海胆天妇罗
     subtitle_style: "烟火气"
 
   - id: v04
     type: multi_dish
-    template: 3_dish
-    dishes: [蒲烧鳗鱼, 海螺刺身, 松叶蟹三吃]
+    template: 5_dish              # 5道菜模板 (12.5s)
+    dishes: [蒲烧鳗鱼, 海螺刺身, 松叶蟹三吃, 角切鱼生饭, 红酒鹅肝]
     hook_dish: 蒲烧鳗鱼
     subtitle_style: "烟火气"
 

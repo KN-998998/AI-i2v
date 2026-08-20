@@ -4,12 +4,12 @@ Step 5: 人工精选片段 → ffmpeg 合成无声成片
 ==========================================
 
 输入：04_selected/checklist.csv（运营标记了 selected=y 的片段）
-输出：05_composed/ 下的无声成片 MP4（10-12s, 1080x1920, 30fps）
+输出：05_composed/ 下的无声成片 MP4（12-15s, 1080x1920, 30fps）
 
 合成逻辑：
   1. 读取 CSV 获取每道菜选用的片段
-  2. 按 batch.yaml 中的视频编排组合菜品
-  3. 每段掐头去尾保留 2-3s 动态最强部分
+  2. 按 batch.yaml 中的视频编排组合菜品（每片 5-6 道菜）
+  3. 每段掐头去尾保留 2.5s 动态最强部分（Kling 3s 源片掐头 0.5s 后最大可用）
   4. 硬切拼接 + 字幕叠加 + 片尾 CTA
   5. 输出无声成片
 
@@ -28,7 +28,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.config import (
-    TEMPLATE_5_DISH, TEMPLATE_3_DISH,
+    TEMPLATE_5_DISH, TEMPLATE_6_DISH,
     FINAL_RESOLUTION, FINAL_FPS,
     get_batch_dir, batch_subdirs,
 )
@@ -211,7 +211,7 @@ def compose_video(video_cfg, selected_clips, clips_dir, subtitles, brand_info,
             print(f"  [跳过] {clip_file} 不存在")
             continue
 
-        duration = seg_durations[i] if i < len(seg_durations) else 2.0
+        duration = seg_durations[i] if i < len(seg_durations) else 2.5
         trimmed_name = f"{vid}_{dish}_trim.mp4"
         trimmed_path = str(dirs["composed"] / trimmed_name)
         trim_clip(clip_path, trimmed_path, start=0.5, duration=duration)
@@ -268,8 +268,13 @@ def run(config_path: str):
     for i, video_cfg in enumerate(videos, 1):
         vid = video_cfg["id"]
         vtype = video_cfg["type"]
-        template_key = video_cfg.get("template", "5_dish")
-        template = TEMPLATE_5_DISH if template_key == "5_dish" else TEMPLATE_3_DISH
+        # 模板按菜数选择（项目组规则 5-6 菜）：6 菜 → 6_dish(15s)，否则 5_dish(12.5s)
+        dish_count = len(video_cfg.get("dishes", []))
+        template_key = video_cfg.get("template", "")
+        if template_key == "6_dish" or dish_count >= 6:
+            template = TEMPLATE_6_DISH
+        else:
+            template = TEMPLATE_5_DISH
 
         print(f"\n[{i}/{len(videos)}] {vid} ({vtype})")
 

@@ -56,7 +56,7 @@ def generate_caption(dishes, brand_info, video_id):
         cta = brand_info.get("cta", "评论区领优惠券")
         return f"{'，'.join(parts)}。{cta}！"
 
-    system_msg = """你是餐饮短视频文案专家。生成一条10-12秒短视频的配音文案。
+    system_msg = """你是餐饮短视频文案专家。生成一条12-15秒短视频的配音文案。
 要求：
 1. 15-30字，语速适中能在10秒内读完
 2. 以菜品诱惑开头，以引导到店结尾

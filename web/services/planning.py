@@ -6,7 +6,7 @@ import random
 from pathlib import Path
 from typing import Any
 
-from pipeline.config import TEMPLATE_3_DISH, TEMPLATE_5_DISH
+from pipeline.config import TEMPLATE_5_DISH, TEMPLATE_6_DISH
 from web.services.state import load_manifest
 
 
@@ -34,20 +34,10 @@ def is_dessert_dish(dish: dict[str, Any]) -> bool:
 
 
 def get_video_template(dish_count: int) -> dict[str, Any]:
-    if dish_count >= 6:
-        return {
-            "total_duration": 10,
-            "segments": [
-                {"index": 0, "duration": 2.5, "role": "hook"},
-                {"index": 1, "duration": 1.3, "role": "body"},
-                {"index": 2, "duration": 1.3, "role": "body"},
-                {"index": 3, "duration": 1.3, "role": "body"},
-                {"index": 4, "duration": 1.3, "role": "body"},
-                {"index": 5, "duration": 1.3, "role": "body"},
-                {"index": 6, "duration": 1.0, "role": "outro"},
-            ],
-        }
-    return TEMPLATE_5_DISH
+    """按菜数选择成片模板（项目组规则：每片 5-6 道菜）。
+    5 道菜 → 5×2.5s = 12.5s；6 道及以上 → 6×2.5s = 15s。
+    """
+    return TEMPLATE_6_DISH if dish_count >= 6 else TEMPLATE_5_DISH
 
 
 def build_video_plan(state: dict[str, Any], selected: dict[str, str], video_config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -58,12 +48,12 @@ def build_video_plan(state: dict[str, Any], selected: dict[str, str], video_conf
             dishes = [d for d in item.get("dishes", []) if d in selected]
             if not dishes:
                 continue
-            template_key = item.get("template") or ("5_dish" if len(dishes) >= 4 else "3_dish")
+            template_key = item.get("template") or ("6_dish" if len(dishes) >= 6 else "5_dish")
             plan.append({
                 "id": item.get("id") or f"v{i:02d}",
                 "dishes": dishes,
                 "hook_dish": item.get("hook_dish") or dishes[0],
-                "template": template_key,
+                "template": "6_dish" if template_key == "6_dish" else "5_dish",
             })
         return plan
 

@@ -84,8 +84,8 @@ VIDEO_DURATION   = 3           # Kling 3.0 最短 3s（3.0 系列支持 3~15s �
 VIDEO_SILENT     = True        # 无声生成
 ROLL_COUNT       = 3           # 每道菜生成 3 个版本供挑选
 
-# 成片规格
-FINAL_DURATION_RANGE = (10, 12)   # 成片 10-12s
+# 成片规格（项目组 2026-08-20 确认：5-6 道菜 / 成片 12-15s）
+FINAL_DURATION_RANGE = (12, 15)   # 成片 12-15s
 FINAL_FPS            = 30
 FINAL_RESOLUTION     = (1080, 1920)
 
@@ -113,27 +113,31 @@ PROMPT_SUFFIX = (
 )
 
 # ── 成片结构模板 ──────────────────────────────────────────────────
-# 半固定模板：镜头1 = 招牌菜（2.5s），其余 = 2s，片尾 1-2s
-# 注意：源片段现为 Kling 3s，掐头 0.5s 后最多可取 2.5s —— 各段时长均 ≤2.5s
+# 项目组规则（2026-08-20）：每片 5-6 道菜；甜品有且仅有一个且必须最后展示；
+# 成片 12-15s。源片段为 Kling 3s，掐头 0.5s 后每段最多取 2.5s：
+#   5 道菜 × 2.5s = 12.5s；6 道菜 × 2.5s = 15.0s（含 outro CTA 叠加）
 TEMPLATE_5_DISH = {
-    "total_duration": 11,
+    "total_duration": 12.5,
     "segments": [
-        {"index": 0, "duration": 2.5, "role": "hook"},      # 钩子：最馋的菜
-        {"index": 1, "duration": 2.0, "role": "body"},
-        {"index": 2, "duration": 2.0, "role": "body"},
-        {"index": 3, "duration": 2.0, "role": "body"},
-        {"index": 4, "duration": 2.0, "role": "body"},
-        {"index": 5, "duration": 1.0, "role": "outro"},     # 片尾 CTA
+        {"index": 0, "duration": 2.5, "role": "hook"},      # 钩子：最馋的菜（2.5s）
+        {"index": 1, "duration": 2.5, "role": "body"},
+        {"index": 2, "duration": 2.5, "role": "body"},
+        {"index": 3, "duration": 2.5, "role": "body"},
+        {"index": 4, "duration": 2.5, "role": "body"},
+        {"index": 5, "duration": 1.0, "role": "outro"},     # 片尾 CTA（叠加在最后一段）
     ],
 }
 
-TEMPLATE_3_DISH = {
-    "total_duration": 9.5,
+TEMPLATE_6_DISH = {
+    "total_duration": 15.0,
     "segments": [
         {"index": 0, "duration": 2.5, "role": "hook"},
         {"index": 1, "duration": 2.5, "role": "body"},
         {"index": 2, "duration": 2.5, "role": "body"},
-        {"index": 3, "duration": 2.0, "role": "outro"},
+        {"index": 3, "duration": 2.5, "role": "body"},
+        {"index": 4, "duration": 2.5, "role": "body"},
+        {"index": 5, "duration": 2.5, "role": "body"},
+        {"index": 6, "duration": 1.0, "role": "outro"},
     ],
 }
 
