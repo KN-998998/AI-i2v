@@ -116,12 +116,16 @@ def image_to_base64(image_path: str) -> str:
 
 
 def create_task(session, image_base64, prompt, negative_prompt,
-                duration=3, mode="pro", sound="off", image_tail_base64=None):
+                duration=VIDEO_DURATION, sound=None, image_tail_base64=None):
     """创建图生视频任务（新版 API POST /image-to-video/{KLING_MODEL}），返回 task_id。
 
     支持首尾帧：image_tail_base64 非空时自动追加 last_frame 素材。
-    使用尾帧时 API 仅支持 1080P（mode=pro 正好是 1080p）。
+    使用尾帧时 API 仅支持 1080P。
     """
+    if image_tail_base64 and VIDEO_RESOLUTION != "1080p":
+        raise ValueError("Kling 3.0 首尾帧任务必须使用 1080p 分辨率")
+
+    sound = "off" if sound is None and VIDEO_SILENT else (sound or "native")
     headers = auth_headers(content_type=True)
     contents = [
         {"type": "prompt", "text": prompt},
@@ -134,7 +138,7 @@ def create_task(session, image_base64, prompt, negative_prompt,
         "contents": contents,
         "settings": {
             "audio": "native" if sound != "off" else "off",
-            "resolution": "1080p" if mode == "pro" else "720p",
+            "resolution": VIDEO_RESOLUTION,
             "duration": int(duration),
         },
         "options": {
@@ -288,7 +292,7 @@ def run(config_path: str):
             # 2. 创建生成任务
             task_id = create_task(
                 session, img_b64, prompt, task["negative_prompt"],
-                duration=VIDEO_DURATION, mode="pro", sound="off",
+                duration=VIDEO_DURATION,
             )
             print(f"  [任务] task_id: {task_id}")
 

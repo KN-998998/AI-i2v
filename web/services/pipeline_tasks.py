@@ -339,8 +339,6 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
                         task["prompt"],
                         task["negative_prompt"],
                         duration=VIDEO_DURATION,
-                        mode="pro",
-                        sound="off",
                         image_tail_base64=tail_b64,
                     )
                     video_url, info = wait_for_video(session, task_id)

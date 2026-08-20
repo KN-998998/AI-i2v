@@ -21,6 +21,10 @@ from pipeline.config import (
     KLING_MODEL,
     KLING_SECRET_KEY,
     OUTPUT_ROOT,
+    VIDEO_ASPECT,
+    VIDEO_DURATION,
+    VIDEO_RESOLUTION,
+    VIDEO_SILENT,
     batch_subdirs,
 )
 from web.core.logging import get_logger
@@ -53,6 +57,13 @@ def get_config() -> dict[str, Any]:
         "kling": bool(KLING_API_KEY or (KLING_ACCESS_KEY and KLING_SECRET_KEY)),
         "kling_base_url": KLING_BASE_URL,
         "kling_model": KLING_MODEL,
+        "video_spec": {
+            "duration_seconds": VIDEO_DURATION,
+            "resolution": VIDEO_RESOLUTION,
+            "aspect_ratio": VIDEO_ASPECT,
+            "silent": VIDEO_SILENT,
+            "supports_last_frame": True,
+        },
         "kling_auth_mode": kling_auth_mode,
         "kling_key_suffix": kling_key_suffix,
         "image_library": str(IMAGE_LIBRARY),
