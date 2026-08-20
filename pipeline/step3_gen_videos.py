@@ -140,6 +140,8 @@ def create_task(session, image_base64, prompt, negative_prompt,
             "audio": "native" if sound != "off" else "off",
             "resolution": VIDEO_RESOLUTION,
             "duration": int(duration),
+            # 可灵 3.0 多镜头叙事默认可触发；3s 切片必须锁死单分镜，否则会被切成多镜报废
+            "multi_shot": False,
         },
         "options": {
             "watermark_info": {"enabled": False},
