@@ -111,7 +111,7 @@ def run_step2(batch_id: str, force: bool = False) -> dict[str, Any]:
                 "reused": True,
             }
             save_state(batch_id, state)
-            return {"status": "reused", "count": len(existing), "message": "???????????"}
+            return {"status": "reused", "count": len(existing), "message": "提示词已存在，直接复用"}
 
     def worker() -> None:
         logger.info("Step2 started batch=%s force=%s", batch_id, force)
@@ -120,7 +120,7 @@ def run_step2(batch_id: str, force: bool = False) -> dict[str, Any]:
             from pipeline.step2_gen_prompts import build_full_prompt, call_deepseek
 
             if not state.get("dishes"):
-                raise RuntimeError("???????????????????????????????")
+                raise RuntimeError("批次菜品配置为空，无法生成提示词（请先在菜品配置步骤添加菜品）")
 
             results = []
             done = 0

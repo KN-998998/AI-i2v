@@ -192,8 +192,13 @@ def _run_blocking_rules(cfg: PromptConfig) -> list:
         errs.append(Issue("V2", "3 秒最多承载 2 个次级动态，超出会导致每项都退化为轻微抖动", "l2_dynamics"))
 
     # V3: L2 target 与 L1 元素 label 相同
+    # 豁免：L1 是菜品主体(dish_cold/dish_hot) 且 L2 是 steam/specular 时，
+    #   target="菜品" 指主体表面（蒸汽从菜品表面升起 / 高光在表面滑移），
+    #   这是合理场景，不算冲突。其余组合仍互斥（如 flame target=菜品 会报 V3）。
+    l1_is_dish = cfg.l1_subject in ("dish_cold", "dish_hot")
     for item in cfg.l2_dynamics:
-        if item.target == L1_LABEL:
+        surface_ok = l1_is_dish and item.type in ("steam", "specular")
+        if item.target == L1_LABEL and not surface_ok:
             errs.append(Issue("V3", "次级动态不能指向主运动对象，二者会互相抵消", "l2_dynamics"))
             break
 

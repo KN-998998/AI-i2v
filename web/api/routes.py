@@ -189,6 +189,43 @@ def api_run_step1(batch_id: str) -> dict[str, Any]:
     return run_step1(batch_id)
 
 
+@router.post("/api/prompt/assemble")
+def api_prompt_assemble(payload: dict[str, Any]) -> dict[str, Any]:
+    """槽位 → 提示词实时装配（确定性纯函数，不调 LLM）。
+
+    前端槽位表单每次变更都调这个接口拿实时预览。
+    """
+    from pipeline.prompt_assembler import L2Item, PromptConfig, assemble_prompt
+
+    try:
+        cfg = PromptConfig(
+            mode=payload.get("mode", "single_image"),
+            camera_move=payload.get("camera_move", "dolly_in"),
+            camera_amplitude=payload.get("camera_amplitude", "subtle"),
+            elements=payload.get("elements", []),
+            l1_subject=payload.get("l1_subject", "none"),
+            l1_action_level=payload.get("l1_action_level"),
+            l1_action_verb=payload.get("l1_action_verb"),
+            l2_dynamics=[
+                L2Item(type=item.get("type", ""), target=item.get("target", ""))
+                for item in payload.get("l2_dynamics", [])
+            ],
+            speed_curve=payload.get("speed_curve"),
+            seamless_loop=bool(payload.get("seamless_loop", False)),
+        )
+        result = assemble_prompt(cfg)
+        return {
+            "blocked": result.blocked,
+            "errors": [{"code": e.code, "message": e.message, "field": e.field} for e in result.errors],
+            "warnings": [{"code": w.code, "message": w.message, "field": w.field} for w in result.warnings],
+            "prompt": result.prompt,
+            "negative_prompt": result.negative_prompt,
+            "cfg_scale": result.cfg_scale,
+        }
+    except Exception as e:
+        return {"blocked": True, "errors": [{"code": "ERR", "message": str(e), "field": ""}], "warnings": [], "prompt": "", "negative_prompt": "", "cfg_scale": 0}
+
+
 @router.post("/api/batch/{batch_id}/run/step2")
 def api_run_step2(batch_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     return run_step2(batch_id, force=bool((payload or {}).get("force", False)))

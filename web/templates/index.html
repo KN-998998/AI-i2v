@@ -1253,7 +1253,8 @@ async function renderPromptsEditor() {
   container.innerHTML = `
     <div style="margin-bottom:16px; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text-dim);">
       💡 每道菜已生成 3 个不同运镜方向的提示词卡片（推近 / 环绕 / 横移），可点卡片勾选或取消。
-      生成 1 段视频选 1 张、生成 2 段选 2 张、最多 3 张全选；<b>只有勾选的卡片才会调用可灵 API 生成视频</b>。提示词可直接在卡片内修改。
+      生成 1 段视频选 1 张、生成 2 段选 2 张、最多 3 张全选；<b>只有勾选的卡片才会调用可灵 API 生成视频</b>。
+      点击卡片内「⚙️ 槽位装配」可按结构化槽位重新生成提示词（可灵是扩散模型，槽位化比自由文本更稳）。
     </div>
     ${Object.keys(byDish).map(dish => `
       <div class="review-group">
@@ -1270,6 +1271,76 @@ async function renderPromptsEditor() {
                   : ""}
                 <span class="prompt-check">${p.selected ? "✓ 已选" : "未选"}</span>
               </div>
+              <div class="slot-bar" onclick="event.stopPropagation()">
+                <button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px;"
+                        onclick="toggleSlotPanel(${index})">⚙️ 槽位装配</button>
+                <span class="slot-status" id="slotStatus${index}"></span>
+              </div>
+              <div class="slot-panel" id="slotPanel${index}" style="display:none;padding:10px;border:1px dashed var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+                <div class="slot-row">
+                  <label class="field-label">镜头运动</label>
+                  <select class="select" id="slotCam${index}" onchange="slotChanged(${index})">
+                    <option value="dolly_in">缓慢推进</option>
+                    <option value="dolly_out">缓慢后拉</option>
+                    <option value="crane_down">缓慢俯视下降</option>
+                    <option value="crane_up">缓慢上升</option>
+                    <option value="truck_left">极小幅左横移</option>
+                    <option value="truck_right">极小幅右横移</option>
+                    <option value="orbit_right">小角度顺时针环绕</option>
+                    <option value="locked_off">固定机位</option>
+                  </select>
+                </div>
+                <div class="slot-row">
+                  <label class="field-label">幅度</label>
+                  <select class="select" id="slotAmp${index}" onchange="slotChanged(${index})">
+                    <option value="subtle">极轻微（约8%）</option>
+                    <option value="light">轻微（约15%）</option>
+                    <option value="medium">中等（约25%）</option>
+                  </select>
+                </div>
+                <div class="slot-row">
+                  <label class="field-label">主运动</label>
+                  <select class="select" id="slotL1${index}" onchange="slotChanged(${index})">
+                    <option value="dish_cold">菜品主体·冷食</option>
+                    <option value="dish_hot">菜品主体·热食</option>
+                    <option value="tableware">餐具器皿</option>
+                    <option value="hand">手部</option>
+                    <option value="chef">厨师上半身</option>
+                    <option value="none">无（纯运镜）</option>
+                  </select>
+                </div>
+                <div class="slot-row">
+                  <label class="field-label">次级动态</label>
+                  <select class="select" id="slotL2a${index}" onchange="slotChanged(${index})">
+                    <option value="">（无）</option>
+                    <option value="steam">热气/蒸汽</option>
+                    <option value="liquid_pour">液体·倾倒</option>
+                    <option value="liquid_ripple">液体·晃动</option>
+                    <option value="flame">火焰/炙烤</option>
+                    <option value="ice_mist">冰雾/冷凝</option>
+                    <option value="specular">高光滑移</option>
+                    <option value="fabric_sway">织物/植物飘动</option>
+                    <option value="person_idle">人物微动</option>
+                  </select>
+                  <select class="select" id="slotL2b${index}" style="margin-left:6px;" onchange="slotChanged(${index})">
+                    <option value="">（无）</option>
+                    <option value="steam">热气/蒸汽</option>
+                    <option value="liquid_pour">液体·倾倒</option>
+                    <option value="liquid_ripple">液体·晃动</option>
+                    <option value="flame">火焰/炙烤</option>
+                    <option value="ice_mist">冰雾/冷凝</option>
+                    <option value="specular">高光滑移</option>
+                    <option value="fabric_sway">织物/植物飘动</option>
+                    <option value="person_idle">人物微动</option>
+                  </select>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                  <input class="input" id="slotTarget${index}" placeholder="作用对象（如：菜品）" value="菜品"
+                         style="flex:1;" onchange="slotChanged(${index})" />
+                  <button type="button" class="btn btn-primary" style="font-size:12px;padding:6px 12px;"
+                          onclick="applySlotConfig(${index})">✨ 应用装配</button>
+                </div>
+              </div>
               <textarea class="textarea" style="min-height:110px;" onclick="event.stopPropagation()"
                         onchange="promptsData[${index}].video_prompt = this.value">${p.video_prompt}</textarea>
             </div>
@@ -1281,6 +1352,62 @@ async function renderPromptsEditor() {
 
   updateGenerateHint();
   document.getElementById("generateBtn").disabled = false;
+}
+
+function toggleSlotPanel(index) {
+  const panel = document.getElementById(`slotPanel${index}`);
+  if (panel) panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+function slotChanged(index) {
+  const st = document.getElementById(`slotStatus${index}`);
+  if (st) st.textContent = "（改完点「✨ 应用装配」生效）";
+}
+
+async function applySlotConfig(index) {
+  const p = promptsData[index];
+  if (!p) return;
+  const st = document.getElementById(`slotStatus${index}`);
+  const l2 = [document.getElementById(`slotL2a${index}`).value,
+              document.getElementById(`slotL2b${index}`).value].filter(Boolean);
+  const target = (document.getElementById(`slotTarget${index}`).value || "菜品").trim();
+
+  // 默认元素集：根据 L1 推导（菜品主体 → 菜品+餐具+桌面；手/厨师 → 手+菜品+餐具）
+  const l1 = document.getElementById(`slotL1${index}`).value;
+  let elements = ["tableware", "surface", "backdrop"];
+  if (l1 === "dish_cold") elements.unshift("dish_cold");
+  else if (l1 === "dish_hot") elements.unshift("dish_hot");
+  else if (l1 === "hand") elements = ["dish_hot", "tableware", "hand"];
+  else if (l1 === "chef") elements = ["dish_hot", "tableware", "chef"];
+  else if (l1 === "none") elements.unshift("dish_hot");
+
+  const payload = {
+    mode: "single_image",
+    camera_move: document.getElementById(`slotCam${index}`).value,
+    camera_amplitude: document.getElementById(`slotAmp${index}`).value,
+    elements,
+    l1_subject: l1,
+    l2_dynamics: l2.map(type => ({ type, target })),
+  };
+
+  if (st) st.textContent = "装配中...";
+  try {
+    const resp = await api("/api/prompt/assemble", { method: "POST", body: JSON.stringify(payload) });
+    if (resp.blocked) {
+      const msg = (resp.errors || []).map(e => e.message).join("；");
+      if (st) { st.textContent = "❌ " + msg; st.style.color = "var(--red)"; }
+      return;
+    }
+    p.video_prompt = resp.prompt;
+    p.negative_prompt = resp.negative_prompt;
+    p.slots = payload;
+    const ta = document.querySelector(`.prompt-card[data-variant="${p.variant_id || "v1"}"][data-dish="${p.dish}"] textarea`);
+    if (ta) ta.value = resp.prompt;
+    const warns = (resp.warnings || []).map(w => w.code).join(",");
+    if (st) { st.textContent = "✅ 已应用" + (warns ? `（提示:${warns}）` : ""); st.style.color = "var(--green)"; }
+  } catch(e) {
+    if (st) { st.textContent = "❌ " + e.message; st.style.color = "var(--red)"; }
+  }
 }
 
 function togglePromptCard(index, card) {
