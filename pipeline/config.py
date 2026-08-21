@@ -6,7 +6,6 @@
 
 密钥统一从 .env 文件读取（.env 已被 .gitignore 忽略，不会进仓库）：
   .env 格式：
-    DEEPSEEK_API_KEY=sk-xxxx
     KLING_API_KEY=xxxx
 
 也可以直接用系统环境变量覆盖（export / set 优先级最高）。
@@ -62,15 +61,11 @@ EXTRA_IMAGE_LIBS = [p for p in EXTRA_IMAGE_LIBS if str(p)]
 BGM_FILE = Path(os.environ.get("BGM_FILE") or "结尾音乐.mp3")
 
 # ── API Keys（从 .env / 环境变量读取，代码里不硬编码）──────────────
-DEEPSEEK_API_KEY  = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-DEEPSEEK_MODEL    = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
-
 KLING_API_KEY     = os.environ.get("KLING_API_KEY", "")
 KLING_ACCESS_KEY  = os.environ.get("KLING_ACCESS_KEY", "")
 KLING_SECRET_KEY  = os.environ.get("KLING_SECRET_KEY", "")
 KLING_BASE_URL    = os.environ.get("KLING_BASE_URL", "https://api-beijing.klingai.com")
-KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-3")                # 可灵 3.0（端点路径同模型名，如 /image-to-video/kling-3）
+KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-3.0-omni")
 
 # TTS 配置（待选型，先留占位）
 TTS_PROVIDER = ""

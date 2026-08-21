@@ -18,8 +18,8 @@
 └──────────────────────────┬──────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Step 2: AI 生成提示词                                   │
-│  DeepSeek 根据菜名+类型+亮点 → 生成图生视频提示词+字幕文案  │
+│  Step 2: 固定槽位装配提示词 + 手动文案                     │
+│  L0/L1/L2 选择 → 生成图生视频提示词；运营填写字幕文案       │
 └──────────────────────────┬──────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -39,8 +39,8 @@
 └──────────────────────────┬──────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Step 6: AI 配音 + 固定 BGM                               │
-│  DeepSeek 文案 → edge-tts 配音 → 固定 BGM 混音 → 最终成片  │
+│  Step 6: 手动文案 + 配音 + 固定 BGM                       │
+│  手动文案 → edge-tts 配音 → 固定 BGM 混音 → 最终成片       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -49,8 +49,8 @@
 | 环节     | 工具                    | 说明                                |
 |--------|-----------------------|-----------------------------------|
 | 图生视频   | **可灵 Kling 3.0**      | 3s / 1080p / 无声 / 9:16，API Key 鉴权 |
-| 提示词生成  | **DeepSeek**          | 动态描述 + 固定约束词                      |
-| 文案生成   | **DeepSeek**          | 配音文案 + 发布文案                       |
+| 提示词生成  | **固定槽位装配器**          | L0/L1/L2 选择后生成确定性提示词                      |
+| 文案编辑   | **画布节点手动填写**          | 人声文案与画面文字由运营直接编辑                       |
 | TTS 配音 | **edge-tts**          | 免费微软语音（可替换为 CosyVoice/火山引擎）       |
 | BGM    | 固定音频文件                | 后续可升级为 AI 生成                      |
 | 视频合成   | **ffmpeg**            | 裁切/拼接/字幕/混音                       |
@@ -72,9 +72,6 @@ ffmpeg 已预装在系统中。
 ### 2. 配置 API Key
 
 ```bash
-# 必须：DeepSeek（Step 2 + Step 6 文案生成）
-set DEEPSEEK_API_KEY=sk-你的key
-
 # 必须：可灵（Step 3 图生视频）
 set KLING_API_KEY=你的kling_api_key
 
@@ -117,9 +114,53 @@ videos:
 python web/app.py
 ```
 
-浏览器打开：`http://127.0.0.1:5000`
+开发环境固定使用 `8015` 端口，并默认启用 reload。浏览器打开：`http://127.0.0.1:8015`
 
-FastAPI 文档：`http://127.0.0.1:5000/docs`
+推荐使用项目根目录的一键 BAT 开发入口：
+
+```bat
+start_dev.bat
+```
+
+双击脚本即可自动结束旧的 `8015` 服务、重新构建 React 前端、启动 FastAPI，并打开 `http://127.0.0.1:8015/canvas-mvp`。后端启用 reload；修改前端源码后重新运行一次 `start_dev.bat`，修改后端源码则刷新浏览器即可。停止开发服务请在独立的 FastAPI 窗口使用 `Ctrl+C`。
+
+FastAPI 文档：`http://127.0.0.1:8015/docs`
+
+启动窗口使用 UTF-8 编码，并按日志级别显示彩色输出；日志文件保存在 `logs/app.log`，保持无颜色的 UTF-8 文本。
+
+## 当前 Web 工作台
+
+新版 Web 工作台由 React Flow 画布和 FastAPI 服务组成。画布只负责流程总览、节点拖拽、节点连接、节点 CRUD 和进入独立操作页；实际业务操作在各步骤页面完成，数据通过同一个持久化草稿贯通。
+
+| 页面 | 路径 | 主要功能 |
+|---|---|---|
+| 流程画布总览 | `/canvas-mvp` | 节点拖拽、连接线、节点增删改、流程入口 |
+| 素材与菜品 | `/workflow/assets` | 菜品、首帧/尾帧图片和素材信息 |
+| 提示词装配 | `/workflow/prompts` | L0/L1/L2 槽位、提示词预览和编辑 |
+| 生成视频片段 | `/workflow/generator` | 生成或刷新本地真实 MP4 片段 |
+| 片段排序 | `/workflow/timeline` | 多片段选择、删除和拖拽排序 |
+| 成片合成 | `/workflow/compose` | 接收多个片段并生成无声成片 |
+| 声音与文字 | `/workflow/sound` | 合成后配置 BGM、人声和画面文字 |
+| 成片结果 | `/workflow/output` | 查看合成状态和最终视频 |
+
+### 持久化与文件流转
+
+- 画布草稿和上传文件保存在 `output/canvas_drafts/<draft_id>/`，前端刷新后可恢复节点、连线、编辑内容和时间线。
+- 既有批次的真实视频片段从 `output/batch_*/03_clips/` 扫描，并在“生成视频片段”和“片段排序”页面复用。
+- 合成任务通过 `/api/canvas/drafts/{draft_id}/compose` 启动，状态和结果通过对应的查询接口获取。
+- `output/`、媒体文件、`.env`、日志和本地开发配置均不会提交到 Git；`.env.example` 只保存配置项名称和示例值。
+
+### 主要画布 API
+
+```text
+GET  /api/canvas/drafts/{draft_id}
+PUT  /api/canvas/drafts/{draft_id}
+POST /api/canvas/drafts/{draft_id}/files
+GET  /api/canvas/clips
+POST /api/canvas/drafts/{draft_id}/compose
+GET  /api/canvas/drafts/{draft_id}/compose/{job_id}
+GET  /api/canvas/drafts/{draft_id}/compose/{job_id}/file
+```
 
 ### 5. 运行流水线（CLI 可选）
 
@@ -151,18 +192,22 @@ pipeline/
 ├── batch_template.yaml    # 批量配置模板
 ├── run_batch.py           # 统一入口脚本
 ├── step1_match_images.py  # 菜品→素材库找图→9:16/1080p 预处理
-├── step2_gen_prompts.py   # DeepSeek 生成图生视频提示词 + 字幕
+├── step2_gen_prompts.py   # 固定槽位装配图生视频提示词 + 手动文案
 ├── step3_gen_videos.py    # Kling API 批量图生视频（JWT 认证 + 轮询）
 ├── step4_manual_review.py # 生成 HTML 审核页 + CSV 清单
 ├── step5_compose.py       # ffmpeg 掐头去尾 + 拼接 + 字幕 + CTA
-└── step6_voice_bgm.py     # DeepSeek 文案 + edge-tts 配音 + BGM 混音
+└── step6_voice_bgm.py     # 手动文案 + edge-tts 配音 + BGM 混音
 
 web/
 ├── app.py                 # FastAPI 应用入口
+├── run_server.py          # Windows 开发启动入口
 ├── api/routes.py          # HTTP 路由层（保持 /api 契约）
 ├── core/settings.py       # Web 配置与项目路径
 ├── core/logging.py        # 控制台 + 文件轮转日志
-└── services/              # 状态、编排、后台任务服务
+├── services/              # 状态、编排、后台任务服务
+├── test_app_routes.py     # Web 路由和画布持久化测试
+├── canvas-react/           # React Flow 前端源码和 Vite 配置
+└── static/canvas-app/      # React 生产构建产物
 ```
 
 ## 输出目录结构
@@ -175,13 +220,16 @@ output/batch_YYYYMMDD/
 ├── 04_selected/     # 审核清单（review.html + checklist.csv）
 ├── 05_composed/     # ffmpeg 合成的无声成片
 └── 06_final/        # 最终有声成片
+
+output/canvas_drafts/
+└── <draft_id>/       # 画布草稿、上传素材、合成任务和结果
 ```
 
 ## 关键设计决策
 
 | 决策                        | 理由                                    |
 |---------------------------|---------------------------------------|
-| **提示词 = 固定约束词 + AI 动态描述** | 负向约束（不变形/不生成文字等）必须强制生效，动态描述交给 AI 灵活生成 |
+| **提示词 = 固定槽位装配 + 固定约束词** | L0/L1/L2 选择后确定性生成提示词，避免自由文本导致约束漂移 |
 | **每菜 3 roll**             | 可灵一次生成多个版本，人工挑选最佳，废片率高时可回退            |
 | **先生成无声，后期配音**            | 图生视频模型有声生成成本翻倍，且配音内容可控                |
 | **生成 3s，成片只用 ~2s**       | Kling API 固定 3s，AI 动态在开头最自然，掐头去尾取精华   |
@@ -216,4 +264,4 @@ output/batch_YYYYMMDD/
 - [ ] TTS 工具选型确认（edge-tts 可用，或换 CosyVoice/火山引擎）
 - [ ] 首个批次实测 + 调优
 - [ ] 提示词效果数据收集 + 固化模板
-- [ ] 发布到 GitHub 仓库
+- [x] 发布到 GitHub 仓库

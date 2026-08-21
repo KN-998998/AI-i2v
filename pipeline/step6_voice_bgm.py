@@ -7,7 +7,7 @@ Step 6: 无声成片 → AI 配音 + 固定 BGM → 最终有声成片
 输出：06_final/ 下的最终有声成片 MP4
 
 流程：
-  1. 读取每条视频对应的文案（DeepSeek 生成或人工填写）
+  1. 读取每条视频对应的手动文案
   2. 调用 TTS API 生成配音音频
   3. 将配音 + 固定 BGM 混音
   4. 将混音叠加到无声成片上
@@ -31,12 +31,10 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.config import (
-    BGM_FILE, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
+    BGM_FILE,
     TTS_PROVIDER, TTS_API_KEY, TTS_VOICE,
     get_batch_dir, batch_subdirs,
 )
-
-import requests
 
 
 def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
@@ -49,42 +47,10 @@ def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
     raise RuntimeError(f"{action}失败: {detail[-500:]}")
 
 def generate_caption(dishes, brand_info, video_id):
-    """调用 DeepSeek 生成视频配音文案。"""
-    if not DEEPSEEK_API_KEY:
-        # 无 API Key 时用简单拼接
-        parts = [d["subtitle"] if isinstance(d, dict) else d for d in dishes]
-        cta = brand_info.get("cta", "评论区领优惠券")
-        return f"{'，'.join(parts)}。{cta}！"
-
-    system_msg = """你是餐饮短视频文案专家。生成一条12-15秒短视频的配音文案。
-要求：
-1. 15-30字，语速适中能在10秒内读完
-2. 以菜品诱惑开头，以引导到店结尾
-3. 口语化、有食欲感
-只输出文案正文，不要其他内容。"""
-
-    dish_names = [d if isinstance(d, str) else d.get("subtitle", "") for d in dishes]
-    user_msg = f"菜品：{'、'.join(dish_names)}\n品牌：{brand_info.get('name','')}\n引导语：{brand_info.get('cta','')}"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-    }
-    payload = {
-        "model": DEEPSEEK_MODEL,
-        "messages": [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ],
-        "temperature": 0.8,
-        "max_tokens": 100,
-    }
-    resp = requests.post(
-        f"{DEEPSEEK_BASE_URL}/chat/completions",
-        headers=headers, json=payload, timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    """Return the manually supplied caption, with a simple fallback for CLI batches."""
+    parts = [d["subtitle"] if isinstance(d, dict) else d for d in dishes]
+    cta = brand_info.get("cta", "评论区领优惠券")
+    return f"{'，'.join(parts)}。{cta}！"
 
 
 def generate_tts(text, out_path):

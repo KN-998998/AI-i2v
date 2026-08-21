@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Step 2: 菜名 → 发布文案（DeepSeek）+ 图生视频提示词（槽位化确定性组装）
+Step 2: 菜名 → 手动文案 + 图生视频提示词（槽位化确定性组装）
 ============================================================================
 
 输入：batch.yaml 中的菜品清单（菜名、类型、亮点）
@@ -9,10 +9,9 @@ Step 2: 菜名 → 发布文案（DeepSeek）+ 图生视频提示词（槽位化
 分工（v2.0，2026-08-14）：
 - 视频提示词（video_prompt / negative_prompt）→ pipeline.prompt_assembler
   确定性槽位化组装，不调 LLM 写动态（可灵是扩散模型，LLM 自由描述易翻车）
-- 发布文案（subtitle / caption）→ DeepSeek 生成（运营需要）
+- 发布文案（subtitle / caption）→ 从批量配置读取，或由运营手动填写
 
 用法：
-  set DEEPSEEK_API_KEY=sk-xxxx
   python pipeline/step2_gen_prompts.py --config pipeline/batch_20260814.yaml
 """
 import argparse
@@ -20,17 +19,10 @@ import json
 import sys
 from pathlib import Path
 
-import requests
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from pipeline.config import (
-    DEEPSEEK_API_KEY,
-    DEEPSEEK_BASE_URL,
-    DEEPSEEK_MODEL,
-    get_batch_dir,
-    batch_subdirs,
-)
+from pipeline.config import get_batch_dir, batch_subdirs
 
 # ── 三变体框架（前端依赖 v1/v2/v3，映射到装配器的镜头运动）──────────────
 PROMPT_VARIANTS = [
@@ -136,46 +128,6 @@ def build_motion_brief(category: str = "", highlight: str = "", variant: dict | 
     return variant.get("label", "推近版")
 
 
-def call_deepseek(dish_name: str, category: str, highlight: str, variant: dict | None = None) -> dict:
-    """调用 DeepSeek 生成发布文案（subtitle + caption）。"""
-    variant = variant or PROMPT_VARIANTS[0]
-    user_msg = (
-        f"菜名：{dish_name}\n"
-        f"类型：{category}\n"
-        f"亮点：{highlight}\n"
-        "请输出该菜的发布文案（subtitle + caption）。"
-    )
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-    }
-    payload = {
-        "model": DEEPSEEK_MODEL,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ],
-        "temperature": 0.45,
-        "response_format": {"type": "json_object"},
-    }
-
-    resp = requests.post(
-        f"{DEEPSEEK_BASE_URL}/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-    result = json.loads(content)
-    result["variant_id"] = variant["id"]
-    result["variant_label"] = variant["label"]
-    result["selected"] = variant.get("selected", False)
-    return result
-
-
 def build_full_prompt(
     ai_result: dict,
     dish_name: str = "",
@@ -194,13 +146,6 @@ def build_full_prompt(
 
 
 def run(config_path: str):
-    if not DEEPSEEK_API_KEY:
-        print("[错误] 未配置 DEEPSEEK_API_KEY（仅文案需要，视频提示词由装配器生成）")
-        # 文案缺失时用菜名兜底，不阻断视频提示词
-        deepseek_ok = False
-    else:
-        deepseek_ok = True
-
     with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
@@ -211,7 +156,7 @@ def run(config_path: str):
     total = len(dishes) * len(PROMPT_VARIANTS)
 
     print(f"{'='*60}")
-    print(f"Step 2: 提示词装配（确定性） + 发布文案（DeepSeek）")
+    print(f"Step 2: 提示词装配（确定性） + 手动文案")
     print(f"  菜品数量: {len(dishes)}  每道菜变体数: {len(PROMPT_VARIANTS)}")
     print(f"  输出目录: {dirs['prompts']}")
     print(f"{'='*60}")
@@ -240,15 +185,9 @@ def run(config_path: str):
                 with open(prompt_path, "w", encoding="utf-8") as f:
                     f.write(full_prompt)
 
-                # 发布文案：DeepSeek（可选，失败用菜名兜底）
-                subtitle, caption = name, ""
-                if deepseek_ok:
-                    try:
-                        ai_result = call_deepseek(name, category, highlight, variant)
-                        subtitle = ai_result.get("subtitle", name)
-                        caption = ai_result.get("caption", "")
-                    except Exception as e:
-                        print(f"\n  [文案失败] {e}")
+                # 文案由运营在批量配置或画布节点中手动填写。
+                subtitle = dish.get("subtitle", name)
+                caption = dish.get("caption", "")
 
                 result = {
                     "dish": name,

@@ -2,6 +2,8 @@
 """API routers for the FastAPI web workbench."""
 import json
 import os
+import re
+import subprocess
 import uuid
 import zipfile
 from datetime import datetime
@@ -12,7 +14,6 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from pipeline.config import (
-    DEEPSEEK_API_KEY,
     EXTRA_IMAGE_LIBS,
     IMAGE_LIBRARY,
     KLING_ACCESS_KEY,
@@ -29,15 +30,188 @@ from pipeline.config import (
 )
 from web.core.logging import get_logger
 from web.services.pipeline_tasks import run_compose, run_step1, run_step2, run_step3
+from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
 from web.services.planning import write_selection_csv
+from web.services.canvas_state import load_draft, save_draft, save_upload, uploaded_file
 from web.services.state import get_batch_state, load_manifest, load_state, save_state
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 
+def _clip_label(filename: str) -> str:
+    match = re.search(r"(?:_|-)roll[_-]?(\d+)", Path(filename).stem, re.IGNORECASE)
+    return f"Roll {match.group(1)}" if match else "本地片段"
+
+
+def _canvas_clip_dish(filename: str) -> str:
+    stem = Path(filename).stem
+    if stem.startswith("omni_smoke_"):
+        stem = stem.removeprefix("omni_smoke_")
+        stem = re.sub(r"_\d{8}_\d{6}.*$", "", stem)
+    stem = re.sub(r"(?:_|-)roll[_-]?\d+.*$", "", stem, flags=re.IGNORECASE)
+    stem = re.sub(r"_v\d+.*$", "", stem, flags=re.IGNORECASE)
+    return stem or Path(filename).stem
+
+
+@router.get("/api/canvas/clips")
+def list_canvas_clips() -> list[dict[str, Any]]:
+    """List existing MP4 clips so the canvas can use real local media."""
+    if not OUTPUT_ROOT.exists():
+        return []
+
+    result: list[dict[str, Any]] = []
+    for batch_dir in OUTPUT_ROOT.glob("batch_*"):
+        clips_dir = batch_dir / "03_clips"
+        if not clips_dir.is_dir():
+            continue
+        for clip_path in clips_dir.glob("*.mp4"):
+            duration = _read_video_duration_seconds(clip_path)
+            if duration is None:
+                continue
+            result.append({
+                "id": f"clip_{batch_dir.name}_{clip_path.name}",
+                "batchId": batch_dir.name,
+                "filename": clip_path.name,
+                "dish": _canvas_clip_dish(clip_path.name),
+                "label": _clip_label(clip_path.name),
+                "tone": "#355e62",
+                "durationSeconds": round(float(duration), 2),
+                "timelineDuration": min(round(float(duration), 2), 2.5),
+                "status": "generated",
+                "sourcePath": str(clip_path.resolve()),
+                "sourceUrl": f"/api/canvas/clips/{batch_dir.name}/{clip_path.name}",
+            })
+    return sorted(result, key=lambda item: (item["dish"], item["filename"]))
+
+
+@router.get("/api/canvas/clips/{batch_id}/{filename}")
+def serve_canvas_clip(batch_id: str, filename: str) -> FileResponse:
+    if not re.fullmatch(r"batch_[A-Za-z0-9_-]+", batch_id):
+        raise _json_error("视频批次无效", 400)
+    clip_path = OUTPUT_ROOT / batch_id / "03_clips" / Path(filename).name
+    if clip_path.suffix.lower() != ".mp4" or not clip_path.is_file():
+        raise _json_error("视频片段不存在", 404)
+    return FileResponse(str(clip_path), media_type="video/mp4")
+
+
+@router.get("/api/canvas/drafts/{draft_id}")
+def get_canvas_draft(draft_id: str) -> dict[str, Any]:
+    try:
+        draft = load_draft(draft_id)
+    except (ValueError, json.JSONDecodeError, OSError) as exc:
+        raise _json_error("草稿读取失败", 500) from exc
+    if draft is None:
+        raise _json_error("草稿不存在", 404)
+    return draft
+
+
+@router.put("/api/canvas/drafts/{draft_id}")
+def put_canvas_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return save_draft(draft_id, payload)
+    except (ValueError, TypeError, OSError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/canvas/drafts/{draft_id}/files")
+async def upload_canvas_file(draft_id: str, kind: str = Form(...), file: UploadFile = File(...)) -> dict[str, Any]:
+    try:
+        metadata = await save_upload(draft_id, file, kind)
+    except (ValueError, OSError) as exc:
+        raise _json_error(str(exc), 400) from exc
+    metadata["url"] = f"/api/canvas/drafts/{draft_id}/files/{metadata['stored_name']}"
+    return metadata
+
+
+@router.get("/api/canvas/drafts/{draft_id}/files/{stored_name}")
+def get_canvas_file(draft_id: str, stored_name: str) -> FileResponse:
+    path = uploaded_file(draft_id, stored_name)
+    if path is None:
+        raise _json_error("文件不存在", 404)
+    return FileResponse(str(path))
+
+
+@router.post("/api/canvas/drafts/{draft_id}/compose")
+def compose_canvas_draft(draft_id: str) -> dict[str, Any]:
+    try:
+        return start_compose(draft_id)
+    except ValueError as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/canvas/drafts/{draft_id}/compose/{job_id}")
+def get_canvas_compose_status(draft_id: str, job_id: str) -> dict[str, Any]:
+    job = get_compose_job(draft_id, job_id)
+    if job is None:
+        raise _json_error("合成任务不存在", 404)
+    return job
+
+
+@router.get("/api/canvas/drafts/{draft_id}/compose/{job_id}/file")
+def get_canvas_compose_file(draft_id: str, job_id: str) -> FileResponse:
+    path = compose_output_path(draft_id, job_id)
+    if path is None:
+        raise _json_error("合成视频尚未生成", 404)
+    return FileResponse(str(path), media_type="video/mp4", filename="canvas_composed.mp4")
+
+
 def _json_error(message: str, status_code: int = 400) -> HTTPException:
     return HTTPException(status_code=status_code, detail=message)
+
+
+def _read_video_duration_seconds(path: str | Path | None) -> float | None:
+    if not path or not os.path.exists(str(path)):
+        return None
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=nw=1:nk=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return float(result.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def _read_file_timestamp(path: str | Path | None) -> str | None:
+    if not path or not os.path.exists(str(path)):
+        return None
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(str(path))).isoformat(timespec="seconds")
+    except OSError:
+        return None
+
+
+def _format_generated_at(value: str | None) -> str:
+    if not value:
+        return "生成时间未知"
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except ValueError:
+        return str(value)
+    return dt.strftime("%Y年%m月%d日%H:%M:%S生成")
+
+
+def _guess_dish_from_clip_name(filename: str, dish_names: list[str]) -> str:
+    for dish in sorted(dish_names, key=len, reverse=True):
+        if dish and dish in filename:
+            return dish
+    stem = Path(filename).stem
+    if stem.startswith("omni_smoke_"):
+        parts = stem.split("_")
+        if len(parts) >= 6:
+            return "_".join(parts[2:-3]) or "未登记视频"
+    return stem.split("_")[0] or "未登记视频"
 
 
 @router.get("/api/config")
@@ -53,7 +227,6 @@ def get_config() -> dict[str, Any]:
         kling_key_suffix = ""
 
     return {
-        "deepseek": bool(DEEPSEEK_API_KEY),
         "kling": bool(KLING_API_KEY or (KLING_ACCESS_KEY and KLING_SECRET_KEY)),
         "kling_base_url": KLING_BASE_URL,
         "kling_model": KLING_MODEL,
@@ -220,10 +393,9 @@ def api_prompt_assemble(payload: dict[str, Any]) -> dict[str, Any]:
             "warnings": [{"code": w.code, "message": w.message, "field": w.field} for w in result.warnings],
             "prompt": result.prompt,
             "negative_prompt": result.negative_prompt,
-            "cfg_scale": result.cfg_scale,
         }
     except Exception as e:
-        return {"blocked": True, "errors": [{"code": "ERR", "message": str(e), "field": ""}], "warnings": [], "prompt": "", "negative_prompt": "", "cfg_scale": 0}
+        return {"blocked": True, "errors": [{"code": "ERR", "message": str(e), "field": ""}], "warnings": [], "prompt": "", "negative_prompt": ""}
 
 
 @router.post("/api/batch/{batch_id}/run/step2")
@@ -254,6 +426,10 @@ def get_prompts(batch_id: str) -> list[dict[str, Any]]:
             "selected": merged.get("selected", prompt.get("selected", False)),
             "video_prompt": merged.get("video_prompt", prompt["video_prompt"]),
             "negative_prompt": merged.get("negative_prompt", prompt.get("negative_prompt", "")),
+            "slots": merged.get("slots", prompt.get("slots", {})),
+            "warnings": merged.get("warnings", prompt.get("warnings", [])),
+            "errors": merged.get("errors", prompt.get("errors", [])),
+            "blocked": bool(merged.get("blocked", prompt.get("blocked", False))),
             "subtitle": prompt.get("subtitle", dish),
             "caption": prompt.get("caption", ""),
         })
@@ -271,6 +447,10 @@ def save_prompts(batch_id: str, payload: dict[str, Any]) -> dict[str, str]:
             "video_prompt": prompt["video_prompt"],
             "negative_prompt": prompt.get("negative_prompt", ""),
             "selected": bool(prompt.get("selected", False)),
+            "slots": prompt.get("slots", {}),
+            "warnings": prompt.get("warnings", []),
+            "errors": prompt.get("errors", []),
+            "blocked": bool(prompt.get("blocked", False)),
         }
     with open(dirs["prompts"] / "edited_prompts.json", "w", encoding="utf-8") as f:
         json.dump(edited, f, ensure_ascii=False, indent=2)
@@ -296,16 +476,49 @@ def get_clips(batch_id: str) -> dict[str, list[dict[str, Any]]]:
     dirs = batch_subdirs(OUTPUT_ROOT / batch_id)
     clips = load_manifest(dirs, "clips") or []
     grouped = {}
+    seen_filenames = set()
     for clip in clips:
         if clip.get("status") != "ok":
             continue
         dish = clip["dish"]
+        duration = clip.get("duration_seconds")
+        if duration is None:
+            duration = _read_video_duration_seconds(clip.get("output"))
+        if duration is None or abs(float(duration) - float(VIDEO_DURATION)) > 0.35:
+            continue
+        generated_at = clip.get("generated_at") or _read_file_timestamp(clip.get("output"))
+        filename = os.path.basename(clip["output"])
+        seen_filenames.add(filename)
         grouped.setdefault(dish, []).append({
             "roll": clip["roll"],
             "variant_id": clip.get("variant_id", ""),
             "variant_label": clip.get("variant_label", ""),
-            "filename": os.path.basename(clip["output"]),
+            "filename": filename,
             "path": clip["output"],
+            "duration_seconds": duration,
+            "generated_at": generated_at,
+            "generated_at_label": _format_generated_at(generated_at),
+        })
+
+    state = load_state(batch_id) or {}
+    dish_names = [dish.get("name", "") for dish in state.get("dishes", []) if isinstance(dish, dict)]
+    for clip_path in sorted(dirs["clips"].glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if clip_path.name in seen_filenames:
+            continue
+        duration = _read_video_duration_seconds(clip_path)
+        if duration is None or abs(float(duration) - float(VIDEO_DURATION)) > 0.35:
+            continue
+        generated_at = _read_file_timestamp(clip_path)
+        dish = _guess_dish_from_clip_name(clip_path.name, dish_names)
+        grouped.setdefault(dish, []).append({
+            "roll": 1,
+            "variant_id": "orphan",
+            "variant_label": "未登记片段",
+            "filename": clip_path.name,
+            "path": str(clip_path),
+            "duration_seconds": duration,
+            "generated_at": generated_at,
+            "generated_at_label": _format_generated_at(generated_at),
         })
     return grouped
 

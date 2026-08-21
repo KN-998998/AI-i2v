@@ -15,15 +15,14 @@
 
 ## 工作流 Step
 1. **Step 1** — 菜品清单 → 素材库找图 → 9:16/1080p 预处理（Pillow）
-2. **Step 2** — DeepSeek 生成图生视频提示词 + 字幕文案
+2. **Step 2** — 固定槽位装配图生视频提示词 + 手动填写字幕文案
 3. **Step 3** — Kling 3.0 API 批量图生视频（3s/无声/9:16，每菜 3 roll）
 4. **Step 4** — 生成 HTML 审核页 + CSV 清单（人工挑选）
 5. **Step 5** — ffmpeg 掐头去尾 + 硬切拼接 + 字幕 + CTA → 无声成片
-6. **Step 6** — DeepSeek 文案 + edge-tts 配音 + 固定 BGM → 最终有声成片
+6. **Step 6** — 手动文案 + edge-tts 配音 + 固定 BGM → 最终有声成片
 
 ## API Key 配置
 ```bash
-set DEEPSEEK_API_KEY=sk-xxxx          # Step 2 + Step 6
 set KLING_API_KEY=xxxx                # Step 3
 ```
 

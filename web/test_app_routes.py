@@ -1,0 +1,99 @@
+import shutil
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from web.app import create_app
+from web.services import canvas_state
+from web.api import routes as api_routes
+
+
+def test_canvas_routes_serve_react_page_only():
+    client = TestClient(create_app())
+
+    root_page = client.get("/")
+    assert root_page.status_code == 200
+    assert "/static/canvas-app/assets/index.js" in root_page.text
+
+    react_page = client.get("/canvas-mvp")
+    assert react_page.status_code == 200
+    assert "/static/canvas-app/assets/index.js" in react_page.text
+
+    assert client.get("/canvas-mvp-legacy").status_code == 404
+
+
+def test_workflow_pages_use_react_spa_fallback():
+    client = TestClient(create_app())
+    for step in ("assets", "prompts", "generator", "timeline", "compose", "sound", "output"):
+        response = client.get(f"/workflow/{step}")
+        assert response.status_code == 200
+        assert "/static/canvas-app/assets/index.js" in response.text
+    assert client.get("/workflow/unknown").status_code == 404
+
+
+def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
+    test_root = tmp_path / "canvas-draft"
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)
+    client = TestClient(create_app())
+    payload = {
+        "activePanel": "prompt",
+        "nextNodeNumber": 3,
+        "nodes": [{"id": "assets", "type": "workflow", "position": {"x": 10, "y": 20}, "data": {"kind": "input"}}],
+        "edges": [],
+        "timeline": [],
+        "bgmName": "默认 BGM",
+        "bgmUrl": "",
+    }
+
+    assert client.get("/api/canvas/drafts/default").status_code == 404
+    saved = client.put("/api/canvas/drafts/default", json=payload)
+    assert saved.status_code == 200
+    assert saved.json()["version"] == 1
+    assert client.get("/api/canvas/drafts/default").json()["nextNodeNumber"] == 3
+
+    uploaded = client.post(
+        "/api/canvas/drafts/default/files",
+        data={"kind": "image"},
+        files={"file": ("dish.png", b"image-bytes", "image/png")},
+    )
+    assert uploaded.status_code == 200
+    file_url = uploaded.json()["url"]
+    assert client.get(file_url).content == b"image-bytes"
+    shutil.rmtree(test_root, ignore_errors=True)
+
+
+def test_canvas_compose_rejects_unlinked_demo_clips(monkeypatch, tmp_path):
+    test_root = tmp_path / "canvas-draft"
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)
+    client = TestClient(create_app())
+    payload = {
+        "activePanel": "prompt",
+        "nextNodeNumber": 1,
+        "nodes": [],
+        "edges": [],
+        "timeline": [{"id": "clip_demo", "dish": "演示菜品", "timelineDuration": 2.5}],
+        "bgmName": "",
+        "bgmUrl": "",
+    }
+    assert client.put("/api/canvas/drafts/default", json=payload).status_code == 200
+    response = client.post("/api/canvas/drafts/default/compose")
+    assert response.status_code == 400
+    assert "没有关联真实视频文件" in response.json()["detail"]
+
+
+def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):
+    output_root = tmp_path / "output"
+    clip_dir = output_root / "batch_demo" / "03_clips"
+    clip_dir.mkdir(parents=True)
+    clip_path = clip_dir / "天妇罗_roll1_1080p_5s.mp4"
+    clip_path.write_bytes(b"fake-mp4")
+    monkeypatch.setattr(api_routes, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(api_routes, "_read_video_duration_seconds", lambda _path: 5.0)
+
+    client = TestClient(create_app())
+    clips = client.get("/api/canvas/clips")
+    assert clips.status_code == 200
+    item = clips.json()[0]
+    assert item["dish"] == "天妇罗"
+    assert item["timelineDuration"] == 2.5
+    assert client.get(item["sourceUrl"]).content == b"fake-mp4"

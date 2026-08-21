@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 STEPS = {
     1: ("Step 1: 匹配素材图片 + 预处理",     "pipeline.step1_match_images", "run"),
-    2: ("Step 2: DeepSeek 生成提示词",        "pipeline.step2_gen_prompts",  "run"),
+    2: ("Step 2: 固定提示词装配 + 手动文案",    "pipeline.step2_gen_prompts",  "run"),
     3: ("Step 3: Kling API 批量图生视频",      "pipeline.step3_gen_videos",   "run"),
     4: ("Step 4: 生成人工审核清单",            "pipeline.step4_manual_review","run"),
     5: ("Step 5: ffmpeg 合成无声成片",         "pipeline.step5_compose",      "run"),

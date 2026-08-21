@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.config import (
     KLING_API_KEY, KLING_ACCESS_KEY, KLING_SECRET_KEY,
     KLING_BASE_URL, KLING_MODEL,
-    VIDEO_RESOLUTION, VIDEO_DURATION, VIDEO_SILENT, ROLL_COUNT,
+    VIDEO_RESOLUTION, VIDEO_ASPECT, VIDEO_DURATION, VIDEO_SILENT, ROLL_COUNT,
     NEGATIVE_PROMPT,
     get_batch_dir, batch_subdirs,
 )
@@ -48,6 +48,30 @@ MAX_CONCURRENT = 3       # 最大并发
 
 # 图片大小限制（10MB，API 要求）
 MAX_IMAGE_SIZE = 10 * 1024 * 1024
+
+OMNI_TASK_PATH = "/omni-video/kling-3.0-omni"
+
+
+def is_omni_model() -> bool:
+    return "omni" in KLING_MODEL.lower()
+
+
+def ok_code(data) -> bool:
+    return data.get("code") in (0, "0")
+
+
+def normalize_task_status(status: str) -> str:
+    status = (status or "unknown").lower()
+    if status in {"succeed", "success", "succeeded", "completed", "complete"}:
+        return "succeeded"
+    if status in {"failed", "failure", "fail"}:
+        return "failed"
+    return status
+
+
+def omni_task_url(task_id: str | None = None) -> str:
+    base = f"{KLING_BASE_URL.rstrip('/')}{OMNI_TASK_PATH}"
+    return f"{base}/{task_id}" if task_id else base
 
 
 def check_credentials():
@@ -100,6 +124,7 @@ def parse_json_response(resp, action):
 
 def session_with_retry():
     s = requests.Session()
+    s.trust_env = False
     retries = Retry(total=3, backoff_factor=1,
                     status_forcelist=[429, 500, 502, 503, 504])
     s.mount("https://", HTTPAdapter(max_retries=retries))
@@ -127,6 +152,40 @@ def create_task(session, image_base64, prompt, negative_prompt,
 
     sound = "off" if sound is None and VIDEO_SILENT else (sound or "native")
     headers = auth_headers(content_type=True)
+    if is_omni_model():
+        contents = [
+            {"type": "prompt", "text": prompt},
+            {"type": "first_frame", "url": image_base64, "id": "image_1"},
+        ]
+        if image_tail_base64:
+            contents.append({"type": "last_frame", "url": image_tail_base64, "id": "image_2"})
+
+        payload = {
+            "contents": contents,
+            "settings": {
+                "audio": "native" if sound != "off" else "off",
+                "resolution": VIDEO_RESOLUTION,
+                "aspect_ratio": VIDEO_ASPECT,
+                "duration": int(duration),
+                "multi_shot": False,
+            },
+            "options": {
+                "watermark_info": {"enabled": False},
+            },
+        }
+        resp = session.post(omni_task_url(), headers=headers, json=payload, timeout=120)
+        data = parse_json_response(resp, "创建任务")
+
+        if resp.status_code != 200 or not ok_code(data):
+            err = data.get("message", resp.text[:300])
+            raise RuntimeError(f"创建任务失败: {err}")
+
+        result = data.get("data", {})
+        task_id = result.get("task_id") or result.get("id")
+        if not task_id:
+            raise RuntimeError("创建任务失败: API 未返回 task_id")
+        return task_id
+
     contents = [
         {"type": "prompt", "text": prompt},
         {"type": "first_frame", "url": image_base64},
@@ -154,7 +213,7 @@ def create_task(session, image_base64, prompt, negative_prompt,
     )
     data = parse_json_response(resp, "创建任务")
 
-    if resp.status_code != 200 or data.get("code") != 0:
+    if resp.status_code != 200 or not ok_code(data):
         err = data.get("message", resp.text[:300])
         raise RuntimeError(f"创建任务失败: {err}")
 
@@ -172,11 +231,17 @@ def query_task(session, task_id):
     )
     data = parse_json_response(resp, "查询任务")
 
-    if resp.status_code != 200 or data.get("code") != 0:
+    if resp.status_code != 200 or not ok_code(data):
         err = data.get("message", resp.text[:300])
         raise RuntimeError(f"查询任务失败: {err}")
 
-    tasks = data.get("data", {}).get("tasks", [])
+    payload = data.get("data", {})
+    if isinstance(payload, list):
+        tasks = payload
+    elif isinstance(payload, dict):
+        tasks = payload.get("tasks") or payload.get("result") or []
+    else:
+        tasks = []
     return tasks[0] if tasks else {}
 
 

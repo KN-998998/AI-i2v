@@ -9,14 +9,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from web.api.routes import router
 from web.core.logging import configure_logging, get_logger, log_request
-from web.core.settings import APP_HOST, APP_PORT, STATIC_DIR, TEMPLATE_DIR
+from web.core.settings import APP_HOST, APP_PORT, APP_RELOAD, STATIC_DIR
 
 configure_logging()
 logger = get_logger(__name__)
@@ -63,9 +63,27 @@ def create_app() -> FastAPI:
         logger.exception("Unhandled request error")
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
+    def react_entry() -> FileResponse:
+        entry = STATIC_DIR / "canvas-app" / "index.html"
+        if not entry.exists():
+            raise HTTPException(status_code=503, detail="React 前端尚未构建，请先运行 start_dev.bat")
+        return FileResponse(str(entry), media_type="text/html")
+
     @app.get("/")
     async def index() -> FileResponse:
-        return FileResponse(str(TEMPLATE_DIR / "index.html"), media_type="text/html")
+        return react_entry()
+
+    @app.get("/canvas-mvp")
+    async def canvas_mvp() -> FileResponse:
+        """React Flow canvas; it does not trigger production jobs."""
+        return react_entry()
+
+    @app.get("/workflow/{step}")
+    async def workflow_step(step: str) -> FileResponse:
+        allowed_steps = {"assets", "prompts", "generator", "timeline", "compose", "sound", "output"}
+        if step not in allowed_steps:
+            raise HTTPException(status_code=404, detail="工作流页面不存在")
+        return react_entry()
 
     return app
 
@@ -84,7 +102,8 @@ if __name__ == "__main__":
         "web.app:app",
         host=APP_HOST,
         port=APP_PORT,
-        reload=False,
+        reload=APP_RELOAD,
+        use_colors=True,
         log_config=None,
         access_log=False,
     )

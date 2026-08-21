@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,40 @@ from web.services.planning import build_video_plan, get_video_template
 from web.services.state import get_batch_state, load_manifest, save_state, summarize_clip_results
 
 logger = get_logger(__name__)
+
+
+def _read_video_duration_seconds(path: str | Path | None) -> float | None:
+    if not path or not os.path.exists(str(path)):
+        return None
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=nw=1:nk=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return float(result.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def _clip_matches_task(clip: dict[str, Any], task: dict[str, Any], expected_duration: int) -> bool:
+    if clip.get("status") != "ok" or clip.get("prompt") != task["prompt"]:
+        return False
+    duration = clip.get("duration_seconds")
+    if duration is None:
+        duration = _read_video_duration_seconds(clip.get("output"))
+    if duration is None:
+        return False
+    return abs(float(duration) - float(expected_duration)) <= 0.35
 
 
 def start_thread(name: str, target) -> None:
@@ -116,8 +151,8 @@ def run_step2(batch_id: str, force: bool = False) -> dict[str, Any]:
     def worker() -> None:
         logger.info("Step2 started batch=%s force=%s", batch_id, force)
         try:
-            from pipeline.config import NEGATIVE_PROMPT
-            from pipeline.step2_gen_prompts import build_full_prompt, call_deepseek
+            from pipeline.prompt_assembler import assemble_prompt
+            from pipeline.step2_gen_prompts import build_slot_config, slot_to_dict
 
             if not state.get("dishes"):
                 raise RuntimeError("批次菜品配置为空，无法生成提示词（请先在菜品配置步骤添加菜品）")
@@ -129,8 +164,14 @@ def run_step2(batch_id: str, force: bool = False) -> dict[str, Any]:
                 category = dish.get("category", "")
                 highlight = dish.get("highlight", "")
                 for variant in PROMPT_VARIANTS:
-                    ai_result = call_deepseek(name, category, highlight, variant)
-                    full_prompt = build_full_prompt(ai_result, name, category, highlight, variant)
+                    slot_cfg = build_slot_config(name, category, highlight, variant)
+                    assembled = assemble_prompt(slot_cfg)
+                    full_prompt = assembled.prompt
+                    negative_prompt = assembled.negative_prompt
+                    manual_result = {
+                        "subtitle": dish.get("subtitle", name),
+                        "caption": dish.get("caption", ""),
+                    }
                     result = {
                         "dish": name,
                         "category": category,
@@ -139,11 +180,21 @@ def run_step2(batch_id: str, force: bool = False) -> dict[str, Any]:
                         "variant_label": variant["label"],
                         "selected": variant.get("selected", False),
                         "video_prompt": full_prompt,
-                        "motion_brief": ai_result.get("motion_brief", ""),
-                        "core_action": ai_result.get("core_action", ai_result.get("video_prompt", "")),
-                        "negative_prompt": NEGATIVE_PROMPT,
-                        "subtitle": ai_result["subtitle"],
-                        "caption": ai_result["caption"],
+                        "motion_brief": "",
+                        "core_action": "",
+                        "negative_prompt": negative_prompt,
+                        "slots": slot_to_dict(slot_cfg),
+                        "warnings": [
+                            {"code": w.code, "message": w.message, "field": w.field}
+                            for w in assembled.warnings
+                        ],
+                        "errors": [
+                            {"code": e.code, "message": e.message, "field": e.field}
+                            for e in assembled.errors
+                        ],
+                        "blocked": assembled.blocked,
+                        "subtitle": manual_result["subtitle"],
+                        "caption": manual_result["caption"],
                     }
                     with open(dirs["prompts"] / f"{name}_{variant['id']}_prompt.txt", "w", encoding="utf-8") as f:
                         f.write(full_prompt)
@@ -258,6 +309,8 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
     pending = tasks
 
     if not force:
+        from pipeline.config import VIDEO_DURATION
+
         existing_clips = load_manifest(dirs, "clips") or []
         task_map = {
             f"{task['dish']}|{task.get('variant_id', task['roll'])}": task
@@ -267,9 +320,8 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
             f"{c['dish']}|{c.get('variant_id', c.get('roll'))}": c["prompt"]
             for c in existing_clips
             if (
-                c.get("status") == "ok"
-                and c.get("prompt")
-                and f"{c.get('dish')}|{c.get('variant_id', c.get('roll'))}" in task_map
+                (task := task_map.get(f"{c.get('dish')}|{c.get('variant_id', c.get('roll'))}"))
+                and _clip_matches_task(c, task, VIDEO_DURATION)
             )
         }
         pending = []
@@ -285,9 +337,8 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
             clip
             for clip in existing_clips
             if (
-                clip.get("status") == "ok"
-                and (task := task_map.get(f"{clip.get('dish')}|{clip.get('variant_id', clip.get('roll'))}"))
-                and clip.get("prompt") == task["prompt"]
+                (task := task_map.get(f"{clip.get('dish')}|{clip.get('variant_id', clip.get('roll'))}"))
+                and _clip_matches_task(clip, task, VIDEO_DURATION)
             )
         ]
 
@@ -347,7 +398,15 @@ def run_step3(batch_id: str, force: bool = False) -> dict[str, Any]:
                         out_name = f"{task['dish']}_{variant_name}_1080p_{VIDEO_DURATION}s.mp4"
                         out_path = str(dirs["clips"] / out_name)
                         download_video(session, video_url, out_path)
-                        results.append({**task, "status": "ok", "output": out_path, "prompt": task["prompt"]})
+                        duration = _read_video_duration_seconds(out_path) or float(VIDEO_DURATION)
+                        results.append({
+                            **task,
+                            "status": "ok",
+                            "output": out_path,
+                            "prompt": task["prompt"],
+                            "duration_seconds": duration,
+                            "generated_at": datetime.now().isoformat(timespec="seconds"),
+                        })
                     else:
                         results.append({**task, "status": "failed", "error": str(info)[:200]})
                 except Exception as exc:

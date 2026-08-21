@@ -41,5 +41,13 @@ logs/
 *.bak
 ~*
 
+# 前端依赖
+web/canvas-react/node_modules/
+
 # 历史归档（含品牌素材/业务文档，不提交公开仓库；本地保留）
 _archive/
+
+# 测试缓存与画布调试临时目录
+pytest-cache-files-*/
+pytest-temp-*/
+web/canvas-draft-*/

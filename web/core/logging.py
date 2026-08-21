@@ -8,6 +8,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
+from colorama import just_fix_windows_console
+
 from web.core.settings import LOG_DIR
 
 LOG_FORMAT = "%(asctime)s %(levelname)-8s [%(name)s] %(message)s"
@@ -96,6 +98,7 @@ def log_request(
 
 def configure_logging(log_dir: Path = LOG_DIR, level: int = logging.INFO) -> None:
     """Configure console and rotating file logging once."""
+    just_fix_windows_console()
     root = logging.getLogger()
     if getattr(root, "_video_pipeline_logging_configured", False):
         return
