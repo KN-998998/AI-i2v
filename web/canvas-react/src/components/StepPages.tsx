@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { nodeCatalog, totalTimelineDuration, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
+import { getCanvasComposeStatus, startCanvasCompose } from "../api";
+import { nodeCatalog, overlayItemsFromData, totalTimelineDuration, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
+import { StoryboardTimeline } from "./StoryboardTimeline";
 
 type StepPageProps = { onToast: (message: string) => void };
 type ManagedNodeKind = Extract<NodeKind, "input" | "prompt" | "generator" | "output" | "sound">;
@@ -23,7 +25,7 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
   }, [nodeId, panel, setActivePanel, setSelection]);
 
   return <StepFrame route={route} title={title} description={description} onToast={onToast}>
-    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div><Inspector onToast={onToast} /></div>
+    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/sound" && <><SoundTextPreview /><SoundComposePanel onToast={onToast} /></>}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div><Inspector onToast={onToast} /></div>
   </StepFrame>;
 }
 
@@ -145,6 +147,51 @@ function StepNext({ route }: { route: WorkflowRoute }) {
   const item = next[route];
   if (!item) return null;
   return <button type="button" className="btn btn-primary step-next" onClick={() => navigate(item.path)}>{item.label}</button>;
+}
+
+function SoundTextPreview() {
+  const timeline = useWorkflowStore(state => state.timeline);
+  const sound = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound")?.data);
+  const setActivePanel = useWorkflowStore(state => state.setActivePanel);
+  const overlayItems = overlayItemsFromData(sound ?? {});
+
+  return <>
+    <div className="sound-text-explainer">
+      <div><span className="panel-label">TEXT OVERLAY LOGIC</span><strong>文字 1、文字 2 是同一个声音与文字节点里的多条文字轨道</strong></div>
+      <p>每条文字单独设置文案、开始秒数、结束秒数和画面位置；它只会在自己的时间段出现，不会新增流程节点。拖动下方播放指针，查看它对应哪一个视频片段。</p>
+      <div className="sound-text-legend"><span><i className="legend-dot legend-top" />上方品牌区</span><span><i className="legend-dot legend-upper" />中上钩子区</span><span><i className="legend-dot legend-center" />画面中央</span><span><i className="legend-dot legend-bottom" />底部安全区</span></div>
+    </div>
+    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} onOverlayFocus={() => setActivePanel("overlay")} />
+  </>;
+}
+
+function SoundComposePanel({ onToast }: StepPageProps) {
+  const draftId = useWorkflowStore(state => state.draftId);
+  const composeJob = useWorkflowStore(state => state.composeJob);
+  const saveDraft = useWorkflowStore(state => state.saveDraft);
+  const setComposeJob = useWorkflowStore(state => state.setComposeJob);
+  const [busy, setBusy] = useState(false);
+  const compose = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await saveDraft();
+      let job = await startCanvasCompose(draftId, undefined, true);
+      setComposeJob(job);
+      while (job.status === "running") {
+        await new Promise(resolve => window.setTimeout(resolve, 800));
+        job = await getCanvasComposeStatus(draftId, job.job_id);
+        setComposeJob(job);
+      }
+      if (job.status === "error") throw new Error(job.error || "合成失败");
+      onToast("最终有声成片已生成");
+    } catch (error) {
+      onToast(`最终成片生成失败：${error instanceof Error ? error.message : "未知错误"}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <section className="step-panel sound-compose-panel"><div className="panel-section-head"><div><span className="panel-label">FINAL RENDER</span><h2>应用声音与文字</h2><p className="muted">文字按各自时间段叠加到视频上方；人声和 BGM 会在这里混音并生成最终成片。</p></div><button type="button" className="btn btn-primary" disabled={busy} onClick={compose}>{busy ? "生成最终成片中..." : "生成最终有声成片"}</button></div>{composeJob?.status === "running" && <div className="step-callout"><strong>正在合成</strong><span>后台正在执行文字渲染、TTS 和音频混音，请稍候。</span></div>}{composeJob?.status === "error" && <div className="step-callout error-panel"><strong>上次生成失败</strong><span>{composeJob.error}</span></div>}{composeJob?.status === "done" && composeJob.output_url && <div className="compose-result"><div><strong>最终有声成片</strong><span>已应用当前人声、BGM 和多段画面文字</span></div><video controls preload="metadata" src={composeJob.output_url} /></div>}</section>;
 }
 
 export function GeneratorPage({ onToast }: StepPageProps) {

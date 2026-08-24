@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, type NodeKind, type WorkflowData, type WorkflowNode } from "../model";
+import { DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_POSITION_OPTIONS, overlayItemsFromData, type NodeKind, type OverlayItem, type WorkflowData, type WorkflowNode } from "../model";
 import { uploadDraftFile } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
@@ -98,28 +98,54 @@ function PromptFields({ node, onToast }: { node: WorkflowNode; onToast: (message
   </>;
 }
 
-function SoundFields({ node }: { node: WorkflowNode }) {
+function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message: string) => void }) {
   const activePanel = useWorkflowStore(state => state.activePanel);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const bgmName = useWorkflowStore(state => state.bgmName);
+  const bgmUrl = useWorkflowStore(state => state.bgmUrl);
   const draftId = useWorkflowStore(state => state.draftId);
   const setBgm = useWorkflowStore(state => state.setBgm);
   const data = node.data;
+  const overlayItems = overlayItemsFromData(data);
+  const positionLabel = (value: OverlayItem["position"]) => OVERLAY_POSITION_OPTIONS.find(item => item.value === value)?.label ?? OVERLAY_POSITION_OPTIONS[1].label;
+  const syncOverlayLegacyFields = (items: OverlayItem[]) => {
+    const first = items[0];
+    const cta = items.find(item => item.id === "overlay_cta") ?? items[items.length - 1];
+    updateNodeData(node.id, {
+      overlayItems: items,
+      overlayMain: first?.text ?? "",
+      overlayCta: cta?.text ?? "",
+      overlayPosition: first ? positionLabel(first.position) : "中上钩子区",
+      overlayStart: first ? `${first.startSeconds}s` : "0s",
+      overlayEnd: first ? `${first.endSeconds}s` : "2.5s",
+    });
+  };
+  const updateOverlay = (id: string, patch: Partial<OverlayItem>) => syncOverlayLegacyFields(overlayItems.map(item => item.id === id ? { ...item, ...patch } : item));
+  const removeOverlay = (id: string) => syncOverlayLegacyFields(overlayItems.filter(item => item.id !== id));
+  const addOverlay = () => {
+    const lastEnd = overlayItems.reduce((max, item) => Math.max(max, item.endSeconds), 0);
+    syncOverlayLegacyFields([...overlayItems, { id: `overlay_${Date.now()}`, text: "", startSeconds: lastEnd, endSeconds: lastEnd + 2, position: "upper" }]);
+  };
   return <>
     <div className="tabs"><button type="button" className={`tab ${activePanel === "voice" ? "active" : ""}`} onClick={() => setActivePanel("voice")}>声音</button><button type="button" className={`tab ${activePanel === "overlay" ? "active" : ""}`} onClick={() => setActivePanel("overlay")}>文字</button></div>
     {activePanel === "overlay" ? <>
-      <SectionTitle>画面文字</SectionTitle>
-      <Field label="主文案"><input className="input" value={formatNodeValue(data.overlayMain, "")} onChange={event => updateNodeData(node.id, { overlayMain: event.target.value })} /></Field>
-      <Field label="片尾 CTA"><input className="input" value={formatNodeValue(data.overlayCta, "")} onChange={event => updateNodeData(node.id, { overlayCta: event.target.value })} /></Field>
-      <Field label="显示位置"><Select value={formatNodeValue(data.overlayPosition, "底部安全区")} options={["底部安全区", "画面中央", "顶部安全区"]} onChange={value => updateNodeData(node.id, { overlayPosition: value })} /></Field>
-      <div className="field-grid"><Field label="开始"><input className="input" value={formatNodeValue(data.overlayStart, "0.0s")} onChange={event => updateNodeData(node.id, { overlayStart: event.target.value })} /></Field><Field label="结束"><input className="input" value={formatNodeValue(data.overlayEnd, "2.5s")} onChange={event => updateNodeData(node.id, { overlayEnd: event.target.value })} /></Field></div>
+      <div className="panel-section-head"><SectionTitle>画面文字时间轴</SectionTitle><button type="button" className="btn" onClick={addOverlay}>＋ 添加文字</button></div>
+      <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面。</span></div>
+      <div className="overlay-editor-list">{overlayItems.map((item, index) => <div className="overlay-editor-item" key={item.id}>
+        <div className="overlay-editor-head"><div><strong>文字轨道 {index + 1}</strong><small>{positionLabel(item.position)} · {item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s</small></div><button type="button" className="clip-remove" aria-label={`删除文字 ${index + 1}`} onClick={() => removeOverlay(item.id)}>×</button></div>
+        <input className="input" value={item.text} placeholder="输入画面文案" onChange={event => updateOverlay(item.id, { text: event.target.value })} />
+        <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateOverlay(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateOverlay(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
+        <Field label="显示位置"><Select value={positionLabel(item.position)} options={OVERLAY_POSITION_OPTIONS.map(option => option.label)} onChange={value => updateOverlay(item.id, { position: OVERLAY_POSITION_OPTIONS.find(option => option.label === value)!.value })} /></Field>
+      </div>)}</div>
+      {overlayItems.length === 0 && <div className="empty-state compact">还没有文字，点击“添加文字”创建第一条。</div>}
     </> : <>
       <SectionTitle>人声与 BGM</SectionTitle>
       <Field label="引流文案"><textarea className="input textarea" value={formatNodeValue(data.voiceText, "")} onChange={event => updateNodeData(node.id, { voiceText: event.target.value })} /></Field>
       <Field label="音色"><Select value={formatNodeValue(data.voiceName, "女声 · 温暖自然")} options={["女声 · 温暖自然", "男声 · 稳重清晰"]} onChange={value => updateNodeData(node.id, { voiceName: value })} /></Field>
       <Field label="音量"><input className="range" type="range" min="0" max="100" value={formatNodeValue(data.voiceVolume, "85")} onChange={event => updateNodeData(node.id, { voiceVolume: event.target.value })} /></Field>
-      <Field label="BGM"><div className="upload-row"><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => setBgm(file.name, result.url)).catch(() => setBgm(file.name, "")); }} /><span>{bgmName}</span></div></Field>
+      <Field label="BGM 音量"><input className="range" type="range" min="0" max="100" value={formatNodeValue(data.bgmVolume, "30")} onChange={event => updateNodeData(node.id, { bgmVolume: event.target.value })} /></Field>
+      <Field label="BGM"><div className="upload-row"><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /><span>{bgmName || "未上传"}</span>{bgmUrl && <button type="button" className="clip-remove" aria-label="移除 BGM" onClick={() => { setBgm("", ""); onToast("BGM 已移除"); }}>×</button>}</div></Field>
     </>}
   </>;
 }
@@ -132,7 +158,7 @@ function TypeFields({ node, onToast }: { node: WorkflowNode; onToast: (message: 
   if (data.kind === "prompt") return <PromptFields node={node} onToast={onToast} />;
   if (data.kind === "generator") return <><SectionTitle>视频规格</SectionTitle><Field label="视频时长"><Select value={formatNodeValue(data.duration, "3s")} options={["3s", "5s"]} onChange={value => update({ duration: value })} /></Field><Field label="分辨率"><Select value={formatNodeValue(data.resolution, "1080p")} options={["1080p", "720p"]} onChange={value => update({ resolution: value })} /></Field><Field label="音频"><Select value={formatNodeValue(data.audio, "无声")} options={["无声", "有声"]} onChange={value => update({ audio: value })} /></Field><Field label="分镜"><Select value={formatNodeValue(data.storyboard, "单分镜")} options={["单分镜", "多分镜"]} onChange={value => update({ storyboard: value })} /></Field></>;
   if (data.kind === "output") return <><SectionTitle>视频合成</SectionTitle><Field label="合成目标"><input className="input" value={formatNodeValue(data.outputTarget, "")} onChange={event => update({ outputTarget: event.target.value })} /></Field><Field label="成片时长"><Select value={formatNodeValue(data.outputDuration, "12-15s")} options={["12-15s", "15-20s"]} onChange={value => update({ outputDuration: value })} /></Field><Field label="画幅"><Select value={formatNodeValue(data.outputAspect, "9:16")} options={["9:16", "1:1"]} onChange={value => update({ outputAspect: value })} /></Field></>;
-  if (data.kind === "sound") return <SoundFields node={node} />;
+  if (data.kind === "sound") return <SoundFields node={node} onToast={onToast} />;
   return <><SectionTitle>自定义处理</SectionTitle><div className="preview-box">{data.description}</div></>;
 }
 

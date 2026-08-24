@@ -1,4 +1,4 @@
-import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, randomizeClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration } from "./model.ts";
+import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, overlayItemsFromData, randomizeClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -30,6 +30,10 @@ assert(inferDishCategory("蜜瓜") === "水果", "fruit fallback classification 
 assert(inferDishCategory("抹茶布丁") === "甜品", "dessert fallback classification is incorrect");
 assert(inferDishCategory("冷食三文鱼") === "其他", "food temperature must not imply fruit classification");
 assert(resolveDishCategory({ dish: "冷食三文鱼", dishCategory: "正餐" }) === "正餐", "explicit dish category was ignored");
+
+const overlays = overlayItemsFromData({ overlayMain: "开胃钩子", overlayCta: "现在预订", overlayPosition: "中上钩子区", overlayStart: "0s", overlayEnd: "2.5s" });
+assert(overlays.length === 2 && overlays[0].position === "upper" && overlays[1].position === "top", "legacy overlay fields were not migrated");
+assert(overlayItemsFromData({ overlayItems: [{ id: "one", text: "上方文案", startSeconds: 1, endSeconds: 3, position: "top" }] }).length === 1, "explicit overlay timeline was not preserved");
 
 const composePool = [
   { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "正餐" as const },

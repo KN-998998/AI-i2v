@@ -165,3 +165,19 @@ def test_canvas_compose_accepts_workspace_id(monkeypatch):
     )
     assert response.status_code == 200
     assert captured == {"draft_id": "default", "workspace_id": "compose_2"}
+
+
+def test_canvas_compose_accepts_sound_render_flag(monkeypatch):
+    captured = {}
+
+    def fake_start(draft_id, workspace_id=None, include_sound=False):
+        captured.update(draft_id=draft_id, workspace_id=workspace_id, include_sound=include_sound)
+        return {"job_id": "b" * 32, "status": "running", "timeline_count": 1, "output_url": None, "error": None}
+
+    monkeypatch.setattr(api_routes, "start_compose", fake_start)
+    response = TestClient(create_app()).post(
+        "/api/canvas/drafts/default/compose",
+        json={"include_sound": True},
+    )
+    assert response.status_code == 200
+    assert captured == {"draft_id": "default", "workspace_id": None, "include_sound": True}

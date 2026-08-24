@@ -4,6 +4,16 @@ import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type ActionVerb, type PromptC
 export type NodeKind = "input" | "prompt" | "generator" | "output" | "sound" | "custom";
 export type Panel = "prompt" | "voice" | "overlay";
 
+export type OverlayPosition = "top" | "upper" | "center" | "bottom";
+
+export type OverlayItem = {
+  id: string;
+  text: string;
+  startSeconds: number;
+  endSeconds: number;
+  position: OverlayPosition;
+};
+
 export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "甜品", "水果", "饮品", "其他"] as const;
 export type DishCategory = typeof DISH_CATEGORY_OPTIONS[number];
 
@@ -49,6 +59,8 @@ export type WorkflowData = {
   overlayPosition?: string;
   overlayStart?: string;
   overlayEnd?: string;
+  overlayItems?: OverlayItem[];
+  bgmVolume?: string;
 };
 
 export type DraftPayload = {
@@ -120,6 +132,39 @@ export const nodeCatalog: Record<NodeKind, NodeCatalogItem> = {
   custom: { kicker: "PROCESS", title: "自定义处理", status: "待配置", description: "可扩展的工作流处理节点。" },
 };
 
+export const OVERLAY_POSITION_OPTIONS: Array<{ value: OverlayPosition; label: string }> = [
+  { value: "top", label: "上方品牌区" },
+  { value: "upper", label: "中上钩子区" },
+  { value: "center", label: "画面中央" },
+  { value: "bottom", label: "底部安全区" },
+];
+
+export const DEFAULT_OVERLAY_ITEMS: OverlayItem[] = [
+  { id: "overlay_hook", text: "本周限定优惠", startSeconds: 0, endSeconds: 2.5, position: "upper" },
+  { id: "overlay_cta", text: "到店即享 · 现在预订", startSeconds: 10.5, endSeconds: 12.5, position: "top" },
+];
+
+export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd">): OverlayItem[] {
+  if (data.overlayItems) {
+    return data.overlayItems.map(item => ({
+      id: item.id,
+      text: item.text,
+      startSeconds: Math.max(0, Number(item.startSeconds) || 0),
+      endSeconds: Math.max(0.1, Number(item.endSeconds) || 0.1),
+      position: item.position ?? "upper",
+    }));
+  }
+  const mainText = data.overlayMain?.trim() || "";
+  const ctaText = data.overlayCta?.trim() || "";
+  const start = Math.max(0, Number.parseFloat(data.overlayStart ?? "0") || 0);
+  const end = Math.max(start + 0.1, Number.parseFloat(data.overlayEnd ?? "2.5") || 2.5);
+  const legacyPosition = data.overlayPosition?.includes("顶部") ? "top" : data.overlayPosition?.includes("中上") ? "upper" : data.overlayPosition?.includes("中央") ? "center" : "bottom";
+  const items: OverlayItem[] = [];
+  if (mainText) items.push({ id: "overlay_main", text: mainText, startSeconds: start, endSeconds: end, position: legacyPosition });
+  if (ctaText && ctaText !== mainText) items.push({ id: "overlay_cta", text: ctaText, startSeconds: Math.max(0, end - 2), endSeconds: end, position: "top" });
+  return items;
+}
+
 export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜／装饰", "餐具器皿", "桌面／台面", "手部", "厨师上半身", "背景陈设"];
 
 export const clips: TimelineClip[] = [
@@ -135,7 +180,7 @@ export function dataFor(kind: NodeKind): WorkflowData {
   if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
   if (kind === "output") return { ...base, outputTarget: "5-6 道菜", outputDuration: "12-15s", outputAspect: "9:16" };
-  if (kind === "sound") return { ...base, voiceText: "本周到店即可领取限定优惠，欢迎来店品尝。", voiceName: "女声 · 温暖自然", voiceVolume: "85", overlayMain: "本周限定优惠", overlayCta: "到店即享 · 现在预订", overlayPosition: "底部安全区", overlayStart: "0.0s", overlayEnd: "2.5s" };
+  if (kind === "sound") return { ...base, voiceText: "本周到店即可领取限定优惠，欢迎来店品尝。", voiceName: "女声 · 温暖自然", voiceVolume: "85", bgmVolume: "30", overlayMain: "本周限定优惠", overlayCta: "到店即享 · 现在预订", overlayPosition: "中上钩子区", overlayStart: "0.0s", overlayEnd: "2.5s", overlayItems: DEFAULT_OVERLAY_ITEMS.map(item => ({ ...item })) };
   return base;
 }
 

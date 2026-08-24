@@ -113,11 +113,17 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
             subtitle_items.append({
                 "text": item.get("text", ""),
                 "duration": float(item.get("duration", 0) or 0),
+                "start": item.get("start"),
+                "end": item.get("end"),
+                "position": item.get("position", "bottom"),
             })
         else:
             subtitle_items.append({
                 "text": str(item),
                 "duration": 0.0,
+                "start": None,
+                "end": None,
+                "position": "bottom",
             })
 
     if subtitle_items:
@@ -130,15 +136,26 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 continue
 
             safe_text = _escape_drawtext(text)
-            end_time = start_time + duration
+            explicit_start = item.get("start")
+            explicit_end = item.get("end")
+            item_start = float(explicit_start) if explicit_start is not None else start_time
+            end_time = float(explicit_end) if explicit_end is not None else item_start + duration
+            y_by_position = {
+                "top": "120",
+                "upper": "h*0.28",
+                "center": "(h-text_h)/2",
+                "bottom": "h-220",
+            }
+            y = y_by_position.get(item.get("position", "bottom"), y_by_position["bottom"])
             filters.append(
                 f"drawtext=text='{safe_text}':"
                 f"fontfile='C\\:/Windows/Fonts/msyh.ttc':"
                 f"fontsize=42:fontcolor=white:borderw=2:bordercolor=black@0.8:"
-                f"x=(w-text_w)/2:y=h-80:"
-                f"enable='between(t,{start_time},{end_time})'"
+                f"x=(w-text_w)/2:y={y}:"
+                f"enable='between(t,{item_start},{end_time})'"
             )
-            start_time = end_time
+            if explicit_start is None and explicit_end is None:
+                start_time = end_time
 
     # 片尾 CTA
     if brand_info:

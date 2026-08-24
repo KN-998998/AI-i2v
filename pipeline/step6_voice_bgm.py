@@ -53,7 +53,7 @@ def generate_caption(dishes, brand_info, video_id):
     return f"{'，'.join(parts)}。{cta}！"
 
 
-def generate_tts(text, out_path):
+def generate_tts(text, out_path, voice="zh-CN-XiaoxiaoNeural"):
     """
     调用 TTS API 生成配音音频。
 
@@ -70,7 +70,7 @@ def generate_tts(text, out_path):
     try:
         import edge_tts
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        communicate = edge_tts.Communicate(text, voice="zh-CN-XiaoxiaoNeural")
+        communicate = edge_tts.Communicate(text, voice=voice)
         result = communicate.save(out_path)
         if asyncio.iscoroutine(result) or hasattr(result, "__await__"):
             asyncio.run(result)
@@ -94,16 +94,17 @@ def generate_tts(text, out_path):
     return None
 
 
-def mix_audio(voice_path, bgm_path, out_path, bgm_volume=0.3, video_duration=12):
+def mix_audio(voice_path, bgm_path, out_path, bgm_volume=0.3, video_duration=12, voice_volume=1.0):
     """用 ffmpeg 混音：配音 + BGM（BGM 降噪+控制音量+截取时长）。"""
     cmd = [
         "ffmpeg", "-y",
         "-i", voice_path,              # 配音
         "-i", bgm_path,                # BGM
         "-filter_complex",
+        f"[0:a]volume={voice_volume}[voice];"
         f"[1:a]volume={bgm_volume},afade=t=in:st=0:d=0.5,"
         f"afade=t=out:st={video_duration-1}:d=1[bgm];"
-        f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[aout]",
+        f"[voice][bgm]amix=inputs=2:duration=longest:dropout_transition=0[aout]",
         "-map", "[aout]",
         "-t", str(video_duration),
         "-c:a", "aac", "-b:a", "192k",
@@ -113,17 +114,36 @@ def mix_audio(voice_path, bgm_path, out_path, bgm_volume=0.3, video_duration=12)
     return out_path
 
 
-def merge_audio_video(video_path, audio_path, out_path):
+def add_bgm(bgm_path, out_path, bgm_volume=0.3, video_duration=12):
+    """Create a duration-limited BGM track with a short fade in/out."""
+    fade_out_start = max(0, float(video_duration) - 1)
+    cmd = [
+        "ffmpeg", "-y",
+        "-stream_loop", "-1", "-i", bgm_path,
+        "-t", str(video_duration),
+        "-filter:a", f"volume={bgm_volume},afade=t=in:st=0:d=0.5,afade=t=out:st={fade_out_start}:d=1",
+        "-c:a", "aac", "-b:a", "192k",
+        out_path,
+    ]
+    _run_ffmpeg(cmd, timeout=60, action="ffmpeg BGM 处理")
+    return out_path
+
+
+def merge_audio_video(video_path, audio_path, out_path, audio_volume=1.0, video_duration=None):
     """用 ffmpeg 将音频合并到无声视频中。"""
     cmd = [
         "ffmpeg", "-y",
         "-i", video_path,
         "-i", audio_path,
         "-c:v", "copy",
+        "-filter:a", f"volume={audio_volume}",
         "-c:a", "aac", "-b:a", "192k",
-        "-shortest",
-        out_path,
     ]
+    if video_duration is None:
+        cmd.append("-shortest")
+    else:
+        cmd.extend(["-t", str(video_duration)])
+    cmd.append(out_path)
     _run_ffmpeg(cmd, timeout=60, action="ffmpeg 音视频合并")
     return out_path
 

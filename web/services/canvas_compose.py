@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT, batch_subdirs
-from web.services.canvas_state import draft_directory, load_draft
+from web.services.canvas_state import draft_directory, load_draft, uploaded_file
 
 _JOB_ID_RE = r"^[0-9a-f]{32}$"
 _JOB_LOCK = threading.RLock()
@@ -92,7 +92,51 @@ def _prepare_sources(draft_id: str, timeline: list[dict[str, Any]]) -> list[tupl
     return prepared
 
 
-def start_compose(draft_id: str, workspace_id: str | None = None) -> dict[str, Any]:
+def _sound_node(draft: dict[str, Any]) -> dict[str, Any]:
+    for node in draft.get("nodes", []):
+        data = node.get("data", {}) if isinstance(node, dict) else {}
+        if data.get("kind") == "sound":
+            return data
+    return {}
+
+
+def _overlay_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
+    items = sound.get("overlayItems")
+    if isinstance(items, list):
+        result = []
+        for item in items:
+            if not isinstance(item, dict) or not str(item.get("text", "")).strip():
+                continue
+            start = max(0.0, float(item.get("startSeconds", 0) or 0))
+            end = max(start + 0.1, float(item.get("endSeconds", start + 2.5) or start + 2.5))
+            result.append({
+                "text": str(item["text"]),
+                "start": start,
+                "end": end,
+                "position": item.get("position", "upper"),
+            })
+        return result
+    main = str(sound.get("overlayMain", "")).strip()
+    cta = str(sound.get("overlayCta", "")).strip()
+    start = max(0.0, float(str(sound.get("overlayStart", "0")).rstrip("s")) or 0)
+    end = max(start + 0.1, float(str(sound.get("overlayEnd", "2.5")).rstrip("s")) or 2.5)
+    position = "top" if "顶部" in str(sound.get("overlayPosition", "")) else "upper" if "中上" in str(sound.get("overlayPosition", "")) else "center" if "中央" in str(sound.get("overlayPosition", "")) else "bottom"
+    result = []
+    if main:
+        result.append({"text": main, "start": start, "end": end, "position": position})
+    if cta and cta != main:
+        result.append({"text": cta, "start": max(0.0, end - 2), "end": end, "position": "top"})
+    return result
+
+
+def _uploaded_audio_path(draft_id: str, url: str | None) -> Path | None:
+    if not url:
+        return None
+    path = uploaded_file(draft_id, Path(url.split("?", 1)[0]).name)
+    return path
+
+
+def start_compose(draft_id: str, workspace_id: str | None = None, include_sound: bool = False) -> dict[str, Any]:
     draft = load_draft(draft_id)
     if draft is None:
         raise ValueError("画布草稿不存在，请先保存草稿")
@@ -110,6 +154,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None) -> dict[str, A
         "output_url": None,
         "error": None,
         "workspace_id": workspace_id,
+        "include_sound": include_sound,
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)
@@ -130,8 +175,44 @@ def start_compose(draft_id: str, workspace_id: str | None = None) -> dict[str, A
                 trimmed_paths.append(str(trimmed_path))
                 temporary_paths.append(str(trimmed_path))
 
-            output_path = output_dir / "canvas_composed.mp4"
-            concat_clips(trimmed_paths, str(output_path), subtitles=[], brand_info=None)
+            output_path = output_dir / ("canvas_final.mp4" if include_sound else "canvas_composed.mp4")
+            sound = _sound_node(draft)
+            subtitles = _overlay_items(sound) if include_sound else []
+            concat_clips(trimmed_paths, str(output_path), subtitles=subtitles, brand_info=None)
+            if include_sound:
+                from pipeline.step6_voice_bgm import add_bgm, generate_tts, merge_audio_video, mix_audio
+
+                video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
+                voice_text = str(sound.get("voiceText", "")).strip()
+                voice_volume = max(0.0, min(float(sound.get("voiceVolume", 85) or 85) / 100, 1.0))
+                bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
+                voice_path = output_dir / "voice.mp3"
+                audio_path = output_dir / "mixed_audio.m4a"
+                voice_file = None
+                bgm_file = _uploaded_audio_path(draft_id, draft.get("bgmUrl"))
+                voice_name = str(sound.get("voiceName", ""))
+                voice = "zh-CN-YunxiNeural" if "男" in voice_name else "zh-CN-XiaoxiaoNeural"
+                if voice_text:
+                    voice_file = generate_tts(voice_text, str(voice_path), voice=voice)
+                    if not voice_file:
+                        raise RuntimeError("人声生成失败，请确认 edge-tts 可用或暂时清空人声文案")
+                    temporary_paths.append(str(voice_path))
+                if voice_file and bgm_file and bgm_file.exists():
+                    mix_audio(str(voice_file), str(bgm_file), str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration, voice_volume=voice_volume)
+                    temporary_paths.append(str(audio_path))
+                    merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), audio_volume=1.0, video_duration=video_duration)
+                    output_path.unlink(missing_ok=True)
+                    output_path.with_suffix(".with-audio.mp4").replace(output_path)
+                elif voice_file:
+                    merge_audio_video(str(output_path), str(voice_file), str(output_path.with_suffix(".with-audio.mp4")), audio_volume=voice_volume, video_duration=video_duration)
+                    output_path.unlink(missing_ok=True)
+                    output_path.with_suffix(".with-audio.mp4").replace(output_path)
+                elif bgm_file and bgm_file.exists() and bgm_volume > 0:
+                    add_bgm(str(bgm_file), str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)
+                    temporary_paths.append(str(audio_path))
+                    merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), video_duration=video_duration)
+                    output_path.unlink(missing_ok=True)
+                    output_path.with_suffix(".with-audio.mp4").replace(output_path)
             for path in temporary_paths:
                 Path(path).unlink(missing_ok=True)
             job.update({
@@ -154,5 +235,9 @@ def compose_output_path(draft_id: str, job_id: str) -> Path | None:
     job = get_compose_job(draft_id, job_id)
     if not job or job.get("status") != "done":
         return None
-    path = draft_directory(draft_id) / "compositions" / job_id / "canvas_composed.mp4"
-    return path if path.exists() and path.is_file() else None
+    output_dir = draft_directory(draft_id) / "compositions" / job_id
+    for filename in ("canvas_final.mp4", "canvas_composed.mp4"):
+        path = output_dir / filename
+        if path.exists() and path.is_file():
+            return path
+    return None
