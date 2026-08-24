@@ -75,6 +75,14 @@ def _resolve_source(draft_id: str, clip: dict[str, Any]) -> Path | None:
     return path.resolve() if _allowed_source(path, draft_id) else None
 
 
+def _clip_trim_range(clip: dict[str, Any]) -> tuple[float, float]:
+    source_duration = max(0.1, float(clip.get("sourceDurationSeconds") or clip.get("durationSeconds") or 3.0))
+    start = max(0.0, min(source_duration - 0.1, float(clip.get("sourceStartSeconds") or 0.0)))
+    default_end = start + max(0.1, float(clip.get("timelineDuration") or 2.5))
+    end = max(start + 0.1, min(source_duration, float(clip.get("sourceEndSeconds") or default_end)))
+    return start, end
+
+
 def _prepare_sources(draft_id: str, timeline: list[dict[str, Any]]) -> list[tuple[dict[str, Any], Path]]:
     if not timeline:
         raise ValueError("时间线中没有可合成的视频片段")
@@ -114,6 +122,7 @@ def _overlay_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
                 "start": start,
                 "end": end,
                 "position": item.get("position", "upper"),
+                "style": item.get("style") if isinstance(item.get("style"), dict) else {},
             })
         return result
     main = str(sound.get("overlayMain", "")).strip()
@@ -123,9 +132,9 @@ def _overlay_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
     position = "top" if "顶部" in str(sound.get("overlayPosition", "")) else "upper" if "中上" in str(sound.get("overlayPosition", "")) else "center" if "中央" in str(sound.get("overlayPosition", "")) else "bottom"
     result = []
     if main:
-        result.append({"text": main, "start": start, "end": end, "position": position})
+        result.append({"text": main, "start": start, "end": end, "position": position, "style": {}})
     if cta and cta != main:
-        result.append({"text": cta, "start": max(0.0, end - 2), "end": end, "position": "top"})
+        result.append({"text": cta, "start": max(0.0, end - 2), "end": end, "position": "top", "style": {}})
     return result
 
 
@@ -168,10 +177,10 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
 
             trimmed_paths = []
             for index, (clip, source) in enumerate(prepared):
-                duration = float(clip.get("timelineDuration") or 2.5)
-                duration = max(0.1, min(duration, 60.0))
+                start, end = _clip_trim_range(clip)
+                duration = max(0.1, min(end - start, 60.0))
                 trimmed_path = output_dir / f"segment_{index:03d}.mp4"
-                trim_clip(str(source), str(trimmed_path), start=0.5, duration=duration)
+                trim_clip(str(source), str(trimmed_path), start=start, duration=duration)
                 trimmed_paths.append(str(trimmed_path))
                 temporary_paths.append(str(trimmed_path))
 

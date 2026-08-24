@@ -20,6 +20,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -95,6 +96,23 @@ def _escape_drawtext(text: str) -> str:
     )
 
 
+def _safe_color(value: str | None, fallback: str) -> str:
+    candidate = str(value or "").strip()
+    return candidate if re.fullmatch(r"#[0-9a-fA-F]{6}(?:@[0-9.]+)?", candidate) else fallback
+
+
+def _font_file(font_family: str | None, font_weight: str | None = None) -> str:
+    mapping = {
+        ("Microsoft YaHei", "normal"): "C\\:/Windows/Fonts/msyh.ttc",
+        ("Microsoft YaHei", "bold"): "C\\:/Windows/Fonts/msyhbd.ttc",
+        ("SimHei", "normal"): "C\\:/Windows/Fonts/simhei.ttf",
+        ("SimHei", "bold"): "C\\:/Windows/Fonts/simhei.ttf",
+        ("Arial", "normal"): "C\\:/Windows/Fonts/arial.ttf",
+        ("Arial", "bold"): "C\\:/Windows/Fonts/arialbd.ttf",
+    }
+    return mapping.get((str(font_family), str(font_weight or "normal")), mapping[("Microsoft YaHei", "normal")])
+
+
 def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
     """拼接多个片段 + 叠加字幕 + 片尾 CTA。"""
     w, h = FINAL_RESOLUTION
@@ -116,6 +134,7 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 "start": item.get("start"),
                 "end": item.get("end"),
                 "position": item.get("position", "bottom"),
+                "style": item.get("style", {}) if isinstance(item.get("style", {}), dict) else {},
             })
         else:
             subtitle_items.append({
@@ -124,6 +143,7 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 "start": None,
                 "end": None,
                 "position": "bottom",
+                "style": {},
             })
 
     if subtitle_items:
@@ -147,10 +167,20 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 "bottom": "h-220",
             }
             y = y_by_position.get(item.get("position", "bottom"), y_by_position["bottom"])
+            style = item.get("style", {})
+            font_size = max(12, min(int(style.get("fontSize", 42) or 42), 120))
+            font_color = _safe_color(style.get("color"), "#FFFFFF")
+            stroke_color = _safe_color(style.get("strokeColor"), "#000000")
+            stroke_width = max(0, min(int(style.get("strokeWidth", 2) or 0), 12))
+            font_weight = "bold" if style.get("fontWeight") == "bold" else "normal"
+            background_enabled = bool(style.get("backgroundEnabled", True))
+            background_color = _safe_color(style.get("backgroundColor"), "#111417")
+            background_opacity = max(0.0, min(float(style.get("backgroundOpacity", 0.62) or 0.0), 1.0))
+            box = f":box=1:boxcolor={background_color}@{background_opacity}:boxborderw=12" if background_enabled else ""
             filters.append(
                 f"drawtext=text='{safe_text}':"
-                f"fontfile='C\\:/Windows/Fonts/msyh.ttc':"
-                f"fontsize=42:fontcolor=white:borderw=2:bordercolor=black@0.8:"
+                f"fontfile='{_font_file(style.get('fontFamily'), font_weight)}':"
+                f"fontsize={font_size}:fontcolor={font_color}:borderw={stroke_width}:bordercolor={stroke_color}@0.8{box}:"
                 f"x=(w-text_w)/2:y={y}:"
                 f"enable='between(t,{item_start},{end_time})'"
             )

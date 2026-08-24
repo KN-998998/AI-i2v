@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, randomizeClipSelection, removeNodeAndEdges, reorderById, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, removeNodeAndEdges, reorderById, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft } from "./api";
 
@@ -43,6 +43,7 @@ type WorkflowState = {
   reorderTimeline: (sourceId: string, targetId: string) => void;
   removeTimelineClip: (clipId: string) => void;
   updateTimelineClip: (clipId: string, patch: Partial<TimelineClip>) => void;
+  updateWorkspaceClip: (workspaceId: string, clipId: string, patch: Partial<TimelineClip>) => void;
   toggleClip: (clipId: string) => void;
   loadClipLibrary: () => Promise<void>;
   setBgmName: (name: string) => void;
@@ -72,6 +73,9 @@ function sameClipList(left: TimelineClip[], right: TimelineClip[]): boolean {
       && clip.label === other.label
       && clip.tone === other.tone
       && clip.timelineDuration === other.timelineDuration
+      && clip.sourceDurationSeconds === other.sourceDurationSeconds
+      && clip.sourceStartSeconds === other.sourceStartSeconds
+      && clip.sourceEndSeconds === other.sourceEndSeconds
       && clip.status === other.status
       && clip.sourcePath === other.sourcePath
       && clip.sourceUrl === other.sourceUrl
@@ -255,8 +259,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     return { timeline, composeWorkspaces: syncPrimaryWorkspace(state.composeWorkspaces, timeline), revision: state.revision + 1 };
   }),
   updateTimelineClip: (clipId, patch) => set(state => {
-    const timeline = state.timeline.map(clip => clip.id === clipId ? { ...clip, ...patch } : clip);
+    const timeline = state.timeline.map(clip => clip.id === clipId ? normalizeTimelineClip({ ...clip, ...patch }) : clip);
     return { timeline, composeWorkspaces: syncPrimaryWorkspace(state.composeWorkspaces, timeline), revision: state.revision + 1 };
+  }),
+  updateWorkspaceClip: (workspaceId, clipId, patch) => set(state => {
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
+      ? { ...workspace, clips: workspace.clips.map(clip => clip.id === clipId ? normalizeTimelineClip({ ...clip, ...patch }) : clip), job: null }
+      : workspace);
+    return { composeWorkspaces, timeline: composeWorkspaces[0]?.clips ?? state.timeline, revision: state.revision + 1 };
   }),
   toggleClip: clipId => set(state => {
     const clip = state.candidateClips.find(item => item.id === clipId) ?? state.availableClips.find(item => item.id === clipId) ?? clips.find(item => item.id === clipId);
@@ -267,10 +277,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   }),
   loadClipLibrary: async () => {
     try {
-      const availableClips = (await fetchCanvasClips()).map(withResolvedDishCategory);
+      const availableClips = (await fetchCanvasClips()).map(clip => withResolvedDishCategory(normalizeTimelineClip(clip)));
       set(state => {
-        const normalizedTimeline = state.timeline.map(withResolvedDishCategory);
-        const normalizedCandidates = state.candidateClips.map(withResolvedDishCategory);
+        const normalizedTimeline = state.timeline.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip)));
+        const normalizedCandidates = state.candidateClips.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip)));
         const seedIds = new Set(clips.map(item => item.id));
         const isUnlinkedSeedTimeline = normalizedTimeline.length > 0 && normalizedTimeline.every(item => seedIds.has(item.id) && !item.sourcePath);
         const timeline = isUnlinkedSeedTimeline && availableClips.length
@@ -344,11 +354,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         ? { ...node, data: { ...node.data, dishCategory: node.data.dishName ? inferDishCategory(node.data.dishName) : "正餐" } }
         : node),
       edges: draft.edges,
-      timeline: draft.timeline,
-      candidateClips: draft.candidateClips ?? draft.timeline,
+      timeline: draft.timeline.map(normalizeTimelineClip),
+      candidateClips: (draft.candidateClips ?? draft.timeline).map(normalizeTimelineClip),
       composeBatchCount: draft.composeBatchCount ?? 1,
       composeClipCount: draft.composeClipCount ?? draft.timeline.length,
-      composeWorkspaces: draft.composeWorkspaces ?? [{ id: "compose_1", title: "成片 1", clips: draft.timeline, job: draft.composeJob ?? null }],
+      composeWorkspaces: (draft.composeWorkspaces ?? [{ id: "compose_1", title: "成片 1", clips: draft.timeline, job: draft.composeJob ?? null }]).map(workspace => ({ ...workspace, clips: workspace.clips.map(normalizeTimelineClip) })),
       bgmName: draft.bgmName,
       bgmUrl: draft.bgmUrl ?? "",
       composeJob: draft.composeJob ?? null,

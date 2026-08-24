@@ -152,6 +152,8 @@ function StepNext({ route }: { route: WorkflowRoute }) {
 function SoundTextPreview() {
   const timeline = useWorkflowStore(state => state.timeline);
   const sound = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound")?.data);
+  const bgmName = useWorkflowStore(state => state.bgmName);
+  const updateTimelineClip = useWorkflowStore(state => state.updateTimelineClip);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const overlayItems = overlayItemsFromData(sound ?? {});
 
@@ -161,7 +163,7 @@ function SoundTextPreview() {
       <p>每条文字单独设置文案、开始秒数、结束秒数和画面位置；它只会在自己的时间段出现，不会新增流程节点。拖动下方播放指针，查看它对应哪一个视频片段。</p>
       <div className="sound-text-legend"><span><i className="legend-dot legend-top" />上方品牌区</span><span><i className="legend-dot legend-upper" />中上钩子区</span><span><i className="legend-dot legend-center" />画面中央</span><span><i className="legend-dot legend-bottom" />底部安全区</span></div>
     </div>
-    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} onOverlayFocus={() => setActivePanel("overlay")} />
+    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceText={sound?.voiceText} bgmName={bgmName} onUpdateClip={updateTimelineClip} onOverlayFocus={() => setActivePanel("overlay")} />
   </>;
 }
 

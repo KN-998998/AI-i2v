@@ -6,12 +6,25 @@ export type Panel = "prompt" | "voice" | "overlay";
 
 export type OverlayPosition = "top" | "upper" | "center" | "bottom";
 
+export type OverlayStyle = {
+  fontFamily: "Microsoft YaHei" | "SimHei" | "Arial";
+  fontSize: number;
+  color: string;
+  fontWeight: "normal" | "bold";
+  strokeColor: string;
+  strokeWidth: number;
+  backgroundEnabled: boolean;
+  backgroundColor: string;
+  backgroundOpacity: number;
+};
+
 export type OverlayItem = {
   id: string;
   text: string;
   startSeconds: number;
   endSeconds: number;
   position: OverlayPosition;
+  style?: Partial<OverlayStyle>;
 };
 
 export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "甜品", "水果", "饮品", "其他"] as const;
@@ -103,6 +116,9 @@ export type TimelineClip = {
   label: string;
   tone: string;
   timelineDuration: number;
+  sourceDurationSeconds?: number;
+  sourceStartSeconds?: number;
+  sourceEndSeconds?: number;
   dishCategory?: DishCategory;
   status?: "pending" | "generated";
   sourcePath?: string;
@@ -144,6 +160,22 @@ export const DEFAULT_OVERLAY_ITEMS: OverlayItem[] = [
   { id: "overlay_cta", text: "到店即享 · 现在预订", startSeconds: 10.5, endSeconds: 12.5, position: "top" },
 ];
 
+export const DEFAULT_OVERLAY_STYLE: OverlayStyle = {
+  fontFamily: "Microsoft YaHei",
+  fontSize: 42,
+  color: "#FFFFFF",
+  fontWeight: "bold",
+  strokeColor: "#000000",
+  strokeWidth: 2,
+  backgroundEnabled: true,
+  backgroundColor: "#111417",
+  backgroundOpacity: 0.62,
+};
+
+export function overlayStyleFromItem(item: Pick<OverlayItem, "style">): OverlayStyle {
+  return { ...DEFAULT_OVERLAY_STYLE, ...item.style, fontSize: clampNumber(item.style?.fontSize, 12, 120, DEFAULT_OVERLAY_STYLE.fontSize), strokeWidth: clampNumber(item.style?.strokeWidth, 0, 12, DEFAULT_OVERLAY_STYLE.strokeWidth), backgroundOpacity: clampNumber(item.style?.backgroundOpacity, 0, 1, DEFAULT_OVERLAY_STYLE.backgroundOpacity) } as OverlayStyle;
+}
+
 export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd">): OverlayItem[] {
   if (data.overlayItems) {
     return data.overlayItems.map(item => ({
@@ -152,6 +184,7 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
       startSeconds: Math.max(0, Number(item.startSeconds) || 0),
       endSeconds: Math.max(0.1, Number(item.endSeconds) || 0.1),
       position: item.position ?? "upper",
+      style: overlayStyleFromItem(item),
     }));
   }
   const mainText = data.overlayMain?.trim() || "";
@@ -160,8 +193,8 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
   const end = Math.max(start + 0.1, Number.parseFloat(data.overlayEnd ?? "2.5") || 2.5);
   const legacyPosition = data.overlayPosition?.includes("顶部") ? "top" : data.overlayPosition?.includes("中上") ? "upper" : data.overlayPosition?.includes("中央") ? "center" : "bottom";
   const items: OverlayItem[] = [];
-  if (mainText) items.push({ id: "overlay_main", text: mainText, startSeconds: start, endSeconds: end, position: legacyPosition });
-  if (ctaText && ctaText !== mainText) items.push({ id: "overlay_cta", text: ctaText, startSeconds: Math.max(0, end - 2), endSeconds: end, position: "top" });
+  if (mainText) items.push({ id: "overlay_main", text: mainText, startSeconds: start, endSeconds: end, position: legacyPosition, style: { ...DEFAULT_OVERLAY_STYLE } });
+  if (ctaText && ctaText !== mainText) items.push({ id: "overlay_cta", text: ctaText, startSeconds: Math.max(0, end - 2), endSeconds: end, position: "top", style: { ...DEFAULT_OVERLAY_STYLE } });
   return items;
 }
 
@@ -195,10 +228,25 @@ export function createPendingGeneratorClip(nodeId: string, _nodeNumber: number, 
     label: "生成任务",
     tone: "#355e62",
     timelineDuration: 2.5,
+    sourceDurationSeconds: 3,
+    sourceStartSeconds: 0.5,
+    sourceEndSeconds: 3,
     dishCategory,
     status: "pending",
     generatorNodeId: nodeId,
   };
+}
+
+export function normalizeTimelineClip<T extends TimelineClip>(clip: T): T {
+  const sourceDuration = Math.max(0.1, Number(clip.sourceDurationSeconds ?? 3) || 3);
+  const start = clampNumber(clip.sourceStartSeconds, 0, Math.max(0, sourceDuration - 0.1), Math.min(0.5, Math.max(0, sourceDuration - 0.1)));
+  const end = clampNumber(clip.sourceEndSeconds, start + 0.1, sourceDuration, Math.min(sourceDuration, start + Math.max(0.1, clip.timelineDuration || 2.5)));
+  return { ...clip, sourceDurationSeconds: sourceDuration, sourceStartSeconds: start, sourceEndSeconds: end, timelineDuration: Math.max(0.1, end - start) };
+}
+
+function clampNumber(value: number | undefined, min: number, max: number, fallback: number): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.min(max, Math.max(min, numeric)) : fallback;
 }
 
 const fruitKeywords = ["蜜瓜", "草莓", "西瓜", "芒果", "葡萄", "蓝莓", "树莓", "樱桃", "桃", "梨", "苹果", "橙", "柚", "柠檬"];

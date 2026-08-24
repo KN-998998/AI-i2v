@@ -248,6 +248,10 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-video-row, .storyboard-overlay-row { position: absolute; inset: 0; }
 .storyboard-clip { position: absolute; top: 0; bottom: 0; min-width: 74px; overflow: hidden; border-right: 2px solid #101417; background: #263438; cursor: grab; }
 .storyboard-clip:active { cursor: grabbing; }
+.trim-handle { position: absolute; top: 0; bottom: 0; z-index: 3; width: 8px; padding: 0; border: 0; background: rgba(113,212,209,.92); cursor: ew-resize; opacity: .9; }
+.trim-handle:hover, .trim-handle:focus-visible { width: 10px; background: #f7d58a; opacity: 1; outline: 0; }
+.trim-start { left: 0; border-right: 2px solid rgba(8,11,13,.8); }
+.trim-end { right: 0; border-left: 2px solid rgba(8,11,13,.8); }
 .storyboard-thumb { position: absolute; inset: 0; background: #243236; }
 .storyboard-thumb video { width: 100%; height: 100%; display: block; object-fit: cover; opacity: .72; }
 .storyboard-thumb-placeholder { display: grid; height: 100%; place-items: center; color: var(--dim); font-size: 10px; }
@@ -284,6 +288,12 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-preview-meta strong { color: var(--text); font-size: 13px; }
 .storyboard-preview-meta span { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .storyboard-active-overlay-list { display: grid; gap: 4px; color: #d8eeee; font-size: 10px; line-height: 1.45; }
+.storyboard-audio-row { position: absolute; inset: 0; display: flex; align-items: center; min-width: 100%; overflow: hidden; padding: 0 9px; border-radius: 3px; }
+.voice-track-block { color: #e2dbff; background: #473f69; }
+.bgm-track-block { color: #ffe4b0; background: #5f4b32; }
+.storyboard-waveform { position: absolute; inset: 5px 8px; display: flex; align-items: center; gap: 3px; opacity: .55; }
+.storyboard-waveform i { flex: 1; min-width: 2px; border-radius: 2px; background: currentColor; }
+.storyboard-audio-label { position: relative; z-index: 1; max-width: 76%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
 .tracks { display: grid; gap: 6px; }
 .track { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 8px; }
 .track-label { color: var(--dim); font-size: 10px; text-transform: uppercase; }
