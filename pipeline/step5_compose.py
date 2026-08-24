@@ -92,7 +92,7 @@ def _escape_drawtext(text: str) -> str:
         .replace(":", r"\:")
         .replace("'", r"\'")
         .replace("%", r"\%")
-        .replace("\n", " ")
+        .replace("\n", r"\n")
     )
 
 
@@ -101,14 +101,49 @@ def _safe_color(value: str | None, fallback: str) -> str:
     return candidate if re.fullmatch(r"#[0-9a-fA-F]{6}(?:@[0-9.]+)?", candidate) else fallback
 
 
+def _normalized_ratio(value) -> float | None:
+    try:
+        ratio = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.05, min(0.95, ratio)) if 0.0 <= ratio <= 1.0 else None
+
+
+def _wrap_text_for_width(text: str, width_ratio: float, font_size: int) -> str:
+    """Wrap only when the editor explicitly disables single-line display."""
+    max_units = max(1.0, FINAL_RESOLUTION[0] * width_ratio / max(1, font_size * 0.95))
+    lines = []
+    for paragraph in str(text).splitlines() or [""]:
+        current = []
+        used = 0.0
+        for character in paragraph:
+            units = 1.0 if ord(character) > 255 else 0.55
+            if current and used + units > max_units:
+                lines.append("".join(current))
+                current = []
+                used = 0.0
+            current.append(character)
+            used += units
+        lines.append("".join(current))
+    return "\n".join(lines)
+
+
 def _font_file(font_family: str | None, font_weight: str | None = None) -> str:
     mapping = {
         ("Microsoft YaHei", "normal"): "C\\:/Windows/Fonts/msyh.ttc",
         ("Microsoft YaHei", "bold"): "C\\:/Windows/Fonts/msyhbd.ttc",
         ("SimHei", "normal"): "C\\:/Windows/Fonts/simhei.ttf",
         ("SimHei", "bold"): "C\\:/Windows/Fonts/simhei.ttf",
+        ("KaiTi", "normal"): "C\\:/Windows/Fonts/simkai.ttf",
+        ("KaiTi", "bold"): "C\\:/Windows/Fonts/simkai.ttf",
+        ("FangSong", "normal"): "C\\:/Windows/Fonts/simfang.ttf",
+        ("FangSong", "bold"): "C\\:/Windows/Fonts/simfang.ttf",
+        ("DengXian", "normal"): "C\\:/Windows/Fonts/Deng.ttf",
+        ("DengXian", "bold"): "C\\:/Windows/Fonts/Deng.ttf",
         ("Arial", "normal"): "C\\:/Windows/Fonts/arial.ttf",
         ("Arial", "bold"): "C\\:/Windows/Fonts/arialbd.ttf",
+        ("Arial Black", "normal"): "C\\:/Windows/Fonts/ariblk.ttf",
+        ("Arial Black", "bold"): "C\\:/Windows/Fonts/ariblk.ttf",
     }
     return mapping.get((str(font_family), str(font_weight or "normal")), mapping[("Microsoft YaHei", "normal")])
 
@@ -134,6 +169,8 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 "start": item.get("start"),
                 "end": item.get("end"),
                 "position": item.get("position", "bottom"),
+                "x": item.get("x"),
+                "y": item.get("y"),
                 "style": item.get("style", {}) if isinstance(item.get("style", {}), dict) else {},
             })
         else:
@@ -143,6 +180,8 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 "start": None,
                 "end": None,
                 "position": "bottom",
+                "x": None,
+                "y": None,
                 "style": {},
             })
 
@@ -155,7 +194,6 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 start_time += duration
                 continue
 
-            safe_text = _escape_drawtext(text)
             explicit_start = item.get("start")
             explicit_end = item.get("end")
             item_start = float(explicit_start) if explicit_start is not None else start_time
@@ -167,8 +205,18 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 "bottom": "h-220",
             }
             y = y_by_position.get(item.get("position", "bottom"), y_by_position["bottom"])
+            x_ratio = _normalized_ratio(item.get("x"))
+            y_ratio = _normalized_ratio(item.get("y"))
+            if x_ratio is not None and y_ratio is not None:
+                x = f"(w-text_w)*{x_ratio:.6f}"
+                y = f"(h-text_h)*{y_ratio:.6f}"
+            else:
+                x = "(w-text_w)/2"
             style = item.get("style", {})
             font_size = max(12, min(int(style.get("fontSize", 42) or 42), 120))
+            text_box_width = _normalized_ratio(style.get("textBoxWidth")) or 0.84
+            single_line = bool(style.get("singleLine", True))
+            safe_text = _escape_drawtext(text if single_line else _wrap_text_for_width(text, text_box_width, font_size))
             font_color = _safe_color(style.get("color"), "#FFFFFF")
             stroke_color = _safe_color(style.get("strokeColor"), "#000000")
             stroke_width = max(0, min(int(style.get("strokeWidth", 2) or 0), 12))
@@ -181,7 +229,7 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 f"drawtext=text='{safe_text}':"
                 f"fontfile='{_font_file(style.get('fontFamily'), font_weight)}':"
                 f"fontsize={font_size}:fontcolor={font_color}:borderw={stroke_width}:bordercolor={stroke_color}@0.8{box}:"
-                f"x=(w-text_w)/2:y={y}:"
+                f"x={x}:y={y}:"
                 f"enable='between(t,{item_start},{end_time})'"
             )
             if explicit_start is None and explicit_end is None:

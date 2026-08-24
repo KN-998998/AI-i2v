@@ -114,6 +114,42 @@ def mix_audio(voice_path, bgm_path, out_path, bgm_volume=0.3, video_duration=12,
     return out_path
 
 
+def mix_voice_segments(voice_segments, bgm_path, out_path, bgm_volume=0.3, video_duration=12):
+    """Mix independently generated voice segments at their timeline offsets."""
+    if not voice_segments and not bgm_path:
+        raise ValueError("至少需要一段人声或一个 BGM")
+    inputs = []
+    filters = []
+    labels = []
+    for index, segment in enumerate(voice_segments):
+        if len(segment) == 4:
+            voice_path, start_seconds, end_seconds, volume = segment
+            segment_duration = max(0.1, float(end_seconds) - float(start_seconds))
+        else:
+            voice_path, start_seconds, volume = segment
+            segment_duration = None
+        inputs.extend(["-i", str(voice_path)])
+        label = f"voice{index}"
+        delay_ms = max(0, round(float(start_seconds) * 1000))
+        source = f"[{index}:a]asetpts=PTS-STARTPTS"
+        if segment_duration is not None:
+            source += f",atrim=duration={segment_duration}"
+        filters.append(f"{source},adelay={delay_ms}:all=1,volume={max(0.0, min(float(volume), 1.0))}[{label}]")
+        labels.append(f"[{label}]")
+    bgm_index = len(voice_segments)
+    if bgm_path:
+        inputs.extend(["-stream_loop", "-1", "-i", str(bgm_path)])
+        filters.append(f"[{bgm_index}:a]volume={max(0.0, min(float(bgm_volume), 1.0))},afade=t=in:st=0:d=0.5,afade=t=out:st={max(0, float(video_duration) - 1)}:d=1[bgm]")
+        labels.append("[bgm]")
+    if len(labels) == 1:
+        filters.append(f"{labels[0]}aresample=async=1:first_pts=0[aout]")
+    else:
+        filters.append(f"{''.join(labels)}amix=inputs={len(labels)}:duration=longest:dropout_transition=0,aresample=async=1:first_pts=0[aout]")
+    cmd = ["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(filters), "-map", "[aout]", "-t", str(video_duration), "-c:a", "aac", "-b:a", "192k", out_path]
+    _run_ffmpeg(cmd, timeout=60, action="ffmpeg 分段人声混音")
+    return out_path
+
+
 def add_bgm(bgm_path, out_path, bgm_volume=0.3, video_duration=12):
     """Create a duration-limited BGM track with a short fade in/out."""
     fade_out_start = max(0, float(video_duration) - 1)
@@ -162,6 +198,22 @@ def get_video_duration(video_path):
         except (TypeError, ValueError, KeyError):
             pass
     return 12.0  # 默认
+
+
+def get_audio_duration(audio_path):
+    """Read the duration of a generated TTS audio file with ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "quiet", "-print_format", "json",
+        "-show_format", str(audio_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, timeout=10)
+    if result.returncode == 0:
+        try:
+            info = json.loads((result.stdout or b"").decode("utf-8", errors="replace"))
+            return max(0.0, float(info["format"]["duration"]))
+        except (TypeError, ValueError, KeyError):
+            pass
+    return 0.0
 
 
 def run(config_path: str):

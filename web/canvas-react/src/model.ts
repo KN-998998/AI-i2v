@@ -4,11 +4,16 @@ import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type ActionVerb, type PromptC
 export type NodeKind = "input" | "prompt" | "generator" | "output" | "sound" | "custom";
 export type Panel = "prompt" | "voice" | "overlay";
 
-export type OverlayPosition = "top" | "upper" | "center" | "bottom";
+export type OverlayPosition = "top" | "upper" | "center" | "bottom" | "custom";
+
+export const OVERLAY_FONT_OPTIONS = ["Microsoft YaHei", "SimHei", "KaiTi", "FangSong", "DengXian", "Arial", "Arial Black"] as const;
+export type OverlayFontFamily = typeof OVERLAY_FONT_OPTIONS[number];
 
 export type OverlayStyle = {
-  fontFamily: "Microsoft YaHei" | "SimHei" | "Arial";
+  fontFamily: OverlayFontFamily;
   fontSize: number;
+  textBoxWidth: number;
+  singleLine: boolean;
   color: string;
   fontWeight: "normal" | "bold";
   strokeColor: string;
@@ -24,7 +29,19 @@ export type OverlayItem = {
   startSeconds: number;
   endSeconds: number;
   position: OverlayPosition;
+  /** Normalized text center coordinates. Omitted values use the legacy position fallback. */
+  x?: number;
+  y?: number;
   style?: Partial<OverlayStyle>;
+};
+
+export type VoiceItem = {
+  id: string;
+  text: string;
+  startSeconds: number;
+  endSeconds: number;
+  voiceName?: string;
+  volume?: number;
 };
 
 export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "甜品", "水果", "饮品", "其他"] as const;
@@ -67,6 +84,7 @@ export type WorkflowData = {
   voiceText?: string;
   voiceName?: string;
   voiceVolume?: string;
+  voiceItems?: VoiceItem[];
   overlayMain?: string;
   overlayCta?: string;
   overlayPosition?: string;
@@ -153,16 +171,19 @@ export const OVERLAY_POSITION_OPTIONS: Array<{ value: OverlayPosition; label: st
   { value: "upper", label: "中上钩子区" },
   { value: "center", label: "画面中央" },
   { value: "bottom", label: "底部安全区" },
+  { value: "custom", label: "自定义位置" },
 ];
 
 export const DEFAULT_OVERLAY_ITEMS: OverlayItem[] = [
-  { id: "overlay_hook", text: "本周限定优惠", startSeconds: 0, endSeconds: 2.5, position: "upper" },
-  { id: "overlay_cta", text: "到店即享 · 现在预订", startSeconds: 10.5, endSeconds: 12.5, position: "top" },
+  { id: "overlay_hook", text: "本周限定优惠", startSeconds: 0, endSeconds: 2.5, position: "custom", x: 0.5, y: 0.5 },
+  { id: "overlay_cta", text: "到店即享 · 现在预订", startSeconds: 10.5, endSeconds: 12.5, position: "custom", x: 0.5, y: 0.5 },
 ];
 
 export const DEFAULT_OVERLAY_STYLE: OverlayStyle = {
   fontFamily: "Microsoft YaHei",
   fontSize: 42,
+  textBoxWidth: 0.84,
+  singleLine: true,
   color: "#FFFFFF",
   fontWeight: "bold",
   strokeColor: "#000000",
@@ -173,7 +194,22 @@ export const DEFAULT_OVERLAY_STYLE: OverlayStyle = {
 };
 
 export function overlayStyleFromItem(item: Pick<OverlayItem, "style">): OverlayStyle {
-  return { ...DEFAULT_OVERLAY_STYLE, ...item.style, fontSize: clampNumber(item.style?.fontSize, 12, 120, DEFAULT_OVERLAY_STYLE.fontSize), strokeWidth: clampNumber(item.style?.strokeWidth, 0, 12, DEFAULT_OVERLAY_STYLE.strokeWidth), backgroundOpacity: clampNumber(item.style?.backgroundOpacity, 0, 1, DEFAULT_OVERLAY_STYLE.backgroundOpacity) } as OverlayStyle;
+  return { ...DEFAULT_OVERLAY_STYLE, ...item.style, fontSize: clampNumber(item.style?.fontSize, 12, 120, DEFAULT_OVERLAY_STYLE.fontSize), textBoxWidth: clampNumber(item.style?.textBoxWidth, 0.3, 0.95, DEFAULT_OVERLAY_STYLE.textBoxWidth), singleLine: item.style?.singleLine ?? DEFAULT_OVERLAY_STYLE.singleLine, strokeWidth: clampNumber(item.style?.strokeWidth, 0, 12, DEFAULT_OVERLAY_STYLE.strokeWidth), backgroundOpacity: clampNumber(item.style?.backgroundOpacity, 0, 1, DEFAULT_OVERLAY_STYLE.backgroundOpacity) } as OverlayStyle;
+}
+
+export function overlayPositionCoordinates(position: OverlayPosition): { x: number; y: number } {
+  if (position === "top") return { x: 0.5, y: 0.1 };
+  if (position === "upper") return { x: 0.5, y: 0.3 };
+  if (position === "bottom") return { x: 0.5, y: 0.9 };
+  return { x: 0.5, y: 0.5 };
+}
+
+export function overlayCoordinatesFromItem(item: Pick<OverlayItem, "position" | "x" | "y">): { x: number; y: number } {
+  const fallback = overlayPositionCoordinates(item.position);
+  return {
+    x: clampNumber(item.x, 0.05, 0.95, fallback.x),
+    y: clampNumber(item.y, 0.05, 0.95, fallback.y),
+  };
 }
 
 export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd">): OverlayItem[] {
@@ -184,6 +220,7 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
       startSeconds: Math.max(0, Number(item.startSeconds) || 0),
       endSeconds: Math.max(0.1, Number(item.endSeconds) || 0.1),
       position: item.position ?? "upper",
+      ...overlayCoordinatesFromItem({ position: item.position ?? "upper", x: item.x, y: item.y }),
       style: overlayStyleFromItem(item),
     }));
   }
@@ -193,9 +230,30 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
   const end = Math.max(start + 0.1, Number.parseFloat(data.overlayEnd ?? "2.5") || 2.5);
   const legacyPosition = data.overlayPosition?.includes("顶部") ? "top" : data.overlayPosition?.includes("中上") ? "upper" : data.overlayPosition?.includes("中央") ? "center" : "bottom";
   const items: OverlayItem[] = [];
-  if (mainText) items.push({ id: "overlay_main", text: mainText, startSeconds: start, endSeconds: end, position: legacyPosition, style: { ...DEFAULT_OVERLAY_STYLE } });
-  if (ctaText && ctaText !== mainText) items.push({ id: "overlay_cta", text: ctaText, startSeconds: Math.max(0, end - 2), endSeconds: end, position: "top", style: { ...DEFAULT_OVERLAY_STYLE } });
+  if (mainText) items.push({ id: "overlay_main", text: mainText, startSeconds: start, endSeconds: end, position: legacyPosition, ...overlayPositionCoordinates(legacyPosition), style: { ...DEFAULT_OVERLAY_STYLE } });
+  if (ctaText && ctaText !== mainText) items.push({ id: "overlay_cta", text: ctaText, startSeconds: Math.max(0, end - 2), endSeconds: end, position: "top", ...overlayPositionCoordinates("top"), style: { ...DEFAULT_OVERLAY_STYLE } });
   return items;
+}
+
+export function voiceItemsFromData(data: Pick<WorkflowData, "voiceItems" | "voiceText" | "voiceName" | "voiceVolume">): VoiceItem[] {
+  const defaultVoice = data.voiceName?.trim() || "女声 · 温暖自然";
+  const defaultVolume = clampNumber(Number(data.voiceVolume), 0, 100, 85);
+  if (data.voiceItems) {
+    return data.voiceItems.map((item, index) => {
+      const start = Math.max(0, Number(item.startSeconds) || 0);
+      const end = Math.max(start + 0.1, Number(item.endSeconds) || start + 2);
+      return {
+        id: item.id || `voice_${index + 1}`,
+        text: item.text || "",
+        startSeconds: start,
+        endSeconds: end,
+        voiceName: item.voiceName || defaultVoice,
+        volume: clampNumber(Number(item.volume), 0, 100, defaultVolume),
+      };
+    });
+  }
+  const text = data.voiceText?.trim() || "";
+  return text ? [{ id: "voice_main", text, startSeconds: 0, endSeconds: 4, voiceName: defaultVoice, volume: defaultVolume }] : [];
 }
 
 export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜／装饰", "餐具器皿", "桌面／台面", "手部", "厨师上半身", "背景陈设"];

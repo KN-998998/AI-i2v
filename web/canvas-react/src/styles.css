@@ -265,6 +265,23 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-overlay-item { position: absolute; top: 18px; height: 34px; min-width: 28px; overflow: hidden; padding: 0 8px; border: 1px solid rgba(255,255,255,.18); border-radius: 4px; color: #fff; background: #4e5155; text-align: left; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; cursor: pointer; }
 .storyboard-overlay-item:hover { filter: brightness(1.18); }
 .storyboard-overlay-item.is-active { outline: 2px solid var(--amber); outline-offset: -2px; filter: brightness(1.18); }
+.storyboard-range-block { position: absolute; display: flex; align-items: stretch; min-width: 28px; box-sizing: border-box; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 4px; cursor: grab; }
+.storyboard-range-block.storyboard-overlay-item { padding: 0; text-align: left; }
+.storyboard-range-lane-stack { position: absolute; inset: 0; display: grid; align-content: start; gap: 4px; padding: 4px 0; overflow: visible; }
+.storyboard-range-lane { position: relative; min-height: 36px; }
+.storyboard-range-block.storyboard-overlay-item { top: 0; height: 34px; }
+.storyboard-range-block:active { cursor: grabbing; }
+.storyboard-range-content { position: relative; display: flex; flex: 1; align-items: center; min-width: 0; overflow: hidden; padding: 0 28px 0 10px; }
+.storyboard-range-content > span { position: relative; z-index: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.storyboard-range-handle { position: absolute; top: 0; bottom: 0; z-index: 2; width: 8px; padding: 0; border: 0; background: rgba(255,255,255,.24); cursor: ew-resize; }
+.storyboard-range-handle:hover { background: rgba(255,255,255,.58); }
+.storyboard-range-remove { position: absolute; top: 2px; right: 10px; z-index: 4; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 3px; color: rgba(255,255,255,.78); background: rgba(10,13,15,.42); font-size: 14px; line-height: 15px; cursor: pointer; }
+.storyboard-range-remove:hover, .storyboard-range-remove:focus-visible { color: #fff; background: rgba(233,130,130,.86); outline: 0; }
+.range-handle-start { left: 0; }
+.range-handle-end { right: 0; }
+.storyboard-range-audio { color: #e2dbff; background: #473f69; }
+.storyboard-range-audio .storyboard-range-content { padding: 0 9px; }
+.storyboard-range-audio .storyboard-waveform { pointer-events: none; }
 .overlay-top { background: #665038; }
 .overlay-upper { background: #4e5155; }
 .overlay-center { background: #473f69; }
@@ -278,8 +295,10 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-preview-media { position: relative; width: 100%; max-width: 180px; aspect-ratio: 9 / 16; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; background: #050708; }
 .storyboard-preview-media video { width: 100%; height: 100%; display: block; object-fit: cover; }
 .storyboard-preview-placeholder { display: grid; height: 100%; place-items: center; padding: 14px; color: var(--dim); text-align: center; font-size: 10px; }
-.storyboard-preview-overlays { position: absolute; inset: 0; pointer-events: none; }
+.storyboard-preview-overlays { position: absolute; inset: 0; pointer-events: auto; }
 .preview-overlay { position: absolute; right: 8px; left: 8px; padding: 4px 6px; border: 1px solid rgba(255,255,255,.24); border-radius: 3px; color: #fff; background: rgba(20,24,27,.62); text-align: center; text-shadow: 0 1px 2px #000; font-size: 11px; }
+.preview-overlay { right: auto; width: 84%; max-width: 84%; cursor: grab; user-select: none; }
+.preview-overlay:active { cursor: grabbing; }
 .preview-top { top: 8%; }
 .preview-upper { top: 28%; }
 .preview-center { top: 46%; transform: translateY(-50%); }
@@ -289,6 +308,10 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-preview-meta span { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .storyboard-active-overlay-list { display: grid; gap: 4px; color: #d8eeee; font-size: 10px; line-height: 1.45; }
 .storyboard-audio-row { position: absolute; inset: 0; display: flex; align-items: center; min-width: 100%; overflow: hidden; padding: 0 9px; border-radius: 3px; }
+.storyboard-audio-row-stack { position: absolute; inset: 0; }
+.storyboard-audio-row-stack .storyboard-audio-row { min-width: 28px; border: 1px solid rgba(255,255,255,.18); cursor: pointer; }
+.storyboard-audio-row-stack .storyboard-audio-row:hover { filter: brightness(1.16); }
+.storyboard-audio-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); font-size: 10px; }
 .voice-track-block { color: #e2dbff; background: #473f69; }
 .bgm-track-block { color: #ffe4b0; background: #5f4b32; }
 .storyboard-waveform { position: absolute; inset: 5px 8px; display: flex; align-items: center; gap: 3px; opacity: .55; }

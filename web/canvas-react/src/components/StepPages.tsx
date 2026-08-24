@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getCanvasComposeStatus, startCanvasCompose } from "../api";
-import { nodeCatalog, overlayItemsFromData, totalTimelineDuration, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
+import { nodeCatalog, overlayItemsFromData, totalTimelineDuration, voiceItemsFromData, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
@@ -151,11 +151,64 @@ function StepNext({ route }: { route: WorkflowRoute }) {
 
 function SoundTextPreview() {
   const timeline = useWorkflowStore(state => state.timeline);
-  const sound = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound")?.data);
+  const soundNode = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound"));
+  const sound = soundNode?.data;
   const bgmName = useWorkflowStore(state => state.bgmName);
   const updateTimelineClip = useWorkflowStore(state => state.updateTimelineClip);
+  const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const overlayItems = overlayItemsFromData(sound ?? {});
+  const voiceItems = voiceItemsFromData(sound ?? {});
+  const updateOverlayTimeline = (id: string, patch: Partial<(typeof overlayItems)[number]>) => {
+    if (!soundNode) return;
+    const next = overlayItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const first = next[0];
+    const cta = next.find(item => item.id === "overlay_cta") ?? next[next.length - 1];
+    updateNodeData(soundNode.id, {
+      overlayItems: next,
+      overlayMain: first?.text ?? "",
+      overlayCta: cta?.text ?? "",
+      overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
+      overlayStart: first ? String(first.startSeconds) + "s" : "0s",
+      overlayEnd: first ? String(first.endSeconds) + "s" : "2.5s",
+    });
+  };
+  const updateVoiceTimeline = (id: string, patch: Partial<(typeof voiceItems)[number]>) => {
+    if (!soundNode) return;
+    const next = voiceItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const first = next[0];
+    updateNodeData(soundNode.id, {
+      voiceItems: next,
+      voiceText: first?.text ?? "",
+      voiceName: first?.voiceName ?? "女声 · 温暖自然",
+      voiceVolume: String(first?.volume ?? 85),
+    });
+  };
+  const removeOverlayTimeline = (id: string) => {
+    if (!soundNode) return;
+    const next = overlayItems.filter(item => item.id !== id);
+    const first = next[0];
+    const cta = next.find(item => item.id === "overlay_cta") ?? next[next.length - 1];
+    updateNodeData(soundNode.id, {
+      overlayItems: next,
+      overlayMain: first?.text ?? "",
+      overlayCta: cta?.text ?? "",
+      overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
+      overlayStart: first ? `${first.startSeconds}s` : "0s",
+      overlayEnd: first ? `${first.endSeconds}s` : "2.5s",
+    });
+  };
+  const removeVoiceTimeline = (id: string) => {
+    if (!soundNode) return;
+    const next = voiceItems.filter(item => item.id !== id);
+    const first = next[0];
+    updateNodeData(soundNode.id, {
+      voiceItems: next,
+      voiceText: first?.text ?? "",
+      voiceName: first?.voiceName ?? "女声 · 温暖自然",
+      voiceVolume: String(first?.volume ?? 85),
+    });
+  };
 
   return <>
     <div className="sound-text-explainer">
@@ -163,7 +216,7 @@ function SoundTextPreview() {
       <p>每条文字单独设置文案、开始秒数、结束秒数和画面位置；它只会在自己的时间段出现，不会新增流程节点。拖动下方播放指针，查看它对应哪一个视频片段。</p>
       <div className="sound-text-legend"><span><i className="legend-dot legend-top" />上方品牌区</span><span><i className="legend-dot legend-upper" />中上钩子区</span><span><i className="legend-dot legend-center" />画面中央</span><span><i className="legend-dot legend-bottom" />底部安全区</span></div>
     </div>
-    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceText={sound?.voiceText} bgmName={bgmName} onUpdateClip={updateTimelineClip} onOverlayFocus={() => setActivePanel("overlay")} />
+    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceItems={voiceItems} bgmName={bgmName} onUpdateClip={updateTimelineClip} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} onVoiceFocus={() => setActivePanel("voice")} onOverlayFocus={() => setActivePanel("overlay")} />
   </>;
 }
 

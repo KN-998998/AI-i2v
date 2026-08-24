@@ -1,4 +1,4 @@
-import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, overlayItemsFromData, randomizeClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration } from "./model.ts";
+import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -34,6 +34,23 @@ assert(resolveDishCategory({ dish: "冷食三文鱼", dishCategory: "正餐" }) 
 const overlays = overlayItemsFromData({ overlayMain: "开胃钩子", overlayCta: "现在预订", overlayPosition: "中上钩子区", overlayStart: "0s", overlayEnd: "2.5s" });
 assert(overlays.length === 2 && overlays[0].position === "upper" && overlays[1].position === "top", "legacy overlay fields were not migrated");
 assert(overlayItemsFromData({ overlayItems: [{ id: "one", text: "上方文案", startSeconds: 1, endSeconds: 3, position: "top" }] }).length === 1, "explicit overlay timeline was not preserved");
+assert(OVERLAY_FONT_OPTIONS.includes("KaiTi") && OVERLAY_FONT_OPTIONS.includes("Arial Black"), "expanded overlay font options are missing");
+const centeredOverlay = overlayCoordinatesFromItem({ position: "custom" });
+assert(centeredOverlay.x === 0.5 && centeredOverlay.y === 0.5, "custom overlay position should default to center");
+const draggedOverlay = overlayItemsFromData({ overlayItems: [{ id: "dragged", text: "可拖动", startSeconds: 0, endSeconds: 2, position: "custom", x: 0.21, y: 0.74 }] })[0];
+assert(draggedOverlay.x === 0.21 && draggedOverlay.y === 0.74, "custom overlay coordinates were not persisted");
+const defaultOverlayStyle = overlayStyleFromItem({ style: {} });
+assert(defaultOverlayStyle.singleLine === true && defaultOverlayStyle.textBoxWidth === 0.84, "overlay text layout defaults are incorrect");
+
+const legacyVoice = voiceItemsFromData({ voiceText: "legacy voice", voiceName: "voice", voiceVolume: "85" });
+assert(legacyVoice.length === 1 && legacyVoice[0].startSeconds === 0 && legacyVoice[0].endSeconds === 4, "legacy voice fields were not migrated");
+const segmentedVoice = voiceItemsFromData({
+  voiceItems: [
+    { id: "voice_1", text: "opening", startSeconds: 0, endSeconds: 4, volume: 80 },
+    { id: "voice_2", text: "closing", startSeconds: 10, endSeconds: 15, volume: 75 },
+  ],
+});
+assert(segmentedVoice.length === 2 && segmentedVoice[1].startSeconds === 10 && segmentedVoice[1].endSeconds === 15, "voice segment timing was not preserved");
 
 const composePool = [
   { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "正餐" as const },

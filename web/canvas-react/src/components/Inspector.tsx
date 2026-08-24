@@ -1,9 +1,23 @@
 import { useEffect } from "react";
-import { DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_POSITION_OPTIONS, overlayItemsFromData, overlayStyleFromItem, type NodeKind, type OverlayItem, type OverlayStyle, type WorkflowData, type WorkflowNode } from "../model";
+import { DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayItemsFromData, overlayPositionCoordinates, overlayStyleFromItem, voiceItemsFromData, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type WorkflowData, type WorkflowNode } from "../model";
 import { uploadDraftFile } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { Field, formatNodeValue, SectionTitle, Select, Tag } from "./ui";
+
+const OVERLAY_STYLE_PRESETS: Array<{ label: string; style: OverlayStyle }> = [
+  { label: "经典白字", style: { fontFamily: "Microsoft YaHei", fontSize: 42, textBoxWidth: 0.84, singleLine: true, color: "#FFFFFF", fontWeight: "bold", strokeColor: "#000000", strokeWidth: 2, backgroundEnabled: true, backgroundColor: "#111417", backgroundOpacity: 0.62 } },
+  { label: "金色 CTA", style: { fontFamily: "Microsoft YaHei", fontSize: 48, textBoxWidth: 0.84, singleLine: true, color: "#FFD166", fontWeight: "bold", strokeColor: "#2A1B00", strokeWidth: 3, backgroundEnabled: false, backgroundColor: "#111417", backgroundOpacity: 0.62 } },
+  { label: "清爽白字", style: { fontFamily: "DengXian", fontSize: 40, textBoxWidth: 0.84, singleLine: true, color: "#FFFFFF", fontWeight: "normal", strokeColor: "#000000", strokeWidth: 1, backgroundEnabled: false, backgroundColor: "#111417", backgroundOpacity: 0.4 } },
+  { label: "黑底卡片", style: { fontFamily: "Microsoft YaHei", fontSize: 40, textBoxWidth: 0.84, singleLine: true, color: "#FFFFFF", fontWeight: "bold", strokeColor: "#000000", strokeWidth: 0, backgroundEnabled: true, backgroundColor: "#111417", backgroundOpacity: 0.78 } },
+  { label: "醒目红字", style: { fontFamily: "SimHei", fontSize: 44, textBoxWidth: 0.84, singleLine: true, color: "#FF5C5C", fontWeight: "bold", strokeColor: "#000000", strokeWidth: 3, backgroundEnabled: false, backgroundColor: "#111417", backgroundOpacity: 0.62 } },
+  { label: "奶油标题", style: { fontFamily: "KaiTi", fontSize: 46, textBoxWidth: 0.84, singleLine: true, color: "#FFF1D6", fontWeight: "bold", strokeColor: "#5C3B1E", strokeWidth: 2, backgroundEnabled: false, backgroundColor: "#111417", backgroundOpacity: 0.62 } },
+];
+
+function stylePresetValue(style: OverlayStyle) {
+  const preset = OVERLAY_STYLE_PRESETS.find(item => Object.entries(item.style).every(([key, value]) => style[key as keyof OverlayStyle] === value));
+  return preset?.label ?? "自定义";
+}
 
 function BasicFields({ node }: { node: WorkflowNode }) {
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
@@ -108,6 +122,7 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const setBgm = useWorkflowStore(state => state.setBgm);
   const data = node.data;
   const overlayItems = overlayItemsFromData(data);
+  const voiceItems = voiceItemsFromData(data);
   const positionLabel = (value: OverlayItem["position"]) => OVERLAY_POSITION_OPTIONS.find(item => item.value === value)?.label ?? OVERLAY_POSITION_OPTIONS[1].label;
   const syncOverlayLegacyFields = (items: OverlayItem[]) => {
     const first = items[0];
@@ -130,26 +145,47 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const removeOverlay = (id: string) => syncOverlayLegacyFields(overlayItems.filter(item => item.id !== id));
   const addOverlay = () => {
     const lastEnd = overlayItems.reduce((max, item) => Math.max(max, item.endSeconds), 0);
-    syncOverlayLegacyFields([...overlayItems, { id: `overlay_${Date.now()}`, text: "", startSeconds: lastEnd, endSeconds: lastEnd + 2, position: "upper" }]);
+    syncOverlayLegacyFields([...overlayItems, { id: `overlay_${Date.now()}`, text: "", startSeconds: lastEnd, endSeconds: lastEnd + 2, position: "custom", x: 0.5, y: 0.5 }]);
+  };
+  const syncVoiceLegacyFields = (items: VoiceItem[]) => {
+    const first = items[0];
+    updateNodeData(node.id, {
+      voiceItems: items,
+      voiceText: first?.text ?? "",
+      voiceName: first?.voiceName ?? "女声 · 温暖自然",
+      voiceVolume: String(first?.volume ?? 85),
+    });
+  };
+  const updateVoice = (id: string, patch: Partial<VoiceItem>) => syncVoiceLegacyFields(voiceItems.map(item => item.id === id ? { ...item, ...patch } : item));
+  const removeVoice = (id: string) => syncVoiceLegacyFields(voiceItems.filter(item => item.id !== id));
+  const addVoice = () => {
+    const start = voiceItems.reduce((max, item) => Math.max(max, item.endSeconds), 0);
+    syncVoiceLegacyFields([...voiceItems, { id: `voice_${Date.now()}`, text: "", startSeconds: start, endSeconds: start + 4, voiceName: "女声 · 温暖自然", volume: 85 }]);
   };
   return <>
     <div className="tabs"><button type="button" className={`tab ${activePanel === "voice" ? "active" : ""}`} onClick={() => setActivePanel("voice")}>声音</button><button type="button" className={`tab ${activePanel === "overlay" ? "active" : ""}`} onClick={() => setActivePanel("overlay")}>文字</button></div>
     {activePanel === "overlay" ? <>
       <div className="panel-section-head"><SectionTitle>画面文字时间轴</SectionTitle><button type="button" className="btn" onClick={addOverlay}>＋ 添加文字</button></div>
       <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面。</span></div>
-      <div className="overlay-editor-list">{overlayItems.map((item, index) => <div className="overlay-editor-item" key={item.id}>
+      <div className="overlay-editor-list">{overlayItems.map((item, index) => { const style = overlayStyleFromItem(item); return <div className="overlay-editor-item" key={item.id}>
         <div className="overlay-editor-head"><div><strong>文字轨道 {index + 1}</strong><small>{positionLabel(item.position)} · {item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s</small></div><button type="button" className="clip-remove" aria-label={`删除文字 ${index + 1}`} onClick={() => removeOverlay(item.id)}>×</button></div>
         <input className="input" value={item.text} placeholder="输入画面文案" onChange={event => updateOverlay(item.id, { text: event.target.value })} />
         <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateOverlay(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateOverlay(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
-        <Field label="显示位置"><Select value={positionLabel(item.position)} options={OVERLAY_POSITION_OPTIONS.map(option => option.label)} onChange={value => updateOverlay(item.id, { position: OVERLAY_POSITION_OPTIONS.find(option => option.label === value)!.value })} /></Field>
-        <div className="style-editor"><span className="style-editor-label">文字样式</span><div className="field-grid"><Field label="字体"><Select value={overlayStyleFromItem(item).fontFamily} options={["Microsoft YaHei", "SimHei", "Arial"]} onChange={value => updateOverlayStyle(item.id, { fontFamily: value as OverlayStyle["fontFamily"] })} /></Field><Field label="字号"><input className="input" type="number" min="12" max="120" step="1" value={overlayStyleFromItem(item).fontSize} onChange={event => updateOverlayStyle(item.id, { fontSize: Math.min(120, Math.max(12, Number(event.target.value) || 42)) })} /></Field></div><div className="field-grid"><label className="field"><span>文字颜色</span><input className="color-input" type="color" value={overlayStyleFromItem(item).color} onChange={event => updateOverlayStyle(item.id, { color: event.target.value.toUpperCase() })} /></label><Field label="字重"><Select value={overlayStyleFromItem(item).fontWeight === "bold" ? "粗体" : "常规"} options={["常规", "粗体"]} onChange={value => updateOverlayStyle(item.id, { fontWeight: value === "粗体" ? "bold" : "normal" })} /></Field></div><div className="field-grid"><label className="field"><span>描边颜色</span><input className="color-input" type="color" value={overlayStyleFromItem(item).strokeColor} onChange={event => updateOverlayStyle(item.id, { strokeColor: event.target.value.toUpperCase() })} /></label><Field label="描边宽度"><input className="input" type="number" min="0" max="12" step="1" value={overlayStyleFromItem(item).strokeWidth} onChange={event => updateOverlayStyle(item.id, { strokeWidth: Math.min(12, Math.max(0, Number(event.target.value) || 0)) })} /></Field></div><label className={`check ${overlayStyleFromItem(item).backgroundEnabled ? "checked" : ""}`}><input type="checkbox" checked={overlayStyleFromItem(item).backgroundEnabled} onChange={event => updateOverlayStyle(item.id, { backgroundEnabled: event.target.checked })} />显示文字背景框</label>{overlayStyleFromItem(item).backgroundEnabled && <div className="field-grid"><label className="field"><span>背景颜色</span><input className="color-input" type="color" value={overlayStyleFromItem(item).backgroundColor} onChange={event => updateOverlayStyle(item.id, { backgroundColor: event.target.value.toUpperCase() })} /></label><Field label="背景透明度"><input className="input" type="number" min="0" max="100" step="5" value={Math.round(overlayStyleFromItem(item).backgroundOpacity * 100)} onChange={event => updateOverlayStyle(item.id, { backgroundOpacity: Math.min(1, Math.max(0, (Number(event.target.value) || 0) / 100)) })} /></Field></div>}</div>
-      </div>)}</div>
+        <Field label="初始/快捷位置"><Select value={positionLabel(item.position)} options={OVERLAY_POSITION_OPTIONS.map(option => option.label)} onChange={value => { const position = OVERLAY_POSITION_OPTIONS.find(option => option.label === value)!.value; updateOverlay(item.id, { position, ...overlayPositionCoordinates(position) }); }} /></Field>
+        <div className="style-editor"><span className="style-editor-label">文字样式</span><Field label="样式模板"><Select value={stylePresetValue(style)} options={["自定义", ...OVERLAY_STYLE_PRESETS.map(preset => preset.label)]} onChange={value => { const preset = OVERLAY_STYLE_PRESETS.find(item => item.label === value); if (preset) updateOverlayStyle(item.id, preset.style); }} /></Field><div className="field-grid"><Field label="字体"><Select value={style.fontFamily} options={[...OVERLAY_FONT_OPTIONS]} onChange={value => updateOverlayStyle(item.id, { fontFamily: value as OverlayStyle["fontFamily"] })} /></Field><Field label="字号"><input className="input" type="number" min="12" max="120" step="1" value={style.fontSize} onChange={event => updateOverlayStyle(item.id, { fontSize: Math.min(120, Math.max(12, Number(event.target.value) || 42)) })} /></Field></div><div className="field-grid"><Field label="文本框宽度 (%)"><input className="input" type="number" min="30" max="95" step="5" value={Math.round(style.textBoxWidth * 100)} onChange={event => updateOverlayStyle(item.id, { textBoxWidth: Math.min(0.95, Math.max(0.3, (Number(event.target.value) || 84) / 100)) })} /></Field><label className={`check ${style.singleLine ? "checked" : ""}`}><input type="checkbox" checked={style.singleLine} onChange={event => updateOverlayStyle(item.id, { singleLine: event.target.checked })} />单行显示</label></div><div className="field-grid"><label className="field"><span>文字颜色</span><input className="color-input" type="color" value={style.color} onChange={event => updateOverlayStyle(item.id, { color: event.target.value.toUpperCase() })} /></label><Field label="字重"><Select value={style.fontWeight === "bold" ? "粗体" : "常规"} options={["常规", "粗体"]} onChange={value => updateOverlayStyle(item.id, { fontWeight: value === "粗体" ? "bold" : "normal" })} /></Field></div><div className="field-grid"><label className="field"><span>描边颜色</span><input className="color-input" type="color" value={style.strokeColor} onChange={event => updateOverlayStyle(item.id, { strokeColor: event.target.value.toUpperCase() })} /></label><Field label="描边宽度"><input className="input" type="number" min="0" max="12" step="1" value={style.strokeWidth} onChange={event => updateOverlayStyle(item.id, { strokeWidth: Math.min(12, Math.max(0, Number(event.target.value) || 0)) })} /></Field></div><label className={`check ${style.backgroundEnabled ? "checked" : ""}`}><input type="checkbox" checked={style.backgroundEnabled} onChange={event => updateOverlayStyle(item.id, { backgroundEnabled: event.target.checked })} />显示文字背景框</label>{style.backgroundEnabled && <div className="field-grid"><label className="field"><span>背景颜色</span><input className="color-input" type="color" value={style.backgroundColor} onChange={event => updateOverlayStyle(item.id, { backgroundColor: event.target.value.toUpperCase() })} /></label><Field label="背景透明度"><input className="input" type="number" min="0" max="100" step="5" value={Math.round(style.backgroundOpacity * 100)} onChange={event => updateOverlayStyle(item.id, { backgroundOpacity: Math.min(1, Math.max(0, (Number(event.target.value) || 0) / 100)) })} /></Field></div>}</div>
+      </div>; })}</div>
       {overlayItems.length === 0 && <div className="empty-state compact">还没有文字，点击“添加文字”创建第一条。</div>}
     </> : <>
-      <SectionTitle>人声与 BGM</SectionTitle>
-      <Field label="引流文案"><textarea className="input textarea" value={formatNodeValue(data.voiceText, "")} onChange={event => updateNodeData(node.id, { voiceText: event.target.value })} /></Field>
-      <Field label="音色"><Select value={formatNodeValue(data.voiceName, "女声 · 温暖自然")} options={["女声 · 温暖自然", "男声 · 稳重清晰"]} onChange={value => updateNodeData(node.id, { voiceName: value })} /></Field>
-      <Field label="音量"><input className="range" type="range" min="0" max="100" value={formatNodeValue(data.voiceVolume, "85")} onChange={event => updateNodeData(node.id, { voiceVolume: event.target.value })} /></Field>
+      <div className="panel-section-head"><SectionTitle>人声时间轨</SectionTitle><button type="button" className="btn" onClick={addVoice}>＋ 添加人声</button></div>
+      <div className="overlay-logic-callout"><strong>人声和文字一样按时间段播放</strong><span>每段人声独立设置文案、开始时间、结束时间、音色和音量；例如第一段 0-4 秒，第二段 10-15 秒。</span></div>
+      <div className="overlay-editor-list">{voiceItems.map((item, index) => <div className="overlay-editor-item voice-editor-item" key={item.id}>
+        <div className="overlay-editor-head"><div><strong>人声轨道 {index + 1}</strong><small>{item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s</small></div><button type="button" className="clip-remove" aria-label={`删除人声 ${index + 1}`} onClick={() => removeVoice(item.id)}>×</button></div>
+        <textarea className="input textarea" value={item.text} placeholder="输入这一段人声文案" onChange={event => updateVoice(item.id, { text: event.target.value })} />
+        <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateVoice(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateVoice(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
+        <Field label="音色"><Select value={item.voiceName || "女声 · 温暖自然"} options={["女声 · 温暖自然", "男声 · 稳重清晰"]} onChange={value => updateVoice(item.id, { voiceName: value })} /></Field>
+        <Field label="音量"><input className="range" type="range" min="0" max="100" value={item.volume ?? 85} onChange={event => updateVoice(item.id, { volume: Number(event.target.value) })} /></Field>
+      </div>)}</div>
+      {voiceItems.length === 0 && <div className="empty-state compact">还没有人声，点击“添加人声”创建第一段。</div>}
       <Field label="BGM 音量"><input className="range" type="range" min="0" max="100" value={formatNodeValue(data.bgmVolume, "30")} onChange={event => updateNodeData(node.id, { bgmVolume: event.target.value })} /></Field>
       <Field label="BGM"><div className="upload-row"><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /><span>{bgmName || "未上传"}</span>{bgmUrl && <button type="button" className="clip-remove" aria-label="移除 BGM" onClick={() => { setBgm("", ""); onToast("BGM 已移除"); }}>×</button>}</div></Field>
     </>}

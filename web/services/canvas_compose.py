@@ -122,6 +122,8 @@ def _overlay_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
                 "start": start,
                 "end": end,
                 "position": item.get("position", "upper"),
+                "x": item.get("x"),
+                "y": item.get("y"),
                 "style": item.get("style") if isinstance(item.get("style"), dict) else {},
             })
         return result
@@ -143,6 +145,27 @@ def _uploaded_audio_path(draft_id: str, url: str | None) -> Path | None:
         return None
     path = uploaded_file(draft_id, Path(url.split("?", 1)[0]).name)
     return path
+
+
+def _voice_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
+    items = sound.get("voiceItems")
+    if isinstance(items, list):
+        result = []
+        for item in items:
+            if not isinstance(item, dict) or not str(item.get("text", "")).strip():
+                continue
+            start = max(0.0, float(item.get("startSeconds", 0) or 0))
+            end = max(start + 0.1, float(item.get("endSeconds", start + 4) or start + 4))
+            result.append({
+                "text": str(item["text"]),
+                "start": start,
+                "end": end,
+                "voice": str(item.get("voiceName") or sound.get("voiceName") or ""),
+                "volume": max(0.0, min(float(item.get("volume", sound.get("voiceVolume", 85)) or 85) / 100, 1.0)),
+            })
+        return result
+    text = str(sound.get("voiceText", "")).strip()
+    return [{"text": text, "start": 0.0, "end": 4.0, "voice": str(sound.get("voiceName", "")), "volume": max(0.0, min(float(sound.get("voiceVolume", 85) or 85) / 100, 1.0))}] if text else []
 
 
 def start_compose(draft_id: str, workspace_id: str | None = None, include_sound: bool = False) -> dict[str, Any]:
@@ -189,35 +212,27 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
             subtitles = _overlay_items(sound) if include_sound else []
             concat_clips(trimmed_paths, str(output_path), subtitles=subtitles, brand_info=None)
             if include_sound:
-                from pipeline.step6_voice_bgm import add_bgm, generate_tts, merge_audio_video, mix_audio
+                from pipeline.step6_voice_bgm import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
                 video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
-                voice_text = str(sound.get("voiceText", "")).strip()
-                voice_volume = max(0.0, min(float(sound.get("voiceVolume", 85) or 85) / 100, 1.0))
                 bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
-                voice_path = output_dir / "voice.mp3"
                 audio_path = output_dir / "mixed_audio.m4a"
-                voice_file = None
                 bgm_file = _uploaded_audio_path(draft_id, draft.get("bgmUrl"))
-                voice_name = str(sound.get("voiceName", ""))
-                voice = "zh-CN-YunxiNeural" if "男" in voice_name else "zh-CN-XiaoxiaoNeural"
-                if voice_text:
-                    voice_file = generate_tts(voice_text, str(voice_path), voice=voice)
-                    if not voice_file:
-                        raise RuntimeError("人声生成失败，请确认 edge-tts 可用或暂时清空人声文案")
-                    temporary_paths.append(str(voice_path))
-                if voice_file and bgm_file and bgm_file.exists():
-                    mix_audio(str(voice_file), str(bgm_file), str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration, voice_volume=voice_volume)
-                    temporary_paths.append(str(audio_path))
-                    merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), audio_volume=1.0, video_duration=video_duration)
-                    output_path.unlink(missing_ok=True)
-                    output_path.with_suffix(".with-audio.mp4").replace(output_path)
-                elif voice_file:
-                    merge_audio_video(str(output_path), str(voice_file), str(output_path.with_suffix(".with-audio.mp4")), audio_volume=voice_volume, video_duration=video_duration)
-                    output_path.unlink(missing_ok=True)
-                    output_path.with_suffix(".with-audio.mp4").replace(output_path)
-                elif bgm_file and bgm_file.exists() and bgm_volume > 0:
-                    add_bgm(str(bgm_file), str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)
+                voice_segments = []
+                for voice_index, item in enumerate(_voice_items(sound)):
+                    segment_path = output_dir / f"voice_{voice_index:03d}.mp3"
+                    voice = "zh-CN-YunxiNeural" if "男" in item["voice"] else "zh-CN-XiaoxiaoNeural"
+                    generated = generate_tts(item["text"], str(segment_path), voice=voice)
+                    if not generated:
+                        raise RuntimeError("人声生成失败，请确认 edge-tts 可用或清空当前人声段")
+                    actual_duration = get_audio_duration(generated)
+                    if actual_duration <= 0:
+                        raise RuntimeError("无法读取 TTS 音频时长，请确认 ffprobe 可用")
+                    temporary_paths.append(str(segment_path))
+                    effective_end = min(item["end"], item["start"] + actual_duration)
+                    voice_segments.append((generated, item["start"], effective_end, item["volume"]))
+                if voice_segments or (bgm_file and bgm_file.exists() and bgm_volume > 0):
+                    mix_voice_segments(voice_segments, str(bgm_file) if bgm_file and bgm_file.exists() and bgm_volume > 0 else None, str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)
                     temporary_paths.append(str(audio_path))
                     merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), video_duration=video_duration)
                     output_path.unlink(missing_ok=True)
