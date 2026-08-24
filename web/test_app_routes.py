@@ -71,6 +71,30 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
     shutil.rmtree(test_root, ignore_errors=True)
 
 
+def test_canvas_draft_accepts_utf8_bom(monkeypatch, tmp_path):
+    test_root = tmp_path / "canvas-draft"
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)
+    client = TestClient(create_app())
+    payload = {
+        "activePanel": "prompt",
+        "nextNodeNumber": 1,
+        "nodes": [],
+        "edges": [],
+        "timeline": [],
+        "candidateClips": [],
+        "bgmName": "",
+        "bgmUrl": "",
+    }
+    client.put("/api/canvas/drafts/default", json=payload)
+    draft_path = test_root / "default" / "draft.json"
+    draft_path.write_text(draft_path.read_text(encoding="utf-8"), encoding="utf-8-sig")
+
+    response = client.get("/api/canvas/drafts/default")
+
+    assert response.status_code == 200
+    assert response.json()["draft_id"] == "default"
+
+
 def test_canvas_compose_rejects_unlinked_demo_clips(monkeypatch, tmp_path):
     test_root = tmp_path / "canvas-draft"
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)
@@ -92,11 +116,12 @@ def test_canvas_compose_rejects_unlinked_demo_clips(monkeypatch, tmp_path):
 
 def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):
     output_root = tmp_path / "output"
-    clip_dir = output_root / "batch_demo" / "03_clips"
+    clip_dir = output_root / "canvas_clips"
     clip_dir.mkdir(parents=True)
     clip_path = clip_dir / "天妇罗_roll1_1080p_5s.mp4"
     clip_path.write_bytes(b"fake-mp4")
     monkeypatch.setattr(api_routes, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(api_routes, "CANVAS_CLIP_ROOT", clip_dir)
     monkeypatch.setattr(api_routes, "_read_video_duration_seconds", lambda _path: 5.0)
 
     client = TestClient(create_app())
@@ -104,8 +129,25 @@ def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):
     assert clips.status_code == 200
     item = clips.json()[0]
     assert item["dish"] == "天妇罗"
+    assert "batchId" not in item
     assert item["timelineDuration"] == 2.5
     assert client.get(item["sourceUrl"]).content == b"fake-mp4"
+
+
+def test_canvas_clip_library_keeps_legacy_batch_compatibility(monkeypatch, tmp_path):
+    output_root = tmp_path / "output"
+    clip_dir = output_root / "batch_demo" / "03_clips"
+    clip_dir.mkdir(parents=True)
+    clip_path = clip_dir / "天妇罗_roll1_1080p_5s.mp4"
+    clip_path.write_bytes(b"legacy-mp4")
+    monkeypatch.setattr(api_routes, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(api_routes, "CANVAS_CLIP_ROOT", output_root / "canvas_clips")
+    monkeypatch.setattr(api_routes, "_read_video_duration_seconds", lambda _path: 5.0)
+
+    client = TestClient(create_app())
+    item = client.get("/api/canvas/clips").json()[0]
+    assert item["batchId"] == "batch_demo"
+    assert client.get(item["sourceUrl"]).content == b"legacy-mp4"
 
 
 def test_canvas_compose_accepts_workspace_id(monkeypatch):

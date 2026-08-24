@@ -45,6 +45,8 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent          # 仓库根目录
 PIPELINE_DIR = PROJECT_ROOT / "pipeline"
 OUTPUT_ROOT  = Path(os.environ.get("OUTPUT_ROOT", PROJECT_ROOT / "output"))
+# 新版画布统一使用的 Kling 视频片段库；旧版批处理仍写入 batch_*/03_clips。
+CANVAS_CLIP_ROOT = Path(os.environ.get("CANVAS_CLIP_ROOT", OUTPUT_ROOT / "canvas_clips"))
 
 # 素材库路径（图生视频主库，按菜名分文件夹）
 #   示例：export IMAGE_LIBRARY="D:/素材库/菜品照片"

@@ -4,6 +4,9 @@ import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type ActionVerb, type PromptC
 export type NodeKind = "input" | "prompt" | "generator" | "output" | "sound" | "custom";
 export type Panel = "prompt" | "voice" | "overlay";
 
+export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "甜品", "水果", "饮品", "其他"] as const;
+export type DishCategory = typeof DISH_CATEGORY_OPTIONS[number];
+
 export type WorkflowData = {
   kind: NodeKind;
   title: string;
@@ -11,6 +14,7 @@ export type WorkflowData = {
   status: string;
   dishName?: string;
   foodType?: string;
+  dishCategory?: DishCategory;
   assetMode?: string;
   imageName?: string;
   imagePreview?: string;
@@ -87,6 +91,7 @@ export type TimelineClip = {
   label: string;
   tone: string;
   timelineDuration: number;
+  dishCategory?: DishCategory;
   status?: "pending" | "generated";
   sourcePath?: string;
   sourceUrl?: string;
@@ -96,7 +101,8 @@ export type TimelineClip = {
 };
 
 export type ClipLibraryItem = TimelineClip & {
-  batchId: string;
+  /** 旧批次片段才有；新版公共画布片段不依赖 batch_id。 */
+  batchId?: string;
   filename: string;
   sourcePath: string;
   sourceUrl: string;
@@ -117,15 +123,15 @@ export const nodeCatalog: Record<NodeKind, NodeCatalogItem> = {
 export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜／装饰", "餐具器皿", "桌面／台面", "手部", "厨师上半身", "背景陈设"];
 
 export const clips: TimelineClip[] = [
-  { id: "clip_salmon_01", dish: "炙烤三文鱼", label: "平稳推进", tone: "#355e62", timelineDuration: 2.5 },
-  { id: "clip_salmon_02", dish: "炙烤三文鱼", label: "小幅弧线", tone: "#4b5d68", timelineDuration: 2.5 },
-  { id: "clip_tempura_01", dish: "天妇罗", label: "右向横移", tone: "#665038", timelineDuration: 2.5 },
-  { id: "clip_sashimi_01", dish: "刺身拼盘", label: "固定机位", tone: "#4c4265", timelineDuration: 2.5 },
+  { id: "clip_salmon_01", dish: "炙烤三文鱼", label: "平稳推进", tone: "#355e62", timelineDuration: 2.5, dishCategory: "正餐" },
+  { id: "clip_salmon_02", dish: "炙烤三文鱼", label: "小幅弧线", tone: "#4b5d68", timelineDuration: 2.5, dishCategory: "正餐" },
+  { id: "clip_tempura_01", dish: "天妇罗", label: "右向横移", tone: "#665038", timelineDuration: 2.5, dishCategory: "小吃" },
+  { id: "clip_sashimi_01", dish: "刺身拼盘", label: "固定机位", tone: "#4c4265", timelineDuration: 2.5, dishCategory: "正餐" },
 ];
 
 export function dataFor(kind: NodeKind): WorkflowData {
   const base = { kind, ...nodeCatalog[kind] };
-  if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", assetMode: "单图模式", imageName: "当前素材" };
+  if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", dishCategory: "正餐", assetMode: "单图模式", imageName: "当前素材" };
   if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
   if (kind === "output") return { ...base, outputTarget: "5-6 道菜", outputDuration: "12-15s", outputAspect: "9:16" };
@@ -135,6 +141,58 @@ export function dataFor(kind: NodeKind): WorkflowData {
 
 export function createWorkflowNode(kind: NodeKind, id: string, position: { x: number; y: number }): WorkflowNode {
   return { id, type: "workflow", position, data: dataFor(kind) };
+}
+
+export function createPendingGeneratorClip(nodeId: string, _nodeNumber: number, dish = "待配置菜品", dishCategory: DishCategory = "正餐"): TimelineClip {
+  return {
+    id: `${nodeId}_clip`,
+    dish,
+    label: "生成任务",
+    tone: "#355e62",
+    timelineDuration: 2.5,
+    dishCategory,
+    status: "pending",
+    generatorNodeId: nodeId,
+  };
+}
+
+const fruitKeywords = ["蜜瓜", "草莓", "西瓜", "芒果", "葡萄", "蓝莓", "树莓", "樱桃", "桃", "梨", "苹果", "橙", "柚", "柠檬"];
+const dessertKeywords = ["蛋糕", "布丁", "冰淇淋", "甜点", "甜品", "慕斯", "奶油", "铜锣烧", "抹茶", "芝士"];
+
+export function inferDishCategory(dish: string): DishCategory {
+  const normalized = dish.trim().toLowerCase();
+  if (fruitKeywords.some(keyword => normalized.includes(keyword))) return "水果";
+  if (dessertKeywords.some(keyword => normalized.includes(keyword))) return "甜品";
+  return "其他";
+}
+
+export function resolveDishCategory(clip: Pick<TimelineClip, "dish" | "dishCategory">): DishCategory {
+  return clip.dishCategory && DISH_CATEGORY_OPTIONS.includes(clip.dishCategory) ? clip.dishCategory : inferDishCategory(clip.dish);
+}
+
+export function randomizeClipSelection(items: TimelineClip[], clipCount: number, random = Math.random): TimelineClip[] {
+  const available = items.filter(clip => clip.sourcePath).filter((clip, index, list) => list.findIndex(item => item.id === clip.id) === index);
+  const count = Math.max(0, Math.round(clipCount));
+  if (count === 0 || available.length === 0) return [];
+  const special = available.filter(clip => ["甜品", "水果"].includes(resolveDishCategory(clip)));
+  const ordinary = available.filter(clip => !["甜品", "水果"].includes(resolveDishCategory(clip)));
+  const shuffledOrdinary = shuffle(ordinary, random);
+  const shuffledSpecial = shuffle(special, random);
+  if (count === 1) return [shuffledSpecial[0] ?? shuffledOrdinary[0]].filter((clip): clip is TimelineClip => Boolean(clip));
+
+  const ordinaryTarget = shuffledSpecial.length ? count - 1 : count;
+  const selected = shuffledOrdinary.slice(0, Math.min(ordinaryTarget, shuffledOrdinary.length));
+  if (shuffledSpecial[0] && selected.length < count) selected.push(shuffledSpecial[0]);
+  return selected;
+}
+
+function shuffle<T>(items: T[], random: () => number): T[] {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(random() * (index + 1));
+    [next[index], next[target]] = [next[target], next[index]];
+  }
+  return next;
 }
 
 export const initialNodes: WorkflowNode[] = [

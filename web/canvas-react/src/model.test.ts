@@ -1,4 +1,4 @@
-import { connectWouldCycle, initialEdges, initialNodes, removeNodeAndEdges, reorderById, totalTimelineDuration } from "./model.ts";
+import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, randomizeClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -20,6 +20,32 @@ const timeline = [
 ];
 assert(JSON.stringify(reorderById(timeline, "c", "a").map(clip => clip.id)) === JSON.stringify(["c", "a", "b"]), "timeline order was not updated");
 assert(totalTimelineDuration(timeline) === 9, "timeline duration is incorrect");
+
+const pendingClip = createPendingGeneratorClip("clips", 1, "炙烤三文鱼");
+assert(pendingClip.id === "clips_clip" && pendingClip.generatorNodeId === "clips", "generator clip is not linked to node");
+assert(pendingClip.status === "pending" && !pendingClip.sourcePath, "generator clip should wait for a real file");
+assert(pendingClip.dishCategory === "正餐", "pending generator clip should have a default dish category");
+
+assert(inferDishCategory("蜜瓜") === "水果", "fruit fallback classification is incorrect");
+assert(inferDishCategory("抹茶布丁") === "甜品", "dessert fallback classification is incorrect");
+assert(inferDishCategory("冷食三文鱼") === "其他", "food temperature must not imply fruit classification");
+assert(resolveDishCategory({ dish: "冷食三文鱼", dishCategory: "正餐" }) === "正餐", "explicit dish category was ignored");
+
+const composePool = [
+  { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "正餐" as const },
+  { id: "main-2", dish: "天妇罗", label: "", tone: "", timelineDuration: 2, sourcePath: "main-2.mp4", dishCategory: "小吃" as const },
+  { id: "fruit-1", dish: "蜜瓜", label: "", tone: "", timelineDuration: 2, sourcePath: "fruit-1.mp4", dishCategory: "水果" as const },
+  { id: "dessert-1", dish: "布丁", label: "", tone: "", timelineDuration: 2, sourcePath: "dessert-1.mp4", dishCategory: "甜品" as const },
+];
+const randomized = randomizeClipSelection(composePool, 3, () => 0.5);
+assert(randomized.length === 3, "random composition did not fill the requested count");
+assert(randomized.filter(clip => ["甜品", "水果"].includes(resolveDishCategory(clip))).length === 1, "random composition selected multiple dessert or fruit clips");
+assert(["甜品", "水果"].includes(resolveDishCategory(randomized.at(-1)!)), "dessert or fruit clip was not placed last");
+assert(new Set(randomized.map(clip => clip.id)).size === randomized.length, "random composition duplicated a clip");
+const singleSpecial = randomizeClipSelection(composePool, 1, () => 0);
+assert(singleSpecial.length === 1 && ["甜品", "水果"].includes(resolveDishCategory(singleSpecial[0])), "single-clip composition did not prefer dessert or fruit");
+const ordinaryOnly = randomizeClipSelection(composePool.slice(0, 2), 3, () => 0);
+assert(ordinaryOnly.length === 2 && ordinaryOnly.every(clip => !["甜品", "水果"].includes(resolveDishCategory(clip))), "ordinary-only composition changed its available pool incorrectly");
 
 assert(ELEMENT_OPTIONS.length === 8, "L0 options are incomplete");
 assert(CAMERA_OPTIONS.length === 8, "camera options are incomplete");

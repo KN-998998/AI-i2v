@@ -21,6 +21,7 @@ from pipeline.config import (
     KLING_BASE_URL,
     KLING_MODEL,
     KLING_SECRET_KEY,
+    CANVAS_CLIP_ROOT,
     OUTPUT_ROOT,
     VIDEO_ASPECT,
     VIDEO_DURATION,
@@ -54,35 +55,64 @@ def _canvas_clip_dish(filename: str) -> str:
     return stem or Path(filename).stem
 
 
+def _canvas_clip_payload(clip_path: Path, source_url: str, batch_id: str | None = None) -> dict[str, Any] | None:
+    duration = _read_video_duration_seconds(clip_path)
+    if duration is None:
+        return None
+    item: dict[str, Any] = {
+        "id": f"clip_{'canvas' if batch_id is None else batch_id}_{clip_path.name}",
+        "filename": clip_path.name,
+        "dish": _canvas_clip_dish(clip_path.name),
+        "label": _clip_label(clip_path.name),
+        "tone": "#355e62",
+        "durationSeconds": round(float(duration), 2),
+        "timelineDuration": min(round(float(duration), 2), 2.5),
+        "status": "generated",
+        "sourcePath": str(clip_path.resolve()),
+        "sourceUrl": source_url,
+    }
+    if batch_id is not None:
+        item["batchId"] = batch_id
+    return item
+
+
 @router.get("/api/canvas/clips")
 def list_canvas_clips() -> list[dict[str, Any]]:
     """List existing MP4 clips so the canvas can use real local media."""
-    if not OUTPUT_ROOT.exists():
+    if not OUTPUT_ROOT.exists() and not CANVAS_CLIP_ROOT.exists():
         return []
 
     result: list[dict[str, Any]] = []
+    if CANVAS_CLIP_ROOT.is_dir():
+        for clip_path in CANVAS_CLIP_ROOT.glob("*.mp4"):
+            item = _canvas_clip_payload(
+                clip_path,
+                f"/api/canvas/clips/library/{clip_path.name}",
+            )
+            if item is not None:
+                result.append(item)
+
     for batch_dir in OUTPUT_ROOT.glob("batch_*"):
         clips_dir = batch_dir / "03_clips"
         if not clips_dir.is_dir():
             continue
         for clip_path in clips_dir.glob("*.mp4"):
-            duration = _read_video_duration_seconds(clip_path)
-            if duration is None:
-                continue
-            result.append({
-                "id": f"clip_{batch_dir.name}_{clip_path.name}",
-                "batchId": batch_dir.name,
-                "filename": clip_path.name,
-                "dish": _canvas_clip_dish(clip_path.name),
-                "label": _clip_label(clip_path.name),
-                "tone": "#355e62",
-                "durationSeconds": round(float(duration), 2),
-                "timelineDuration": min(round(float(duration), 2), 2.5),
-                "status": "generated",
-                "sourcePath": str(clip_path.resolve()),
-                "sourceUrl": f"/api/canvas/clips/{batch_dir.name}/{clip_path.name}",
-            })
+            item = _canvas_clip_payload(
+                clip_path,
+                f"/api/canvas/clips/{batch_dir.name}/{clip_path.name}",
+                batch_id=batch_dir.name,
+            )
+            if item is not None:
+                result.append(item)
     return sorted(result, key=lambda item: (item["dish"], item["filename"]))
+
+
+@router.get("/api/canvas/clips/library/{filename}")
+def serve_canvas_library_clip(filename: str) -> FileResponse:
+    clip_path = CANVAS_CLIP_ROOT / Path(filename).name
+    if clip_path.suffix.lower() != ".mp4" or not clip_path.is_file():
+        raise _json_error("视频片段不存在", 404)
+    return FileResponse(str(clip_path), media_type="video/mp4")
 
 
 @router.get("/api/canvas/clips/{batch_id}/{filename}")

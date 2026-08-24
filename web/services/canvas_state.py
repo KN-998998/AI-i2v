@@ -40,7 +40,8 @@ def load_draft(draft_id: str) -> dict[str, Any] | None:
     path = draft_file(draft_id)
     if not path.exists():
         return None
-    with path.open("r", encoding="utf-8") as stream:
+    # Windows editors may write the persisted draft with a UTF-8 BOM.
+    with path.open("r", encoding="utf-8-sig") as stream:
         payload = json.load(stream)
     if not isinstance(payload, dict) or payload.get("version") != DRAFT_VERSION:
         raise ValueError("草稿版本不受支持")

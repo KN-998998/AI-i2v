@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from pipeline.config import OUTPUT_ROOT, batch_subdirs
+from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT, batch_subdirs
 from web.services.canvas_state import draft_directory, load_draft
 
 _JOB_ID_RE = r"^[0-9a-f]{32}$"
@@ -48,9 +48,13 @@ def get_compose_job(draft_id: str, job_id: str) -> dict[str, Any] | None:
 
 
 def _find_generated_clip(dish: str) -> Path | None:
-    if not dish or not OUTPUT_ROOT.exists():
+    if not dish:
         return None
     candidates = []
+    if CANVAS_CLIP_ROOT.is_dir():
+        candidates.extend(path for path in CANVAS_CLIP_ROOT.glob("*.mp4") if dish in path.name)
+    if not OUTPUT_ROOT.exists():
+        return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
     for batch_dir in OUTPUT_ROOT.glob("batch_*"):
         clips_dir = batch_subdirs(batch_dir)["clips"]
         candidates.extend(path for path in clips_dir.glob("*.mp4") if dish in path.name)

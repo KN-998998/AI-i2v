@@ -42,7 +42,7 @@ function resolveStepNodeId(kind: ManagedNodeKind | null, nodes: WorkflowNode[], 
   return kind === "input" ? "assets" : kind === "prompt" ? "prompt" : kind === "sound" ? "sound" : "output";
 }
 
-function NodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (message: string) => void }) {
+function LegacyNodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (message: string) => void }) {
   const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === kind);
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
   const bgmName = useWorkflowStore(state => state.bgmName);
@@ -66,7 +66,61 @@ function NodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (messa
     deleteNode(node.id);
     onToast(`已删除${node.data.title}`);
   };
-  return <section className="node-manager"><div className="panel-section-head"><div><span className="panel-label">NODE CRUD</span><h2>{nodeCatalog[kind].title} · {nodes.length} 个节点</h2></div><button type="button" className="btn btn-primary" onClick={add}>＋ 新增节点</button></div><div className="node-record-grid">{nodes.map((node, index) => { const selected = selectedNodeId === node.id; const protectedNode = ["assets", "prompt", "clips", "output", "sound"].includes(node.id); return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}><div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div><div className="node-record-body">{node.data.kind === "input" && <><span>菜品：{node.data.dishName || "未设置"}</span><span>素材：{node.data.imageName || "未上传"}</span></>}{node.data.kind === "prompt" && <><span>L0：{node.data.promptL0?.length ?? 0} 个画面元素</span><span>运动：{node.data.promptMotion || "未设置"}</span></>}{node.data.kind === "generator" && <><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></>}{node.data.kind === "output" && <><span>目标：{node.data.outputTarget || "未设置"}</span><span>画幅：{node.data.outputAspect || "9:16"}</span></>}{node.data.kind === "sound" && <><span>BGM：{bgmName || "未上传"}</span><span>文字：{node.data.overlayMain || "未设置"}</span></>}</div><div className="node-record-actions"><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div></article>; })}</div></section>;
+  return <section className="node-manager"><div className="panel-section-head"><div><span className="panel-label">GENERATION NODES</span><h2>{nodeCatalog[kind].title} · {nodes.length} 个生成节点</h2><p className="muted">每个生成节点对应一个片段输出槽位，可在画布或这里编辑。</p></div><button type="button" className="btn btn-primary" onClick={add}>＋ 新增生成节点</button></div><div className="node-record-grid">{nodes.map((node, index) => { const selected = selectedNodeId === node.id; const protectedNode = ["assets", "prompt", "clips", "output", "sound"].includes(node.id); return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}><div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div><div className="node-record-body">{node.data.kind === "input" && <><span>菜品：{node.data.dishName || "未设置"}</span><span>素材：{node.data.imageName || "未上传"}</span></>}{node.data.kind === "prompt" && <><span>L0：{node.data.promptL0?.length ?? 0} 个画面元素</span><span>运动：{node.data.promptMotion || "未设置"}</span></>}{node.data.kind === "generator" && <><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></>}{node.data.kind === "output" && <><span>目标：{node.data.outputTarget || "未设置"}</span><span>画幅：{node.data.outputAspect || "9:16"}</span></>}{node.data.kind === "sound" && <><span>BGM：{bgmName || "未上传"}</span><span>文字：{node.data.overlayMain || "未设置"}</span></>}</div><div className="node-record-actions"><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div></article>; })}</div></section>;
+}
+
+function NodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (message: string) => void }) {
+  return kind === "generator"
+    ? <GeneratorNodeManager onToast={onToast} />
+    : <LegacyNodeManager kind={kind} onToast={onToast} />;
+}
+
+function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void }) {
+  const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === "generator");
+  const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
+  const setSelection = useWorkflowStore(state => state.setSelection);
+  const addNode = useWorkflowStore(state => state.addNode);
+  const deleteNode = useWorkflowStore(state => state.deleteNode);
+  const duplicateNode = useWorkflowStore(state => state.duplicateNode);
+  const registerGeneratorClip = useWorkflowStore(state => state.registerGeneratorClip);
+  const updateNodeData = useWorkflowStore(state => state.updateNodeData);
+
+  const add = () => {
+    addNode("generator");
+    onToast("已新增生成视频片段节点，请编辑后点击生成片段");
+  };
+  const duplicate = (node: WorkflowNode) => {
+    duplicateNode(node.id);
+    onToast(`已复制${node.data.title}，请重新点击生成片段`);
+  };
+  const remove = (node: WorkflowNode) => {
+    if (["assets", "prompt", "clips", "output", "sound"].includes(node.id)) {
+      onToast("流程核心节点不能删除");
+      return;
+    }
+    deleteNode(node.id);
+    onToast(`已删除${node.data.title}`);
+  };
+  const generate = (node: WorkflowNode) => {
+    setSelection(node.id);
+    registerGeneratorClip(node.id);
+    updateNodeData(node.id, { status: "已进行生成" });
+    onToast(`已进行生成：${node.data.title}`);
+  };
+
+  return <section className="node-manager">
+    <div className="panel-section-head"><div><span className="panel-label">GENERATION NODES</span><h2>{nodeCatalog.generator.title} · {nodes.length} 个生成节点</h2><p className="muted">每个生成节点对应一个片段输出槽位。请先编辑节点，再点击对应卡片的生成按钮。</p></div><button type="button" className="btn btn-primary" onClick={add}>＋ 新增生成节点</button></div>
+    <div className="node-record-grid">{nodes.map((node, index) => {
+      const selected = selectedNodeId === node.id;
+      const protectedNode = ["assets", "prompt", "clips", "output", "sound"].includes(node.id);
+      const generated = node.data.status !== nodeCatalog.generator.status;
+      return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}>
+        <div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div>
+        <div className="node-record-body"><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></div>
+        <div className="node-record-actions"><button type="button" className={`btn ${generated ? "" : "btn-primary"}`} onClick={event => { event.stopPropagation(); generate(node); }}>{generated ? "再次生成" : "生成片段"}</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div>
+      </article>;
+    })}</div>
+  </section>;
 }
 
 function StepSummary({ route, nodeId }: { route: WorkflowRoute; nodeId: string | null }) {
@@ -105,6 +159,9 @@ export function GeneratorPage({ onToast }: StepPageProps) {
   const setSelection = useWorkflowStore(state => state.setSelection);
   const [busy, setBusy] = useState(false);
   const nodeId = resolveStepNodeId("generator", nodes, selectedNodeId);
+  const generatorCount = nodes.filter(node => node.data.kind === "generator").length;
+  const readyClipCount = timeline.filter(clip => Boolean(clip.sourcePath)).length;
+  const pendingClipCount = timeline.length - readyClipCount;
   useEffect(() => setSelection(nodeId), [nodeId, setSelection]);
 
   const refresh = async () => {
@@ -120,8 +177,8 @@ export function GeneratorPage({ onToast }: StepPageProps) {
   };
 
   const syncTime = clipsLastLoadedAt ? new Date(clipsLastLoadedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "尚未扫描";
-  return <StepFrame route="/workflow/generator" title="生成视频片段" description="每个候选片段独立生成，生成后作为多个输入流向成片合成页面。" onToast={onToast}>
-    <div className="step-page-grid"><div className="step-page-main"><NodeManager kind="generator" onToast={onToast} /><div className="step-panel"><div className="panel-section-head"><div><span className="panel-label">CLIP INPUTS</span><h2>{timeline.length} 个片段输入</h2></div><div className="panel-actions"><span className="muted">3s · 1080p · 9:16 · 无声</span><button type="button" className="btn" disabled={busy} onClick={refresh}>{busy ? "刷新中..." : "刷新本地片段"}</button></div></div><div className="clip-input-grid">{timeline.map((clip, index) => <article className="clip-input-card" key={clip.id}><div className="clip-index">{String(index + 1).padStart(2, "0")}</div>{clip.sourceUrl ? <video className="clip-thumb" controls preload="metadata" src={clip.sourceUrl} /> : null}<div className="clip-input-copy"><strong>{clip.dish}</strong><span>{clip.label} · {clip.timelineDuration.toFixed(1)}s</span><small className={clip.sourcePath ? "source-ready" : "source-pending"}>{clip.sourcePath ? `已关联真实文件：${clip.filename || "MP4"}` : "待生成或关联真实文件"}</small></div></article>)}</div><div className="step-callout">这里展示的是本机输出目录中的真实 MP4。Kling 生成任务仍由现有批处理流程负责；刷新后新片段会进入“成片合成”，在那里选择、排序并合成。</div><button type="button" className="btn" onClick={() => navigate("/workflow/compose")}>进入成片合成</button><div className="clip-library-status"><span className="muted">当前发现 {availableClips.length} 个本地片段 · 自动检查每 30 秒 · 最近扫描 {syncTime}</span>{clipsLoadError && <span className="clip-sync-error">扫描失败：{clipsLoadError}</span>}</div></div></div><Inspector onToast={onToast} /></div>
+  return <StepFrame route="/workflow/generator" title="生成视频片段" description="先管理生成节点，再查看每个节点对应的片段结果。只有已经关联真实 MP4 的片段，才能进入成片合成。" onToast={onToast}>
+    <div className="step-page-grid"><div className="step-page-main"><section className="generator-status-strip"><div><span className="panel-label">CURRENT STATUS</span><strong>{generatorCount} 个生成节点</strong></div><div><span className="panel-label">READY CLIPS</span><strong className="source-ready">{readyClipCount} 个可合成</strong></div><div><span className="panel-label">PENDING TASKS</span><strong className={pendingClipCount ? "source-pending" : "source-ready"}>{pendingClipCount} 个待关联</strong></div></section><NodeManager kind="generator" onToast={onToast} /><div className="step-panel"><div className="panel-section-head"><div><span className="panel-label">CLIP RESULTS</span><h2>候选片段 · {timeline.length} 个</h2><p className="muted">绿色表示本地已有 MP4；黄色表示只有生成任务记录，还不能合成。</p></div><div className="panel-actions"><span className="muted">3s · 1080p · 9:16 · 无声</span><button type="button" className="btn" disabled={busy} onClick={refresh}>{busy ? "刷新中..." : "扫描本地 MP4"}</button></div></div><div className="clip-input-grid">{timeline.map((clip, index) => <article className={`clip-input-card ${clip.sourcePath ? "clip-ready" : "clip-pending"}`} key={clip.id}><div className="clip-index">{String(index + 1).padStart(2, "0")}</div>{clip.sourceUrl ? <video className="clip-thumb" controls preload="metadata" src={clip.sourceUrl} /> : <div className="clip-thumb clip-thumb-placeholder">待下载</div>}<div className="clip-input-copy"><strong>{clip.dish}</strong><span>{clip.label} · {clip.timelineDuration.toFixed(1)}s</span><small className={clip.sourcePath ? "source-ready" : "source-pending"}>{clip.sourcePath ? `已关联真实文件：${clip.filename || "MP4"}` : "已记录生成任务，等待真实 MP4"}</small></div><span className={`clip-result-badge ${clip.sourcePath ? "ready" : "pending"}`}>{clip.sourcePath ? "可合成" : "待下载"}</span></article>)}</div><div className="step-callout"><strong>这里怎么判断？</strong><span>“待下载”只代表任务记录已经保存，视频文件还没有进入本地片段库。刷新只会扫描已经下载到本地的 MP4，不会替代 Kling 生成、轮询和下载。</span></div><button type="button" className="btn btn-primary" onClick={() => navigate("/workflow/compose")}>进入成片合成</button><div className="clip-library-status"><span className="muted">本地片段库发现 {availableClips.length} 个 MP4 · 自动扫描每 30 秒 · 最近扫描 {syncTime}</span>{clipsLoadError && <span className="clip-sync-error">扫描失败：{clipsLoadError}</span>}</div></div></div><Inspector onToast={onToast} /></div>
   </StepFrame>;
 }
 

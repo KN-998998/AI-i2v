@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { nodeCatalog, type NodeKind, type WorkflowData, type WorkflowNode } from "../model";
+import { DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, type NodeKind, type WorkflowData, type WorkflowNode } from "../model";
 import { uploadDraftFile } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
@@ -20,6 +20,7 @@ function AssetFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const draftId = useWorkflowStore(state => state.draftId);
   const data = node.data;
+  const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
   useEffect(() => () => {
     if (data.imagePreview?.startsWith("blob:")) URL.revokeObjectURL(data.imagePreview);
   }, [data.imagePreview]);
@@ -27,6 +28,7 @@ function AssetFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
     <SectionTitle>素材与菜品</SectionTitle>
     <Field label="当前菜品"><input className="input" value={formatNodeValue(data.dishName, "")} onChange={event => updateNodeData(node.id, { dishName: event.target.value })} /></Field>
     <Field label="菜品类型"><Select value={formatNodeValue(data.foodType, "热食")} options={["冷食", "热食"]} onChange={value => updateNodeData(node.id, { foodType: value })} /></Field>
+    <Field label="菜品分类"><Select value={dishCategory} options={[...DISH_CATEGORY_OPTIONS]} onChange={value => updateNodeData(node.id, { dishCategory: value as typeof DISH_CATEGORY_OPTIONS[number] })} /></Field>
     <Field label="素材模式"><Select value={formatNodeValue(data.assetMode, "单图模式")} options={["单图模式", "首尾帧模式"]} onChange={value => updateNodeData(node.id, { assetMode: value })} /></Field>
     <Field label="首帧 / 菜品图片"><input className="input" type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (!file) return; const localUrl = URL.createObjectURL(file); updateNodeData(node.id, { imageName: file.name, imagePreview: localUrl }); uploadDraftFile(draftId, file, "image").then(result => { URL.revokeObjectURL(localUrl); updateNodeData(node.id, { imagePreview: result.url }); onToast("图片已上传并持久化"); }).catch(() => { URL.revokeObjectURL(localUrl); updateNodeData(node.id, { imagePreview: undefined }); onToast("图片上传失败"); }); }} /></Field>
   </>;

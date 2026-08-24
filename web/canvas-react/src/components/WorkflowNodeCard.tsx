@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { nodeCatalog, type Panel, type WorkflowNode } from "../model";
+import { inferDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
 import { assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
+import { navigate } from "../router";
 import { ActionButton, Footer, formatNodeValue, Row, Tag } from "./ui";
 
 export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>) {
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
+  const registerGeneratorClip = useWorkflowStore(state => state.registerGeneratorClip);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const bgmName = useWorkflowStore(state => state.bgmName);
@@ -15,6 +17,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const kind = data.kind;
   const promptResult = kind === "prompt" ? assemblePrompt(promptConfigFromData(data)) : null;
   const promptConfig = kind === "prompt" ? promptConfigFromData(data) : null;
+  const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
 
   useEffect(() => () => {
     if (generationTimer.current !== null) window.clearTimeout(generationTimer.current);
@@ -28,11 +31,12 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const generate = () => {
     if (generationTimer.current !== null) window.clearTimeout(generationTimer.current);
     setGenerating(true);
+    registerGeneratorClip(id);
     updateNodeData(id, { status: "生成中" });
     generationTimer.current = window.setTimeout(() => {
       generationTimer.current = null;
       setGenerating(false);
-      updateNodeData(id, { status: "已生成" });
+      updateNodeData(id, { status: "待关联真实文件" });
     }, 900);
   };
 
@@ -41,7 +45,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <div className="dish-preview"><div className="dish-image-fallback">{data.imagePreview ? <img src={data.imagePreview} alt={formatNodeValue(data.dishName, "菜品素材")} /> : "素材"}</div></div>
       <Row label="当前菜品" value={formatNodeValue(data.dishName, "未选择菜品")} />
       <Row label="首帧 / 尾帧" value={`${formatNodeValue(data.imageName, "未上传")} / 可选`} />
-      <div className="tag-list"><Tag good>{formatNodeValue(data.foodType, "待确认")}</Tag><Tag>{formatNodeValue(data.assetMode, "单图模式")}</Tag></div>
+      <div className="tag-list"><Tag good>{formatNodeValue(data.foodType, "待确认")}</Tag><Tag>{dishCategory}</Tag><Tag>{formatNodeValue(data.assetMode, "单图模式")}</Tag></div>
       <Footer><ActionButton onClick={() => action()}>编辑素材</ActionButton></Footer>
     </>,
     prompt: <>
@@ -59,7 +63,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
     output: <>
       <Row label="目标" value={formatNodeValue(data.outputTarget, "5-6 道菜")} />
       <Row label="时长 / 画幅" value={`${formatNodeValue(data.outputDuration, "12-15s")} / ${formatNodeValue(data.outputAspect, "9:16")}`} />
-      <Footer><ActionButton primary onClick={() => action()}>进入合成</ActionButton></Footer>
+      <Footer><ActionButton primary onClick={() => { setSelection(id); navigate("/workflow/compose"); }}>进入合成</ActionButton></Footer>
     </>,
     sound: <>
       <Row label="BGM" value={bgmName} />
