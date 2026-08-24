@@ -44,8 +44,12 @@ export async function uploadDraftFile(draftId: string, file: File, kind: "image"
   return parseResponse<{ url: string; original_name: string; stored_name: string; size: number }>(response);
 }
 
-export async function startCanvasCompose(draftId: string): Promise<ComposeJob> {
-  const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/compose`, { method: "POST" });
+export async function startCanvasCompose(draftId: string, workspaceId?: string): Promise<ComposeJob> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/compose`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(workspaceId ? { workspace_id: workspaceId } : {}),
+  });
   return parseResponse<ComposeJob>(response);
 }
 

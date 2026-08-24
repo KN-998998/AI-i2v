@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { nodeCatalog, type Panel, type WorkflowNode } from "../model";
+import { assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { ActionButton, Footer, formatNodeValue, Row, Tag } from "./ui";
 
@@ -12,6 +13,8 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const [generating, setGenerating] = useState(false);
   const generationTimer = useRef<number | null>(null);
   const kind = data.kind;
+  const promptResult = kind === "prompt" ? assemblePrompt(promptConfigFromData(data)) : null;
+  const promptConfig = kind === "prompt" ? promptConfigFromData(data) : null;
 
   useEffect(() => () => {
     if (generationTimer.current !== null) window.clearTimeout(generationTimer.current);
@@ -42,10 +45,10 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <Footer><ActionButton onClick={() => action()}>编辑素材</ActionButton></Footer>
     </>,
     prompt: <>
-      <Row label="L0 画面元素" value={`${data.promptL0?.length ?? 0} / 8 项`} />
-      <Row label="L1 主运动" value={formatNodeValue(data.promptL1)} />
-      <Row label="L2 次级动态" value={formatNodeValue(data.promptL2Type1)} />
-      <div className="tag-list"><Tag good>校验通过</Tag><Tag warn>W1 液体风险</Tag></div>
+      <Row label="L0 画面元素" value={`${promptConfig?.elements.length ?? 0} / 8 项`} />
+      <Row label="L1 主运动" value={promptConfig?.l1_subject === "none" ? "无（纯运镜）" : ELEMENT_OPTIONS.find(item => item.id === promptConfig?.l1_subject)?.label ?? "待配置"} />
+      <Row label="L2 次级动态" value={`${promptConfig?.l2_dynamics.length ?? 0} / 2 项`} />
+      <div className="tag-list"><Tag good={!promptResult?.blocked} warn={Boolean(promptResult?.blocked)}>{promptResult?.blocked ? `阻断 ${promptResult.errors[0]?.code ?? ""}` : "校验通过"}</Tag>{promptResult?.warnings.slice(0, 1).map(warning => <Tag warn key={warning.code}>{warning.code}</Tag>)}</div>
       <Footer><ActionButton onClick={() => action("prompt")}>编辑槽位</ActionButton><ActionButton primary onClick={() => updateNodeData(id, { status: "已装配" })}>实时装配</ActionButton></Footer>
     </>,
     generator: <>

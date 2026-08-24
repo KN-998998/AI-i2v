@@ -133,9 +133,9 @@ def get_canvas_file(draft_id: str, stored_name: str) -> FileResponse:
 
 
 @router.post("/api/canvas/drafts/{draft_id}/compose")
-def compose_canvas_draft(draft_id: str) -> dict[str, Any]:
+def compose_canvas_draft(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
-        return start_compose(draft_id)
+        return start_compose(draft_id, workspace_id=(payload or {}).get("workspace_id"))
     except ValueError as exc:
         raise _json_error(str(exc), 400) from exc
 

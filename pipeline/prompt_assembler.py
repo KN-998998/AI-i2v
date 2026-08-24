@@ -249,8 +249,8 @@ def _validate_target(t: str) -> bool:
     if not (1 <= len(t) <= 8):
         return False
     for ch in t:
-        if not (ch.isalnum() or ch.isascii()):
-            return False   # 拒绝标点/全角符号
+        if not ch.isalnum():
+            return False   # 允许中文名词，拒绝空格、标点和符号
     for w in ("若", "如果", "则", "当", "存在", "或者", "否则", "不", "无", "没有", "禁止"):
         if w in t:
             return False

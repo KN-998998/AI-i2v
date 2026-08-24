@@ -88,11 +88,12 @@ def _prepare_sources(draft_id: str, timeline: list[dict[str, Any]]) -> list[tupl
     return prepared
 
 
-def start_compose(draft_id: str) -> dict[str, Any]:
+def start_compose(draft_id: str, workspace_id: str | None = None) -> dict[str, Any]:
     draft = load_draft(draft_id)
     if draft is None:
         raise ValueError("画布草稿不存在，请先保存草稿")
-    timeline = draft.get("timeline") or []
+    workspace = next((item for item in draft.get("composeWorkspaces", []) if item.get("id") == workspace_id), None) if workspace_id else None
+    timeline = (workspace or {}).get("clips") if workspace is not None else draft.get("timeline") or []
     prepared = _prepare_sources(draft_id, timeline)
     job_id = uuid.uuid4().hex
     job = {
@@ -104,6 +105,7 @@ def start_compose(draft_id: str) -> dict[str, Any]:
         "updated_at": _now(),
         "output_url": None,
         "error": None,
+        "workspace_id": workspace_id,
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)

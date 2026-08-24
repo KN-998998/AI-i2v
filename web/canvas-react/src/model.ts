@@ -1,4 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
+import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type ActionVerb, type PromptConfig } from "./promptAssembler.ts";
 
 export type NodeKind = "input" | "prompt" | "generator" | "output" | "sound" | "custom";
 export type Panel = "prompt" | "voice" | "overlay";
@@ -26,6 +27,13 @@ export type WorkflowData = {
   promptL2Target1?: string;
   promptL2Type2?: string;
   promptL2Target2?: string;
+  promptL1ActionLevel?: 1 | 2 | 3 | null;
+  promptL1ActionVerb?: ActionVerb | null;
+  promptSpeedCurve?: "uniform" | "ease_in" | "ease_out" | null;
+  promptSeamlessLoop?: boolean;
+  promptEndImageName?: string;
+  promptEndImagePreview?: string;
+  promptConfig?: PromptConfig;
   outputTarget?: string;
   outputDuration?: string;
   outputAspect?: string;
@@ -45,6 +53,10 @@ export type DraftPayload = {
   nodes: WorkflowNode[];
   edges: Edge[];
   timeline: TimelineClip[];
+  candidateClips?: TimelineClip[];
+  composeBatchCount?: number;
+  composeClipCount?: number;
+  composeWorkspaces?: ComposeWorkspace[];
   bgmName: string;
   bgmUrl: string;
   composeJob?: ComposeJob | null;
@@ -57,6 +69,14 @@ export type ComposeJob = {
   timeline_count: number;
   output_url: string | null;
   error: string | null;
+  workspace_id?: string;
+};
+
+export type ComposeWorkspace = {
+  id: string;
+  title: string;
+  clips: TimelineClip[];
+  job: ComposeJob | null;
 };
 
 export type WorkflowNode = Node<WorkflowData, "workflow">;
@@ -72,6 +92,7 @@ export type TimelineClip = {
   sourceUrl?: string;
   batchId?: string;
   filename?: string;
+  generatorNodeId?: string;
 };
 
 export type ClipLibraryItem = TimelineClip & {
@@ -93,7 +114,7 @@ export const nodeCatalog: Record<NodeKind, NodeCatalogItem> = {
   custom: { kicker: "PROCESS", title: "自定义处理", status: "待配置", description: "可扩展的工作流处理节点。" },
 };
 
-export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜/装饰", "餐具器皿", "桌面/台面", "手部", "厨师上半身", "背景陈设"];
+export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜／装饰", "餐具器皿", "桌面／台面", "手部", "厨师上半身", "背景陈设"];
 
 export const clips: TimelineClip[] = [
   { id: "clip_salmon_01", dish: "炙烤三文鱼", label: "平稳推进", tone: "#355e62", timelineDuration: 2.5 },
@@ -105,7 +126,7 @@ export const clips: TimelineClip[] = [
 export function dataFor(kind: NodeKind): WorkflowData {
   const base = { kind, ...nodeCatalog[kind] };
   if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", assetMode: "单图模式", imageName: "当前素材" };
-  if (kind === "prompt") return { ...base, promptMode: "单图模式", promptL0: ["菜品主体·热食", "配菜/装饰", "餐具器皿", "桌面/台面", "背景陈设"], promptMotion: "小角度顺时针环绕", promptAmplitude: "极轻微（约 8%）", promptL1: "菜品主体·热食", promptL2Type1: "高光滑移", promptL2Target1: "菜品", promptL2Type2: "（无）", promptL2Target2: "菜品" };
+  if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
   if (kind === "output") return { ...base, outputTarget: "5-6 道菜", outputDuration: "12-15s", outputAspect: "9:16" };
   if (kind === "sound") return { ...base, voiceText: "本周到店即可领取限定优惠，欢迎来店品尝。", voiceName: "女声 · 温暖自然", voiceVolume: "85", overlayMain: "本周限定优惠", overlayCta: "到店即享 · 现在预订", overlayPosition: "底部安全区", overlayStart: "0.0s", overlayEnd: "2.5s" };

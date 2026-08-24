@@ -13,5 +13,5 @@ function PipelineItem({ item, active }: { item: typeof workflowRoutes[number]; a
     if (item.path === "/workflow/compose" || item.path === "/workflow/output") setSelection("output");
     navigate(item.path);
   };
-  return <button type="button" className={`pipeline-item ${active ? "active" : ""}`} onClick={selectStage}><span className="step-index">{item.step}</span><span>{item.label}<small>{item.path === "/workflow/compose" ? "接收多个片段" : item.path === "/workflow/timeline" ? "拖拽调整顺序" : "独立操作页面"}</small></span></button>;
+  return <button type="button" className={`pipeline-item ${active ? "active" : ""}`} onClick={selectStage}><span className="step-index">{item.step}</span><span>{item.label}<small>{item.path === "/workflow/compose" ? "选片、排序并合成" : "独立操作页面"}</small></span></button>;
 }

@@ -41,6 +41,13 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
         "nodes": [{"id": "assets", "type": "workflow", "position": {"x": 10, "y": 20}, "data": {"kind": "input"}}],
         "edges": [],
         "timeline": [],
+        "candidateClips": [],
+        "composeBatchCount": 2,
+        "composeClipCount": 3,
+        "composeWorkspaces": [
+            {"id": "compose_1", "title": "成片 1", "clips": [], "job": None},
+            {"id": "compose_2", "title": "成片 2", "clips": [], "job": None},
+        ],
         "bgmName": "默认 BGM",
         "bgmUrl": "",
     }
@@ -50,6 +57,8 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
     assert saved.status_code == 200
     assert saved.json()["version"] == 1
     assert client.get("/api/canvas/drafts/default").json()["nextNodeNumber"] == 3
+    assert client.get("/api/canvas/drafts/default").json()["composeBatchCount"] == 2
+    assert len(client.get("/api/canvas/drafts/default").json()["composeWorkspaces"]) == 2
 
     uploaded = client.post(
         "/api/canvas/drafts/default/files",
@@ -97,3 +106,20 @@ def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):
     assert item["dish"] == "天妇罗"
     assert item["timelineDuration"] == 2.5
     assert client.get(item["sourceUrl"]).content == b"fake-mp4"
+
+
+def test_canvas_compose_accepts_workspace_id(monkeypatch):
+    captured = {}
+
+    def fake_start(draft_id, workspace_id=None):
+        captured["draft_id"] = draft_id
+        captured["workspace_id"] = workspace_id
+        return {"job_id": "a" * 32, "status": "running", "timeline_count": 2, "output_url": None, "error": None}
+
+    monkeypatch.setattr(api_routes, "start_compose", fake_start)
+    response = TestClient(create_app()).post(
+        "/api/canvas/drafts/default/compose",
+        json={"workspace_id": "compose_2"},
+    )
+    assert response.status_code == 200
+    assert captured == {"draft_id": "default", "workspace_id": "compose_2"}

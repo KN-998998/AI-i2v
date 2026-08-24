@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { clips, nodeCatalog, totalTimelineDuration, type ComposeJob, type NodeKind, type TimelineClip, type WorkflowNode } from "../model";
-import { getCanvasComposeStatus, startCanvasCompose } from "../api";
+import { nodeCatalog, totalTimelineDuration, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
@@ -95,10 +94,12 @@ function StepNext({ route }: { route: WorkflowRoute }) {
 }
 
 export function GeneratorPage({ onToast }: StepPageProps) {
-  const timeline = useWorkflowStore(state => state.timeline);
+  const timeline = useWorkflowStore(state => state.candidateClips);
   const nodes = useWorkflowStore(state => state.nodes);
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
   const availableClips = useWorkflowStore(state => state.availableClips);
+  const clipsLastLoadedAt = useWorkflowStore(state => state.clipsLastLoadedAt);
+  const clipsLoadError = useWorkflowStore(state => state.clipsLoadError);
   const loadClipLibrary = useWorkflowStore(state => state.loadClipLibrary);
   const updateTimelineClip = useWorkflowStore(state => state.updateTimelineClip);
   const setSelection = useWorkflowStore(state => state.setSelection);
@@ -118,50 +119,9 @@ export function GeneratorPage({ onToast }: StepPageProps) {
     }
   };
 
-  return <StepFrame route="/workflow/generator" title="生成视频片段" description="每个时间线片段独立生成，生成后作为多个输入流向排序和合成页面。" onToast={onToast}>
-    <div className="step-page-grid"><div className="step-page-main"><NodeManager kind="generator" onToast={onToast} /><div className="step-panel"><div className="panel-section-head"><div><span className="panel-label">CLIP INPUTS</span><h2>{timeline.length} 个片段输入</h2></div><div className="panel-actions"><span className="muted">3s · 1080p · 9:16 · 无声</span><button type="button" className="btn" disabled={busy} onClick={refresh}>{busy ? "刷新中..." : "刷新本地片段"}</button></div></div><div className="clip-input-grid">{timeline.map((clip, index) => <article className="clip-input-card" key={clip.id}><div className="clip-index">{String(index + 1).padStart(2, "0")}</div>{clip.sourceUrl ? <video className="clip-thumb" controls preload="metadata" src={clip.sourceUrl} /> : null}<div className="clip-input-copy"><strong>{clip.dish}</strong><span>{clip.label} · {clip.timelineDuration.toFixed(1)}s</span><small className={clip.sourcePath ? "source-ready" : "source-pending"}>{clip.sourcePath ? `已关联真实文件：${clip.filename || "MP4"}` : "待生成或关联真实文件"}</small></div></article>)}</div><div className="step-callout">这里展示的是本机输出目录中的真实 MP4。Kling 生成任务仍由现有批处理流程负责；刷新后新片段会进入“片段排序”，不会把演示状态当成真实生成结果。</div><button type="button" className="btn" onClick={() => navigate("/workflow/timeline")}>进入片段排序</button><div className="muted clip-library-count">当前发现 {availableClips.length} 个本地片段</div></div></div><Inspector onToast={onToast} /></div>
-  </StepFrame>;
-}
-
-export function TimelinePage({ onToast }: StepPageProps) {
-  const timeline = useWorkflowStore(state => state.timeline);
-  const reorderTimeline = useWorkflowStore(state => state.reorderTimeline);
-  const removeTimelineClip = useWorkflowStore(state => state.removeTimelineClip);
-  const toggleClip = useWorkflowStore(state => state.toggleClip);
-  const availableClips = useWorkflowStore(state => state.availableClips);
-  const [dragging, setDragging] = useState<string | null>(null);
-  return <StepFrame route="/workflow/timeline" title="片段排序" description="选择要进入成片的片段，并通过拖拽确定最终展示顺序。" onToast={onToast}>
-    <div className="step-panel"><div className="panel-section-head"><div><span className="panel-label">SELECTED CLIPS</span><h2>{timeline.length} 个片段 · {totalTimelineDuration(timeline).toFixed(1)}s</h2></div><button type="button" className="btn btn-primary" onClick={() => navigate("/workflow/compose")}>进入成片合成</button></div><div className="ordered-clip-list">{timeline.map((clip, index) => <div className="ordered-clip" key={clip.id} draggable onDragStart={() => setDragging(clip.id)} onDragOver={event => event.preventDefault()} onDrop={() => { if (dragging) reorderTimeline(dragging, clip.id); setDragging(null); }}><span className="drag-handle">⠿</span><span className="order-number">{index + 1}</span>{clip.sourceUrl ? <video className="clip-list-thumb" preload="metadata" src={clip.sourceUrl} /> : null}<div><strong>{clip.dish}</strong><small>{clip.label} · {clip.timelineDuration.toFixed(1)}s · {clip.sourcePath ? "已关联真实文件" : "等待真实文件"}</small></div><button type="button" className="clip-remove" aria-label={`移除${clip.dish}`} onClick={() => removeTimelineClip(clip.id)}>×</button></div>)}</div><div className="clip-pool-page"><h3>可选视频片段</h3><div className="pool-grid">{(availableClips.length ? availableClips : clips).map(clip => { const selected = timeline.some(item => item.id === clip.id); return <button type="button" key={clip.id} className={`pool-card ${selected ? "selected" : ""}`} onClick={() => toggleClip(clip.id)}><span>{clip.dish} · {clip.label}</span><small>{selected ? "已加入时间线" : `${clip.timelineDuration}s · 点击加入时间线`}</small></button>; })}</div></div></div>
-  </StepFrame>;
-}
-
-export function ComposePage({ onToast }: StepPageProps) {
-  const draftId = useWorkflowStore(state => state.draftId);
-  const timeline = useWorkflowStore(state => state.timeline);
-  const reorderTimeline = useWorkflowStore(state => state.reorderTimeline);
-  const composeJob = useWorkflowStore(state => state.composeJob);
-  const setComposeJob = useWorkflowStore(state => state.setComposeJob);
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [composing, setComposing] = useState(false);
-  const compose = async () => {
-    setComposing(true);
-    try {
-      let job = await startCanvasCompose(draftId);
-      setComposeJob(job);
-      while (job.status === "running") {
-        await new Promise(resolve => window.setTimeout(resolve, 800));
-        job = await getCanvasComposeStatus(draftId, job.job_id);
-        setComposeJob(job);
-      }
-      onToast(job.status === "done" ? "无声成片已生成" : `合成失败：${job.error || "未知错误"}`);
-    } catch (error) {
-      onToast(`合成失败：${error instanceof Error ? error.message : "未知错误"}`);
-    } finally {
-      setComposing(false);
-    }
-  };
-  return <StepFrame route="/workflow/compose" title="成片合成" description="这里接收多个已排序的视频片段，统一裁切、拼接并生成无声成片。" onToast={onToast}>
-    <div className="compose-page-grid"><div className="step-panel"><div className="panel-section-head"><div><span className="panel-label">MULTI-CLIP INPUT</span><h2>{timeline.length} 个片段输入</h2></div><span className="muted">顺序即最终展示顺序</span></div><div className="ordered-clip-list">{timeline.map((clip, index) => <div className="ordered-clip" key={clip.id} draggable onDragStart={() => setDragging(clip.id)} onDragOver={event => event.preventDefault()} onDrop={() => { if (dragging) reorderTimeline(dragging, clip.id); setDragging(null); }}><span className="drag-handle">⠿</span><span className="order-number">{index + 1}</span>{clip.sourceUrl ? <video className="clip-list-thumb" preload="metadata" src={clip.sourceUrl} /> : null}<div><strong>{clip.dish}</strong><small>{clip.label} · {clip.timelineDuration.toFixed(1)}s</small></div><span className={`source-status ${clip.sourcePath ? "ready" : "pending"}`}>{clip.sourcePath ? "已关联真实文件" : "待关联文件"}</span></div>)}</div><div className="compose-actions"><button type="button" className="btn btn-primary" disabled={composing || timeline.length === 0 || timeline.some(clip => !clip.sourcePath)} onClick={compose}>{composing ? "合成中..." : "开始合成无声成片"}</button><button type="button" className="btn" onClick={() => navigate("/workflow/sound")}>合成后配置声音文字</button></div>{timeline.some(clip => !clip.sourcePath) ? <div className="step-callout">仍有片段没有关联真实 MP4，请先到“生成片段”刷新本地片段，或从“片段排序”加入已有片段。</div> : null}</div><ComposeResult job={composeJob} /></div>
+  const syncTime = clipsLastLoadedAt ? new Date(clipsLastLoadedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "尚未扫描";
+  return <StepFrame route="/workflow/generator" title="生成视频片段" description="每个候选片段独立生成，生成后作为多个输入流向成片合成页面。" onToast={onToast}>
+    <div className="step-page-grid"><div className="step-page-main"><NodeManager kind="generator" onToast={onToast} /><div className="step-panel"><div className="panel-section-head"><div><span className="panel-label">CLIP INPUTS</span><h2>{timeline.length} 个片段输入</h2></div><div className="panel-actions"><span className="muted">3s · 1080p · 9:16 · 无声</span><button type="button" className="btn" disabled={busy} onClick={refresh}>{busy ? "刷新中..." : "刷新本地片段"}</button></div></div><div className="clip-input-grid">{timeline.map((clip, index) => <article className="clip-input-card" key={clip.id}><div className="clip-index">{String(index + 1).padStart(2, "0")}</div>{clip.sourceUrl ? <video className="clip-thumb" controls preload="metadata" src={clip.sourceUrl} /> : null}<div className="clip-input-copy"><strong>{clip.dish}</strong><span>{clip.label} · {clip.timelineDuration.toFixed(1)}s</span><small className={clip.sourcePath ? "source-ready" : "source-pending"}>{clip.sourcePath ? `已关联真实文件：${clip.filename || "MP4"}` : "待生成或关联真实文件"}</small></div></article>)}</div><div className="step-callout">这里展示的是本机输出目录中的真实 MP4。Kling 生成任务仍由现有批处理流程负责；刷新后新片段会进入“成片合成”，在那里选择、排序并合成。</div><button type="button" className="btn" onClick={() => navigate("/workflow/compose")}>进入成片合成</button><div className="clip-library-status"><span className="muted">当前发现 {availableClips.length} 个本地片段 · 自动检查每 30 秒 · 最近扫描 {syncTime}</span>{clipsLoadError && <span className="clip-sync-error">扫描失败：{clipsLoadError}</span>}</div></div></div><Inspector onToast={onToast} /></div>
   </StepFrame>;
 }
 

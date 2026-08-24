@@ -97,6 +97,8 @@ h1 { margin-top: 3px; font-size: 18px; }
 .source-pending { color: var(--amber) !important; }
 .panel-actions { display: flex; align-items: center; gap: 10px; }
 .clip-library-count { margin-top: 12px; }
+.clip-library-status { display: grid; gap: 3px; margin-top: 10px; }
+.clip-sync-error { color: #ffc1c1; font-size: 10px; }
 .clip-index, .order-number { color: var(--cyan); font-size: 12px; font-weight: 700; }
 .clip-input-copy { display: grid; gap: 4px; min-width: 0; }
 .clip-input-copy span, .clip-input-copy small, .ordered-clip small { color: var(--muted); font-size: 10px; }
@@ -112,6 +114,15 @@ h1 { margin-top: 3px; font-size: 18px; }
 .clip-pool-page { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
 .clip-pool-page h3 { margin-bottom: 10px; color: var(--muted); font-size: 12px; }
 .compose-page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 18px; align-items: start; }
+.batch-compose-controls { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.batch-compose-controls h2 { margin-top: 5px; font-size: 17px; }
+.batch-control-grid { display: grid; grid-template-columns: 130px 130px auto auto; align-items: end; gap: 8px; min-width: 540px; }
+.batch-control-grid .field { margin: 0; }
+.compose-workspace-list { display: grid; gap: 18px; }
+.compose-workspace-card { min-width: 0; }
+.compose-pool { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.compose-pool > .muted { display: block; margin-bottom: 8px; }
+.workspace-result-video { width: min(260px, 100%); max-height: 360px; margin-top: 12px; border: 1px solid var(--line); border-radius: 5px; background: #000; }
 .compose-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .empty-panel { min-height: 180px; }
 .error-panel { border-color: rgba(233,130,130,.5); }
@@ -128,7 +139,7 @@ h1 { margin-top: 3px; font-size: 18px; }
 .react-flow__controls { border: 1px solid var(--line); box-shadow: none; }
 .react-flow__controls-button { width: 28px; height: 28px; border-bottom: 1px solid var(--line); background: var(--panel-2); fill: var(--muted); }
 .react-flow__controls-button:hover { background: var(--cyan-soft); }
-.react-flow__minimap { border: 1px solid var(--line); background: #15191c; }
+.react-flow__minimap { width: 128px; height: 82px; border: 1px solid rgba(113,212,209,.28); background: rgba(21,25,28,.42); opacity: .74; }
 .react-flow__edge-path { stroke: #718287; stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path, .react-flow__edge:hover .react-flow__edge-path { stroke: var(--cyan); stroke-width: 3; }
 .react-flow__handle { width: 13px; height: 13px; border: 2px solid var(--cyan); background: #111719; }
@@ -153,6 +164,14 @@ h1 { margin-top: 3px; font-size: 18px; }
 .node-footer { display: flex; gap: 7px; margin-top: 12px; }
 .node-footer .btn { min-width: 0; flex: 1; padding: 7px 5px; font-size: 11px; }
 .node-description, .preview-box { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.prompt-target-input { margin-top: 7px; }
+.prompt-preview { min-height: 118px; color: #d9f5f3; background: #11191b; font-size: 10px; line-height: 1.55; }
+.prompt-validation { display: grid; gap: 5px; margin: 14px 0; padding: 10px; border: 1px solid var(--line); border-radius: 5px; font-size: 10px; line-height: 1.5; }
+.prompt-validation strong { font-size: 11px; }
+.prompt-validation-ready { border-color: rgba(125,204,155,.45); background: rgba(125,204,155,.07); }
+.prompt-validation-ready strong { color: var(--green); }
+.prompt-validation-error { border-color: rgba(233,130,130,.55); background: rgba(233,130,130,.08); }
+.prompt-validation-error strong { color: #ffc1c1; }
 .inspector { min-width: 0; overflow: auto; padding: 18px 16px; border-left: 1px solid var(--line); background: #171b1f; }
 .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
 .inspector h2 { font-size: 15px; }

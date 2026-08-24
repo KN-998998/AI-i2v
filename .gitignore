@@ -50,4 +50,5 @@ _archive/
 # 测试缓存与画布调试临时目录
 pytest-cache-files-*/
 pytest-temp-*/
+.test-tmp/
 web/canvas-draft-*/
