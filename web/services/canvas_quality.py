@@ -123,6 +123,21 @@ def _probe_media(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def _display_video_dimensions(video_stream: dict[str, Any]) -> tuple[int, int, int]:
+    width = int(video_stream.get("width") or 0)
+    height = int(video_stream.get("height") or 0)
+    rotation = 0
+    for side_data in video_stream.get("side_data_list") or []:
+        try:
+            rotation = int(float(side_data.get("rotation", 0)))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        break
+    if abs(rotation) % 180 == 90:
+        return height, width, rotation
+    return width, height, rotation
+
+
 def analyze_video(path: str | Path, dish_name: str = "", category: str | None = None) -> dict[str, Any]:
     """Score technical video readiness; semantic quality remains a future model step."""
     video_path = Path(path)
@@ -145,8 +160,7 @@ def analyze_video(path: str | Path, dish_name: str = "", category: str | None = 
         duration = float((payload.get("format") or {}).get("duration") or 0)
     except (TypeError, ValueError):
         duration = 0
-    width = int(video_stream.get("width") or 0)
-    height = int(video_stream.get("height") or 0)
+    width, height, rotation = _display_video_dimensions(video_stream)
     score = 100
     if duration < 2.5:
         score -= 25
@@ -178,6 +192,7 @@ def analyze_video(path: str | Path, dish_name: str = "", category: str | None = 
         "durationSeconds": round(duration, 3),
         "width": width,
         "height": height,
+        "rotation": rotation,
         "fps": round(fps, 2),
         "codec": video_stream.get("codec_name", ""),
         "semanticReview": "未接入视觉模型",

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from web.app import create_app
 from web.services import canvas_state
+from web.services import canvas_quality
 from web.api import routes as api_routes
 
 
@@ -196,6 +197,34 @@ def test_canvas_clip_library_keeps_legacy_batch_compatibility(monkeypatch, tmp_p
     item = client.get("/api/canvas/clips").json()[0]
     assert item["batchId"] == "batch_demo"
     assert client.get(item["sourceUrl"]).content == b"legacy-mp4"
+
+
+def test_video_quality_uses_rotation_metadata_for_display_ratio(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        canvas_quality,
+        "_probe_media",
+        lambda _path: {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "width": 3840,
+                    "height": 2160,
+                    "avg_frame_rate": "30/1",
+                    "codec_name": "hevc",
+                    "side_data_list": [{"rotation": -90}],
+                }
+            ],
+            "format": {"duration": "4.0"},
+        },
+    )
+
+    analysis = canvas_quality.analyze_video(tmp_path / "rotated.mp4")
+
+    assert analysis["width"] == 2160
+    assert analysis["height"] == 3840
+    assert analysis["rotation"] == -90
+    assert analysis["qualityScore"] == 100
+    assert analysis["qualityWarnings"] == []
 
 
 def test_canvas_compose_accepts_workspace_id(monkeypatch):
