@@ -8,7 +8,9 @@ edge-tts==7.2.7           # 语音合成（step6）
 fastapi==0.141.1          # Web API 框架（web/app.py）
 uvicorn[standard]==0.52.0 # ASGI 服务（FastAPI 启动）
 python-multipart==0.0.32  # FastAPI 文件上传表单解析
-httpx2==2.10.0             # FastAPI TestClient 烟测依赖
+httpx==0.28.1              # FastAPI TestClient 烟测依赖
+pytest==8.4.1              # Python 测试运行器
+colorama==0.4.6            # Windows 控制台彩色日志
 numpy==2.4.3              # 数值计算
 requests==2.33.0          # HTTP 调用（Kling / LLM 等 API）
 urllib3==2.7.0            # requests 底层（代码中有直接 import）

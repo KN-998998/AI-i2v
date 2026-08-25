@@ -58,6 +58,7 @@ export type WorkflowData = {
   assetMode?: string;
   imageName?: string;
   imagePreview?: string;
+  assetAnalysis?: MediaAnalysis;
   duration?: string;
   resolution?: string;
   audio?: string;
@@ -144,6 +145,36 @@ export type TimelineClip = {
   batchId?: string;
   filename?: string;
   generatorNodeId?: string;
+  generationJobId?: string;
+  qualityScore?: number;
+  qualityLabel?: "good" | "warning" | "reject";
+  qualityWarnings?: string[];
+  analysisMode?: string;
+};
+
+export type MediaAnalysis = {
+  kind: "image" | "video";
+  analysisMode: string;
+  qualityScore: number;
+  qualityLabel: "good" | "warning" | "reject";
+  qualityWarnings: string[];
+  category?: DishCategory;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+  fps?: number;
+  semanticReview?: string;
+};
+
+export type GenerationJob = {
+  job_id: string;
+  draft_id?: string;
+  node_id: string;
+  status: "queued" | "running" | "done" | "error";
+  stage?: string;
+  task_id?: string | null;
+  clip?: TimelineClip | null;
+  error?: string | null;
 };
 
 export type ClipLibraryItem = TimelineClip & {
@@ -335,6 +366,42 @@ export function randomizeClipSelection(items: TimelineClip[], clipCount: number,
   const selected = shuffledOrdinary.slice(0, Math.min(ordinaryTarget, shuffledOrdinary.length));
   if (shuffledSpecial[0] && selected.length < count) selected.push(shuffledSpecial[0]);
   return selected;
+}
+
+export function recommendClipSelection(items: TimelineClip[], clipCount: number): TimelineClip[] {
+  const available = items
+    .filter(clip => clip.sourcePath)
+    .filter((clip, index, list) => list.findIndex(item => item.id === clip.id) === index)
+    .sort((left, right) => clipRecommendationScore(right) - clipRecommendationScore(left));
+  const count = Math.max(0, Math.round(clipCount));
+  if (count === 0 || available.length === 0) return [];
+  const special = available.filter(clip => ["甜品", "水果"].includes(resolveDishCategory(clip)));
+  const ordinary = available.filter(clip => !["甜品", "水果"].includes(resolveDishCategory(clip)));
+  if (count === 1) return [available[0]];
+
+  const selected: TimelineClip[] = [];
+  const targetOrdinary = Math.min(ordinary.length, special.length ? count - 1 : count);
+  const byDish = new Set<string>();
+  for (const clip of ordinary) {
+    if (selected.length >= targetOrdinary) break;
+    if (!byDish.has(clip.dish)) {
+      selected.push(clip);
+      byDish.add(clip.dish);
+    }
+  }
+  for (const clip of ordinary) {
+    if (selected.length >= targetOrdinary) break;
+    if (!selected.some(item => item.id === clip.id)) selected.push(clip);
+  }
+  if (special[0] && selected.length < count) selected.push(special[0]);
+  return selected;
+}
+
+function clipRecommendationScore(clip: TimelineClip): number {
+  const quality = Number.isFinite(Number(clip.qualityScore)) ? Number(clip.qualityScore) : 50;
+  const readyBonus = clip.sourcePath ? 20 : 0;
+  const warningPenalty = (clip.qualityWarnings?.length ?? 0) * 4;
+  return quality + readyBonus - warningPenalty;
 }
 
 function shuffle<T>(items: T[], random: () => number): T[] {

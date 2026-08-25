@@ -66,9 +66,57 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
         files={"file": ("dish.png", b"image-bytes", "image/png")},
     )
     assert uploaded.status_code == 200
+    assert uploaded.json()["analysis"]["kind"] == "image"
+    assert "qualityScore" in uploaded.json()["analysis"]
     file_url = uploaded.json()["url"]
     assert client.get(file_url).content == b"image-bytes"
     shutil.rmtree(test_root, ignore_errors=True)
+
+
+def test_canvas_preflight_reports_missing_clips(monkeypatch, tmp_path):
+    test_root = tmp_path / "canvas-draft"
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)
+    client = TestClient(create_app())
+    payload = {
+        "activePanel": "prompt",
+        "nextNodeNumber": 1,
+        "nodes": [],
+        "edges": [],
+        "timeline": [],
+        "candidateClips": [],
+        "bgmName": "",
+        "bgmUrl": "",
+    }
+    assert client.put("/api/canvas/drafts/default", json=payload).status_code == 200
+    response = client.post("/api/canvas/drafts/default/preflight", json={"include_sound": False})
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert response.json()["errors"][0]["code"] == "NO_CLIPS"
+
+
+def test_canvas_generation_rejects_missing_kling_key(monkeypatch, tmp_path):
+    test_root = tmp_path / "canvas-draft"
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)
+    from web.services import canvas_generation
+
+    monkeypatch.setattr(canvas_generation, "KLING_API_KEY", "")
+    monkeypatch.setattr(canvas_generation, "KLING_ACCESS_KEY", "")
+    monkeypatch.setattr(canvas_generation, "KLING_SECRET_KEY", "")
+    client = TestClient(create_app())
+    payload = {
+        "activePanel": "prompt",
+        "nextNodeNumber": 1,
+        "nodes": [{"id": "clips", "type": "workflow", "position": {"x": 0, "y": 0}, "data": {"kind": "generator"}}],
+        "edges": [],
+        "timeline": [],
+        "candidateClips": [],
+        "bgmName": "",
+        "bgmUrl": "",
+    }
+    assert client.put("/api/canvas/drafts/default", json=payload).status_code == 200
+    response = client.post("/api/canvas/drafts/default/generations", json={"node_id": "clips"})
+    assert response.status_code == 400
+    assert "Kling" in response.json()["detail"]
 
 
 def test_canvas_draft_accepts_utf8_bom(monkeypatch, tmp_path):
@@ -111,7 +159,7 @@ def test_canvas_compose_rejects_unlinked_demo_clips(monkeypatch, tmp_path):
     assert client.put("/api/canvas/drafts/default", json=payload).status_code == 200
     response = client.post("/api/canvas/drafts/default/compose")
     assert response.status_code == 400
-    assert "没有关联真实视频文件" in response.json()["detail"]
+    assert "没有关联" in response.json()["detail"] and "视频文件" in response.json()["detail"]
 
 
 def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):

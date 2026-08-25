@@ -12,6 +12,7 @@ from typing import Any
 
 from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT, batch_subdirs
 from web.services.canvas_state import draft_directory, load_draft, uploaded_file
+from web.services.canvas_quality import preflight_draft
 
 _JOB_ID_RE = r"^[0-9a-f]{32}$"
 _JOB_LOCK = threading.RLock()
@@ -174,6 +175,10 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
         raise ValueError("画布草稿不存在，请先保存草稿")
     workspace = next((item for item in draft.get("composeWorkspaces", []) if item.get("id") == workspace_id), None) if workspace_id else None
     timeline = (workspace or {}).get("clips") if workspace is not None else draft.get("timeline") or []
+    preflight = preflight_draft(draft, draft_id, workspace_id, include_sound=include_sound)
+    if not preflight["ok"]:
+        detail = "；".join(item["message"] for item in preflight["errors"])
+        raise ValueError(f"合成预检未通过：{detail}")
     prepared = _prepare_sources(draft_id, timeline)
     job_id = uuid.uuid4().hex
     job = {
@@ -187,6 +192,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
         "error": None,
         "workspace_id": workspace_id,
         "include_sound": include_sound,
+        "preflight": preflight,
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)

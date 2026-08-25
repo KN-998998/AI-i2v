@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getCanvasComposeStatus, startCanvasCompose } from "../api";
+import { getCanvasComposeStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
 import { nodeCatalog, overlayItemsFromData, totalTimelineDuration, voiceItemsFromData, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
@@ -84,8 +84,7 @@ function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void 
   const addNode = useWorkflowStore(state => state.addNode);
   const deleteNode = useWorkflowStore(state => state.deleteNode);
   const duplicateNode = useWorkflowStore(state => state.duplicateNode);
-  const registerGeneratorClip = useWorkflowStore(state => state.registerGeneratorClip);
-  const updateNodeData = useWorkflowStore(state => state.updateNodeData);
+  const generateNode = useWorkflowStore(state => state.generateNode);
 
   const add = () => {
     addNode("generator");
@@ -103,11 +102,14 @@ function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void 
     deleteNode(node.id);
     onToast(`已删除${node.data.title}`);
   };
-  const generate = (node: WorkflowNode) => {
+  const generate = async (node: WorkflowNode) => {
     setSelection(node.id);
-    registerGeneratorClip(node.id);
-    updateNodeData(node.id, { status: "已进行生成" });
-    onToast(`已进行生成：${node.data.title}`);
+    try {
+      await generateNode(node.id);
+      onToast(`已完成生成并下载：${node.data.title}`);
+    } catch (error) {
+      onToast(`生成失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
   };
 
   return <section className="node-manager">
@@ -115,11 +117,13 @@ function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void 
     <div className="node-record-grid">{nodes.map((node, index) => {
       const selected = selectedNodeId === node.id;
       const protectedNode = ["assets", "prompt", "clips", "output", "sound"].includes(node.id);
-      const generated = node.data.status !== nodeCatalog.generator.status;
+      const generated = node.data.status === "已生成";
+      const generating = node.data.status === "生成中";
+      const failed = node.data.status === "生成失败";
       return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}>
         <div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div>
         <div className="node-record-body"><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></div>
-        <div className="node-record-actions"><button type="button" className={`btn ${generated ? "" : "btn-primary"}`} onClick={event => { event.stopPropagation(); generate(node); }}>{generated ? "再次生成" : "生成片段"}</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div>
+        <div className="node-record-actions"><button type="button" disabled={generating} className={`btn ${generated || failed ? "" : "btn-primary"}`} onClick={event => { event.stopPropagation(); void generate(node); }}>{generating ? "生成中..." : failed ? "重试生成" : generated ? "再次生成" : "生成片段"}</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div>
       </article>;
     })}</div>
   </section>;
@@ -226,11 +230,15 @@ function SoundComposePanel({ onToast }: StepPageProps) {
   const saveDraft = useWorkflowStore(state => state.saveDraft);
   const setComposeJob = useWorkflowStore(state => state.setComposeJob);
   const [busy, setBusy] = useState(false);
+  const [preflight, setPreflight] = useState<PreflightReport | null>(null);
   const compose = async () => {
     if (busy) return;
     setBusy(true);
     try {
       await saveDraft();
+      const report = await runCanvasPreflight(draftId, undefined, true);
+      setPreflight(report);
+      if (!report.ok) throw new Error(report.errors.map(item => item.message).join("；"));
       let job = await startCanvasCompose(draftId, undefined, true);
       setComposeJob(job);
       while (job.status === "running") {
@@ -246,7 +254,7 @@ function SoundComposePanel({ onToast }: StepPageProps) {
       setBusy(false);
     }
   };
-  return <section className="step-panel sound-compose-panel"><div className="panel-section-head"><div><span className="panel-label">FINAL RENDER</span><h2>应用声音与文字</h2><p className="muted">文字按各自时间段叠加到视频上方；人声和 BGM 会在这里混音并生成最终成片。</p></div><button type="button" className="btn btn-primary" disabled={busy} onClick={compose}>{busy ? "生成最终成片中..." : "生成最终有声成片"}</button></div>{composeJob?.status === "running" && <div className="step-callout"><strong>正在合成</strong><span>后台正在执行文字渲染、TTS 和音频混音，请稍候。</span></div>}{composeJob?.status === "error" && <div className="step-callout error-panel"><strong>上次生成失败</strong><span>{composeJob.error}</span></div>}{composeJob?.status === "done" && composeJob.output_url && <div className="compose-result"><div><strong>最终有声成片</strong><span>已应用当前人声、BGM 和多段画面文字</span></div><video controls preload="metadata" src={composeJob.output_url} /></div>}</section>;
+  return <section className="step-panel sound-compose-panel"><div className="panel-section-head"><div><span className="panel-label">FINAL RENDER</span><h2>应用声音与文字</h2><p className="muted">文字按各自时间段叠加到视频上方；人声和 BGM 会在这里混音并生成最终成片。</p></div><button type="button" className="btn btn-primary" disabled={busy} onClick={compose}>{busy ? "生成最终成片中..." : "生成最终有声成片"}</button></div>{preflight && <div className={`step-callout ${preflight.ok ? "" : "error-panel"}`}><strong>{preflight.ok ? "成片预检通过" : "成片预检未通过"}</strong><span>{preflight.ok ? `片段 ${preflight.summary.clipCount} 个 · 预计 ${preflight.summary.totalDurationSeconds.toFixed(1)}s · 文字 ${preflight.summary.overlayCount} 段 · 人声 ${preflight.summary.voiceCount} 段` : preflight.errors.map(item => item.message).join("；")}</span>{preflight.warnings.map(item => <small key={item.code}>提示：{item.message}</small>)}</div>}{composeJob?.status === "running" && <div className="step-callout"><strong>正在合成</strong><span>后台正在执行文字渲染、TTS 和音频混音，请稍候。</span></div>}{composeJob?.status === "error" && <div className="step-callout error-panel"><strong>上次生成失败</strong><span>{composeJob.error}</span></div>}{composeJob?.status === "done" && composeJob.output_url && <div className="compose-result"><div><strong>最终有声成片</strong><span>已应用当前人声、BGM 和多段画面文字</span></div><video controls preload="metadata" src={composeJob.output_url} /></div>}</section>;
 }
 
 export function GeneratorPage({ onToast }: StepPageProps) {

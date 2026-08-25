@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { inferDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
 import { assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData } from "../promptAssembler";
@@ -8,36 +8,33 @@ import { ActionButton, Footer, formatNodeValue, Row, Tag } from "./ui";
 
 export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>) {
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
-  const registerGeneratorClip = useWorkflowStore(state => state.registerGeneratorClip);
+  const generateNode = useWorkflowStore(state => state.generateNode);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const bgmName = useWorkflowStore(state => state.bgmName);
   const [generating, setGenerating] = useState(false);
-  const generationTimer = useRef<number | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const kind = data.kind;
   const promptResult = kind === "prompt" ? assemblePrompt(promptConfigFromData(data)) : null;
   const promptConfig = kind === "prompt" ? promptConfigFromData(data) : null;
   const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
-
-  useEffect(() => () => {
-    if (generationTimer.current !== null) window.clearTimeout(generationTimer.current);
-  }, []);
 
   const action = (nextPanel?: Panel) => {
     setSelection(id);
     if (nextPanel) setActivePanel(nextPanel);
   };
 
-  const generate = () => {
-    if (generationTimer.current !== null) window.clearTimeout(generationTimer.current);
+  const generate = async () => {
+    if (generating) return;
+    setGenerationError(null);
     setGenerating(true);
-    registerGeneratorClip(id);
-    updateNodeData(id, { status: "生成中" });
-    generationTimer.current = window.setTimeout(() => {
-      generationTimer.current = null;
+    try {
+      await generateNode(id);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "生成失败");
+    } finally {
       setGenerating(false);
-      updateNodeData(id, { status: "待关联真实文件" });
-    }, 900);
+    }
   };
 
   const body: Record<typeof kind, ReactNode> = {
@@ -58,7 +55,8 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
     generator: <>
       <Row label="规格" value={`${formatNodeValue(data.duration, "3s")} · ${formatNodeValue(data.resolution, "1080p")}`} />
       <Row label="音频 / 分镜" value={`${formatNodeValue(data.audio, "无声")} / ${formatNodeValue(data.storyboard, "单分镜")}`} />
-      <Footer><ActionButton primary onClick={generate}>{generating ? "生成中..." : "生成片段"}</ActionButton></Footer>
+      {generationError && <Tag warn>{generationError}</Tag>}
+      <Footer><ActionButton primary onClick={generate}>{generating ? "生成中..." : data.status === "已生成" ? "再次生成" : "生成片段"}</ActionButton></Footer>
     </>,
     output: <>
       <Row label="目标" value={formatNodeValue(data.outputTarget, "5-6 道菜")} />

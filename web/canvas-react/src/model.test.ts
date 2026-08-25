@@ -1,4 +1,4 @@
-import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -67,6 +67,17 @@ const singleSpecial = randomizeClipSelection(composePool, 1, () => 0);
 assert(singleSpecial.length === 1 && ["甜品", "水果"].includes(resolveDishCategory(singleSpecial[0])), "single-clip composition did not prefer dessert or fruit");
 const ordinaryOnly = randomizeClipSelection(composePool.slice(0, 2), 3, () => 0);
 assert(ordinaryOnly.length === 2 && ordinaryOnly.every(clip => !["甜品", "水果"].includes(resolveDishCategory(clip))), "ordinary-only composition changed its available pool incorrectly");
+
+const recommended = recommendClipSelection([
+  { ...composePool[0], qualityScore: 62, qualityWarnings: ["暗部"] },
+  { ...composePool[1], qualityScore: 95, qualityWarnings: [] },
+  { ...composePool[2], qualityScore: 99, qualityWarnings: [] },
+  { id: "same-dish", dish: "天妇罗", label: "重复菜品", tone: "", timelineDuration: 2, sourcePath: "same-dish.mp4", dishCategory: "小吃" as const, qualityScore: 100, qualityWarnings: [] },
+], 3);
+assert(recommended.length === 3, "smart recommendation did not fill the requested count");
+assert(recommended[0].id === "same-dish", "smart recommendation did not prioritize high quality clips");
+assert(new Set(recommended.slice(0, 2).map(clip => clip.dish)).size === 2, "smart recommendation did not diversify dishes");
+assert(["甜品", "水果"].includes(resolveDishCategory(recommended.at(-1)!)), "smart recommendation did not place the special clip last");
 
 assert(ELEMENT_OPTIONS.length === 8, "L0 options are incomplete");
 assert(CAMERA_OPTIONS.length === 8, "camera options are incomplete");

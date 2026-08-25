@@ -32,6 +32,8 @@ from pipeline.config import (
 from web.core.logging import get_logger
 from web.services.pipeline_tasks import run_compose, run_step1, run_step2, run_step3
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
+from web.services.canvas_generation import get_generation_job, start_generation
+from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
 from web.services.planning import write_selection_csv
 from web.services.canvas_state import load_draft, save_draft, save_upload, uploaded_file
 from web.services.state import get_batch_state, load_manifest, load_state, save_state
@@ -56,7 +58,8 @@ def _canvas_clip_dish(filename: str) -> str:
 
 
 def _canvas_clip_payload(clip_path: Path, source_url: str, batch_id: str | None = None) -> dict[str, Any] | None:
-    duration = _read_video_duration_seconds(clip_path)
+    analysis = analyze_video(clip_path, _canvas_clip_dish(clip_path.name))
+    duration = analysis.get("durationSeconds") or _read_video_duration_seconds(clip_path)
     if duration is None:
         return None
     item: dict[str, Any] = {
@@ -73,6 +76,11 @@ def _canvas_clip_payload(clip_path: Path, source_url: str, batch_id: str | None 
         "status": "generated",
         "sourcePath": str(clip_path.resolve()),
         "sourceUrl": source_url,
+        "qualityScore": analysis.get("qualityScore", 50),
+        "qualityLabel": analysis.get("qualityLabel", "warning"),
+        "qualityWarnings": analysis.get("qualityWarnings", []),
+        "analysisMode": analysis.get("analysisMode", "technical_rules"),
+        "dishCategory": analysis.get("category", "其他"),
     }
     if batch_id is not None:
         item["batchId"] = batch_id
@@ -148,12 +156,22 @@ def put_canvas_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/api/canvas/drafts/{draft_id}/files")
-async def upload_canvas_file(draft_id: str, kind: str = Form(...), file: UploadFile = File(...)) -> dict[str, Any]:
+async def upload_canvas_file(
+    draft_id: str,
+    kind: str = Form(...),
+    dish: str = Form(""),
+    category: str = Form(""),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
     try:
         metadata = await save_upload(draft_id, file, kind)
     except (ValueError, OSError) as exc:
         raise _json_error(str(exc), 400) from exc
     metadata["url"] = f"/api/canvas/drafts/{draft_id}/files/{metadata['stored_name']}"
+    if kind == "image":
+        path = uploaded_file(draft_id, metadata["stored_name"])
+        if path is not None:
+            metadata["analysis"] = analyze_image(path, dish, category or None)
     return metadata
 
 
@@ -163,6 +181,32 @@ def get_canvas_file(draft_id: str, stored_name: str) -> FileResponse:
     if path is None:
         raise _json_error("文件不存在", 404)
     return FileResponse(str(path))
+
+
+@router.post("/api/canvas/drafts/{draft_id}/generations")
+def start_canvas_generation(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    request = payload or {}
+    try:
+        return start_generation(draft_id, str(request.get("node_id") or ""), force=bool(request.get("force", False)))
+    except (ValueError, RuntimeError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/canvas/drafts/{draft_id}/generations/{job_id}")
+def get_canvas_generation_status(draft_id: str, job_id: str) -> dict[str, Any]:
+    job = get_generation_job(draft_id, job_id)
+    if job is None:
+        raise _json_error("生成任务不存在", 404)
+    return job
+
+
+@router.post("/api/canvas/drafts/{draft_id}/preflight")
+def canvas_preflight(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    draft = load_draft(draft_id)
+    if draft is None:
+        raise _json_error("画布草稿不存在，请先保存草稿", 404)
+    request = payload or {}
+    return preflight_draft(draft, draft_id, request.get("workspace_id"), include_sound=bool(request.get("include_sound", True)))
 
 
 @router.post("/api/canvas/drafts/{draft_id}/compose")
@@ -209,6 +253,8 @@ def _read_video_duration_seconds(path: str | Path | None) -> float | None:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
             check=False,
         )

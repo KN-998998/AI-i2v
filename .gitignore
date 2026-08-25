@@ -48,6 +48,9 @@ web/canvas-react/node_modules/
 _archive/
 
 # 测试缓存与画布调试临时目录
+.pytest_cache/
+.pytest-tmp/
+.pytest-run-*/
 pytest-cache-files-*/
 pytest-temp-*/
 .test-tmp/

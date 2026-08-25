@@ -1,8 +1,8 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, removeNodeAndEdges, reorderById, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
-import { fetchCanvasClips, fetchDraft, persistDraft } from "./api";
+import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, waitForCanvasGeneration } from "./api";
 
 type WorkflowState = {
   nodes: WorkflowNode[];
@@ -35,6 +35,8 @@ type WorkflowState = {
   setActivePanel: (panel: Panel) => void;
   updateNodeData: (nodeId: string, patch: Partial<WorkflowData>) => void;
   registerGeneratorClip: (nodeId: string) => void;
+  attachGeneratedClip: (nodeId: string, clip: TimelineClip) => void;
+  generateNode: (nodeId: string) => Promise<GenerationJob>;
   addNode: (kind: NodeKind) => void;
   deleteNode: (nodeId: string) => void;
   duplicateNode: (nodeId: string) => void;
@@ -53,6 +55,7 @@ type WorkflowState = {
   setComposeBatchCount: (count: number) => void;
   setComposeClipCount: (count: number) => void;
   randomizeComposeWorkspaces: () => void;
+  recommendComposeWorkspaces: () => void;
   reorderWorkspace: (workspaceId: string, sourceId: string, targetId: string) => void;
   removeWorkspaceClip: (workspaceId: string, clipId: string) => void;
   addWorkspaceClip: (workspaceId: string, clipId: string) => void;
@@ -82,12 +85,36 @@ function sameClipList(left: TimelineClip[], right: TimelineClip[]): boolean {
       && clip.dishCategory === other.dishCategory
       && clip.batchId === other.batchId
       && clip.filename === other.filename
-      && clip.generatorNodeId === other.generatorNodeId;
+      && clip.generatorNodeId === other.generatorNodeId
+      && clip.generationJobId === other.generationJobId
+      && clip.qualityScore === other.qualityScore
+      && clip.qualityLabel === other.qualityLabel
+      && JSON.stringify(clip.qualityWarnings ?? []) === JSON.stringify(other.qualityWarnings ?? []);
   });
 }
 
 function withResolvedDishCategory<T extends TimelineClip>(clip: T): T {
   return clip.dishCategory ? clip : { ...clip, dishCategory: inferDishCategory(clip.dish) };
+}
+
+function mergeAvailableClips(persisted: TimelineClip[], available: ClipLibraryItem[]): TimelineClip[] {
+  const matched = new Set<string>();
+  const merged = persisted.map(item => {
+    const match = available.find(candidate =>
+      (item.sourcePath && candidate.sourcePath === item.sourcePath)
+      || (item.filename && candidate.filename === item.filename),
+    );
+    if (!match) return item;
+    matched.add(match.id);
+    return {
+      ...match,
+      id: item.id,
+      generatorNodeId: item.generatorNodeId ?? match.generatorNodeId,
+      generationJobId: item.generationJobId ?? match.generationJobId,
+      dishCategory: item.dishCategory ?? match.dishCategory,
+    };
+  });
+  return [...merged, ...available.filter(item => !matched.has(item.id) && !persisted.some(existing => existing.sourcePath === item.sourcePath || existing.filename === item.filename))];
 }
 
 function syncPrimaryWorkspace(workspaces: ComposeWorkspace[], timeline: TimelineClip[]): ComposeWorkspace[] {
@@ -196,6 +223,46 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       revision: state.revision + 1,
     };
   }),
+  attachGeneratedClip: (nodeId, clip) => set(state => {
+    const existing = state.candidateClips.find(item => item.generatorNodeId === nodeId);
+    const nextClip = normalizeTimelineClip({
+      ...clip,
+      id: existing?.id ?? clip.id,
+      generatorNodeId: nodeId,
+      status: "generated" as const,
+    });
+    const candidateClips = existing
+      ? state.candidateClips.map(item => item.id === existing.id ? nextClip : item)
+      : [...state.candidateClips, nextClip];
+    const replace = (items: TimelineClip[]) => existing ? items.map(item => item.id === existing.id ? nextClip : item) : items;
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => ({ ...workspace, clips: replace(workspace.clips) }));
+    return {
+      candidateClips,
+      timeline: replace(state.timeline),
+      composeWorkspaces,
+      availableClips: [...state.availableClips.filter(item => item.sourcePath !== nextClip.sourcePath), nextClip as ClipLibraryItem],
+      nodes: state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, status: "已生成" } } : item),
+      revision: state.revision + 1,
+    };
+  }),
+  generateNode: async nodeId => {
+    const state = get();
+    state.registerGeneratorClip(nodeId);
+    state.updateNodeData(nodeId, { status: "生成中" });
+    await get().saveDraft();
+    try {
+      const started = await startCanvasGeneration(get().draftId, nodeId);
+      const completed = await waitForCanvasGeneration(get().draftId, started);
+      if (completed.status === "error") throw new Error(completed.error || "Kling 生成失败");
+      if (completed.status !== "done" || !completed.clip) throw new Error("生成任务超时，请检查后端日志");
+      get().attachGeneratedClip(nodeId, completed.clip);
+      await get().saveDraft();
+      return completed;
+    } catch (error) {
+      get().updateNodeData(nodeId, { status: "生成失败" });
+      throw error;
+    }
+  },
   addNode: kind => set(state => {
     const id = `node_${kind}_${state.nextNodeNumber}`;
     const index = state.nextNodeNumber - 1;
@@ -289,7 +356,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const isUnlinkedSeedCandidates = normalizedCandidates.length > 0 && normalizedCandidates.every(item => seedIds.has(item.id) && !item.sourcePath);
         const candidateClips = isUnlinkedSeedCandidates && availableClips.length
           ? availableClips.map(item => ({ ...item }))
-          : [...normalizedCandidates, ...availableClips.filter(item => !normalizedCandidates.some(existing => existing.id === item.id))];
+          : mergeAvailableClips(normalizedCandidates, availableClips);
         const timelineChanged = !sameClipList(timeline, state.timeline);
         const candidateClipsChanged = !sameClipList(candidateClips, state.candidateClips);
         const workspaces = timelineChanged ? syncPrimaryWorkspace(state.composeWorkspaces, timeline) : state.composeWorkspaces;
@@ -324,6 +391,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const workspaces = state.composeWorkspaces.map(workspace => {
       return { ...workspace, clips: randomizeClipSelection(pool, state.composeClipCount), job: null };
     });
+    return { composeWorkspaces: workspaces, timeline: workspaces[0]?.clips ?? [], revision: state.revision + 1 };
+  }),
+  recommendComposeWorkspaces: () => set(state => {
+    const pool = state.candidateClips.filter(clip => clip.sourcePath);
+    const workspaces = state.composeWorkspaces.map(workspace => ({
+      ...workspace,
+      clips: recommendClipSelection(pool, state.composeClipCount),
+      job: null,
+    }));
     return { composeWorkspaces: workspaces, timeline: workspaces[0]?.clips ?? [], revision: state.revision + 1 };
   }),
   reorderWorkspace: (workspaceId, sourceId, targetId) => set(state => {
