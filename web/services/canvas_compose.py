@@ -109,7 +109,7 @@ def _sound_node(draft: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _overlay_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
+def _overlay_items(sound: dict[str, Any], voice_timings: dict[str, tuple[float, float]] | None = None) -> list[dict[str, Any]]:
     items = sound.get("overlayItems")
     if isinstance(items, list):
         result = []
@@ -118,6 +118,9 @@ def _overlay_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             start = max(0.0, float(item.get("startSeconds", 0) or 0))
             end = max(start + 0.1, float(item.get("endSeconds", start + 2.5) or start + 2.5))
+            sync_voice_id = str(item.get("syncVoiceId") or "")
+            if voice_timings and sync_voice_id in voice_timings:
+                start, end = voice_timings[sync_voice_id]
             result.append({
                 "text": str(item["text"]),
                 "start": start,
@@ -125,6 +128,8 @@ def _overlay_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
                 "position": item.get("position", "upper"),
                 "x": item.get("x"),
                 "y": item.get("y"),
+                "animation": item.get("animation", "static"),
+                "sync_voice_id": sync_voice_id or None,
                 "style": item.get("style") if isinstance(item.get("style"), dict) else {},
             })
         return result
@@ -152,12 +157,13 @@ def _voice_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
     items = sound.get("voiceItems")
     if isinstance(items, list):
         result = []
-        for item in items:
+        for index, item in enumerate(items):
             if not isinstance(item, dict) or not str(item.get("text", "")).strip():
                 continue
             start = max(0.0, float(item.get("startSeconds", 0) or 0))
             end = max(start + 0.1, float(item.get("endSeconds", start + 4) or start + 4))
             result.append({
+                "id": str(item.get("id") or f"voice_{index + 1}"),
                 "text": str(item["text"]),
                 "start": start,
                 "end": end,
@@ -218,8 +224,9 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
 
             output_path = output_dir / ("canvas_final.mp4" if include_sound else "canvas_composed.mp4")
             sound = _sound_node(draft)
-            subtitles = _overlay_items(sound) if include_sound else []
-            concat_clips(trimmed_paths, str(output_path), subtitles=subtitles, brand_info=None)
+            voice_timings: dict[str, tuple[float, float]] = {}
+            if not include_sound:
+                concat_clips(trimmed_paths, str(output_path), subtitles=[], brand_info=None)
             if include_sound:
                 from pipeline.step6_voice_bgm import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
@@ -241,6 +248,10 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                     temporary_paths.append(str(segment_path))
                     effective_end = min(item["end"], item["start"] + actual_duration)
                     voice_segments.append((generated, item["start"], effective_end, item["volume"]))
+                    if item.get("id"):
+                        voice_timings[item["id"]] = (item["start"], effective_end)
+                subtitles = _overlay_items(sound, voice_timings)
+                concat_clips(trimmed_paths, str(output_path), subtitles=subtitles, brand_info=None)
                 if voice_segments or (bgm_file and bgm_file.exists() and bgm_volume > 0):
                     mix_voice_segments(voice_segments, str(bgm_file) if bgm_file and bgm_file.exists() and bgm_volume > 0 else None, str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)
                     temporary_paths.append(str(audio_path))

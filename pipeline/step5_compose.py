@@ -128,6 +128,12 @@ def _wrap_text_for_width(text: str, width_ratio: float, font_size: int) -> str:
     return "\n".join(lines)
 
 
+def _typewriter_prefixes(text: str) -> list[str]:
+    """Return visible prefixes without splitting Unicode characters."""
+    characters = list(str(text))
+    return ["".join(characters[:index]) for index in range(1, len(characters) + 1)]
+
+
 def _font_file(font_family: str | None, font_weight: str | None = None) -> str:
     mapping = {
         ("Microsoft YaHei", "normal"): "C\\:/Windows/Fonts/msyh.ttc",
@@ -171,6 +177,8 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 "position": item.get("position", "bottom"),
                 "x": item.get("x"),
                 "y": item.get("y"),
+                "animation": item.get("animation", "static"),
+                "sync_voice_id": item.get("syncVoiceId"),
                 "style": item.get("style", {}) if isinstance(item.get("style", {}), dict) else {},
             })
         else:
@@ -216,7 +224,6 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
             font_size = max(12, min(int(style.get("fontSize", 42) or 42), 120))
             text_box_width = _normalized_ratio(style.get("textBoxWidth")) or 0.84
             single_line = bool(style.get("singleLine", True))
-            safe_text = _escape_drawtext(text if single_line else _wrap_text_for_width(text, text_box_width, font_size))
             font_color = _safe_color(style.get("color"), "#FFFFFF")
             stroke_color = _safe_color(style.get("strokeColor"), "#000000")
             stroke_width = max(0, min(int(style.get("strokeWidth", 2) or 0), 12))
@@ -225,13 +232,23 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
             background_color = _safe_color(style.get("backgroundColor"), "#111417")
             background_opacity = max(0.0, min(float(style.get("backgroundOpacity", 0.62) or 0.0), 1.0))
             box = f":box=1:boxcolor={background_color}@{background_opacity}:boxborderw=12" if background_enabled else ""
-            filters.append(
-                f"drawtext=text='{safe_text}':"
-                f"fontfile='{_font_file(style.get('fontFamily'), font_weight)}':"
-                f"fontsize={font_size}:fontcolor={font_color}:borderw={stroke_width}:bordercolor={stroke_color}@0.8{box}:"
-                f"x={x}:y={y}:"
-                f"enable='between(t,{item_start},{end_time})'"
-            )
+            def append_text_filter(value: str, visible_start: float, visible_end: float) -> None:
+                safe_text = _escape_drawtext(value if single_line else _wrap_text_for_width(value, text_box_width, font_size))
+                filters.append(
+                    f"drawtext=text='{safe_text}':"
+                    f"fontfile='{_font_file(style.get('fontFamily'), font_weight)}':"
+                    f"fontsize={font_size}:fontcolor={font_color}:borderw={stroke_width}:bordercolor={stroke_color}@0.8{box}:"
+                    f"x={x}:y={y}:"
+                    f"enable='between(t,{visible_start},{visible_end})'"
+                )
+
+            if item.get("animation") == "typewriter" and text:
+                prefixes = _typewriter_prefixes(text if single_line else _wrap_text_for_width(text, text_box_width, font_size))
+                step = (end_time - item_start) / len(prefixes)
+                for index, prefix in enumerate(prefixes):
+                    append_text_filter(prefix, item_start + index * step, end_time)
+            else:
+                append_text_filter(text, item_start, end_time)
             if explicit_start is None and explicit_end is None:
                 start_time = end_time
 

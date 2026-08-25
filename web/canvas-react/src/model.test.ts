@@ -39,6 +39,8 @@ const centeredOverlay = overlayCoordinatesFromItem({ position: "custom" });
 assert(centeredOverlay.x === 0.5 && centeredOverlay.y === 0.5, "custom overlay position should default to center");
 const draggedOverlay = overlayItemsFromData({ overlayItems: [{ id: "dragged", text: "可拖动", startSeconds: 0, endSeconds: 2, position: "custom", x: 0.21, y: 0.74 }] })[0];
 assert(draggedOverlay.x === 0.21 && draggedOverlay.y === 0.74, "custom overlay coordinates were not persisted");
+const animatedOverlay = overlayItemsFromData({ overlayItems: [{ id: "typed", text: "typewriter", startSeconds: 0, endSeconds: 2, position: "upper", animation: "typewriter", syncVoiceId: "voice_1" }] })[0];
+assert(animatedOverlay.animation === "typewriter" && animatedOverlay.syncVoiceId === "voice_1", "overlay animation binding was not persisted");
 const defaultOverlayStyle = overlayStyleFromItem({ style: {} });
 assert(defaultOverlayStyle.singleLine === true && defaultOverlayStyle.textBoxWidth === 0.84, "overlay text layout defaults are incorrect");
 

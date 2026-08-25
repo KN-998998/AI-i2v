@@ -187,7 +187,7 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
       <div className="storyboard-playhead" style={{ left: playheadLeft }} aria-hidden="true" />
     </div></div>
     <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.1" value={playhead} onChange={event => setPlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>
-    <div className="storyboard-preview"><div className="storyboard-preview-media" ref={previewMediaRef}>{activeClip?.clip.sourceUrl ? <video ref={previewVideoRef} muted playsInline preload="metadata" src={activeClip.clip.previewUrl ?? activeClip.clip.sourceUrl} /> : <div className="storyboard-preview-placeholder">{clips.length ? "当前片段暂无本地视频" : "先把视频片段加入成片时间线"}</div>}{activeOverlays.length > 0 && <div className="storyboard-preview-overlays">{activeOverlays.map(item => <span className={`preview-overlay preview-${item.position}`} style={overlayPreviewStyle(item)} onPointerDown={event => startOverlayPositionDrag(event, item)} key={item.id}>{item.text || "未填写文字"}</span>)}</div>}</div><div className="storyboard-preview-meta"><strong>{activeClip?.clip.dish || "暂无片段"}</strong><span>{activeClip ? `${formatSeconds(activeClip.start)} - ${formatSeconds(activeClip.end)} · ${activeOverlays.length ? `当前文字：${activeOverlays.map(item => item.text || "未填写").join(" / ")}` : "当前时间无画面文字"}` : "播放指针移动到文字时间段后，文字会出现在左侧 9:16 预览中"}</span>{activeOverlays.length > 0 && <div className="storyboard-active-overlay-list">{activeOverlays.map(item => <span key={item.id}>{item.text || "未填写文字"} · {positionLabel(item.position)}</span>)}</div>}</div></div>
+    <div className="storyboard-preview"><div className="storyboard-preview-media" ref={previewMediaRef}>{activeClip?.clip.sourceUrl ? <video ref={previewVideoRef} muted playsInline preload="metadata" src={activeClip.clip.previewUrl ?? activeClip.clip.sourceUrl} /> : <div className="storyboard-preview-placeholder">{clips.length ? "当前片段暂无本地视频" : "先把视频片段加入成片时间线"}</div>}{activeOverlays.length > 0 && <div className="storyboard-preview-overlays">{activeOverlays.map(item => <span className={`preview-overlay preview-${item.position}`} style={overlayPreviewStyle(item)} onPointerDown={event => startOverlayPositionDrag(event, item)} key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"}</span>)}</div>}</div><div className="storyboard-preview-meta"><strong>{activeClip?.clip.dish || "暂无片段"}</strong><span>{activeClip ? `${formatSeconds(activeClip.start)} - ${formatSeconds(activeClip.end)} · ${activeOverlays.length ? `当前文字：${activeOverlays.map(item => previewOverlayText(item, playhead) || "未填写").join(" / ")}` : "当前时间无画面文字"}` : "播放指针移动到文字时间段后，文字会出现在左侧 9:16 预览中"}</span>{activeOverlays.length > 0 && <div className="storyboard-active-overlay-list">{activeOverlays.map(item => <span key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"} · {positionLabel(item.position)}</span>)}</div>}</div></div>
   </section>;
 }
 
@@ -216,6 +216,13 @@ function StoryboardTrack({ label, children, style }: { label: string; children: 
 
 function formatSeconds(value: number) {
   return `${value.toFixed(1)}s`;
+}
+
+function previewOverlayText(item: OverlayItem, playhead: number) {
+  if (item.animation !== "typewriter" || !item.text) return item.text;
+  const characters = Array.from(item.text);
+  const progress = clamp((playhead - item.startSeconds) / Math.max(0.1, item.endSeconds - item.startSeconds), 0, 1);
+  return characters.slice(0, Math.max(1, Math.ceil(characters.length * progress))).join("");
 }
 
 function roundSeconds(value: number) {

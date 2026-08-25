@@ -5,6 +5,7 @@ export type NodeKind = "input" | "prompt" | "generator" | "output" | "sound" | "
 export type Panel = "prompt" | "voice" | "overlay";
 
 export type OverlayPosition = "top" | "upper" | "center" | "bottom" | "custom";
+export type OverlayAnimation = "static" | "typewriter";
 
 export const OVERLAY_FONT_OPTIONS = ["Microsoft YaHei", "SimHei", "KaiTi", "FangSong", "DengXian", "Arial", "Arial Black"] as const;
 export type OverlayFontFamily = typeof OVERLAY_FONT_OPTIONS[number];
@@ -32,6 +33,8 @@ export type OverlayItem = {
   /** Normalized text center coordinates. Omitted values use the legacy position fallback. */
   x?: number;
   y?: number;
+  animation?: OverlayAnimation;
+  syncVoiceId?: string;
   style?: Partial<OverlayStyle>;
 };
 
@@ -257,6 +260,8 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
       endSeconds: Math.max(0.1, Number(item.endSeconds) || 0.1),
       position: item.position ?? "upper",
       ...overlayCoordinatesFromItem({ position: item.position ?? "upper", x: item.x, y: item.y }),
+      animation: item.animation === "typewriter" ? "typewriter" : "static",
+      syncVoiceId: item.syncVoiceId,
       style: overlayStyleFromItem(item),
     }));
   }
@@ -266,8 +271,8 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
   const end = Math.max(start + 0.1, Number.parseFloat(data.overlayEnd ?? "2.5") || 2.5);
   const legacyPosition = data.overlayPosition?.includes("顶部") ? "top" : data.overlayPosition?.includes("中上") ? "upper" : data.overlayPosition?.includes("中央") ? "center" : "bottom";
   const items: OverlayItem[] = [];
-  if (mainText) items.push({ id: "overlay_main", text: mainText, startSeconds: start, endSeconds: end, position: legacyPosition, ...overlayPositionCoordinates(legacyPosition), style: { ...DEFAULT_OVERLAY_STYLE } });
-  if (ctaText && ctaText !== mainText) items.push({ id: "overlay_cta", text: ctaText, startSeconds: Math.max(0, end - 2), endSeconds: end, position: "top", ...overlayPositionCoordinates("top"), style: { ...DEFAULT_OVERLAY_STYLE } });
+  if (mainText) items.push({ id: "overlay_main", text: mainText, startSeconds: start, endSeconds: end, position: legacyPosition, ...overlayPositionCoordinates(legacyPosition), animation: "static", style: { ...DEFAULT_OVERLAY_STYLE } });
+  if (ctaText && ctaText !== mainText) items.push({ id: "overlay_cta", text: ctaText, startSeconds: Math.max(0, end - 2), endSeconds: end, position: "top", ...overlayPositionCoordinates("top"), animation: "static", style: { ...DEFAULT_OVERLAY_STYLE } });
   return items;
 }
 
