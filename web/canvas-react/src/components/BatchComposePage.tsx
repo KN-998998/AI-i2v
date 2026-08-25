@@ -103,9 +103,34 @@ function WorkspaceCard({ workspace, candidates, dragging, setDragging, reorderWo
     const first = next[0];
     updateNodeData(soundNode.id, { voiceItems: next, voiceText: first?.text ?? "", voiceName: first?.voiceName ?? "voice", voiceVolume: String(first?.volume ?? 85) });
   };
+  const removeOverlayTimeline = (id: string) => {
+    if (!soundNode) return;
+    const next = overlayItems.filter(item => item.id !== id);
+    const first = next[0];
+    const cta = next.find(item => item.id === "overlay_cta") ?? next[next.length - 1];
+    updateNodeData(soundNode.id, {
+      overlayItems: next,
+      overlayMain: first?.text ?? "",
+      overlayCta: cta?.text ?? "",
+      overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
+      overlayStart: first ? `${first.startSeconds}s` : "0s",
+      overlayEnd: first ? `${first.endSeconds}s` : "2.5s",
+    });
+  };
+  const removeVoiceTimeline = (id: string) => {
+    if (!soundNode) return;
+    const next = voiceItems.filter(item => item.id !== id);
+    const first = next[0];
+    updateNodeData(soundNode.id, {
+      voiceItems: next,
+      voiceText: first?.text ?? "",
+      voiceName: first?.voiceName ?? "voice",
+      voiceVolume: String(first?.volume ?? 85),
+    });
+  };
   return <section className="step-panel compose-workspace-card">
     <div className="panel-section-head"><div><span className="panel-label">{workspace.id.toUpperCase()}</span><h2>{workspace.title} · {workspace.clips.length} 个片段</h2></div><span className={`source-status ${missing ? "pending" : "ready"}`}>{missing ? "待补齐" : "可合成"}</span></div>
-    <StoryboardTimeline clips={workspace.clips} overlayItems={overlayItems} voiceItems={voiceItems} onUpdateOverlay={updateOverlayTimeline} onUpdateVoice={updateVoiceTimeline} bgmName={bgmName} onUpdateClip={(clipId, patch) => updateWorkspaceClip(workspace.id, clipId, patch)} />
+    <StoryboardTimeline clips={workspace.clips} overlayItems={overlayItems} voiceItems={voiceItems} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} bgmName={bgmName} onUpdateClip={(clipId, patch) => updateWorkspaceClip(workspace.id, clipId, patch)} />
     <div className="ordered-clip-list">{workspace.clips.map((clip, index) => <div className="ordered-clip" key={clip.id} draggable onDragStart={() => setDragging(`${workspace.id}:${clip.id}`)} onDragOver={event => event.preventDefault()} onDrop={() => { if (dragging?.startsWith(`${workspace.id}:`)) reorderWorkspace(workspace.id, dragging.slice(workspace.id.length + 1), clip.id); setDragging(null); }}><span className="drag-handle">⠿</span><span className="order-number">{index + 1}</span>{clip.sourceUrl ? <video className="clip-list-thumb" preload="metadata" src={clip.previewUrl ?? clip.sourceUrl} /> : null}<div><strong>{clip.dish}</strong><small>{clip.label} · {resolveDishCategory(clip)} · 质量 {clip.qualityScore ?? "-"}/100 · {clip.timelineDuration.toFixed(1)}s · 源 {Number(clip.sourceStartSeconds ?? 0).toFixed(1)}-{Number(clip.sourceEndSeconds ?? clip.sourceDurationSeconds ?? clip.timelineDuration).toFixed(1)}s · {clip.sourcePath ? "已关联真实文件" : "待生成"}</small></div><button type="button" className="clip-remove" aria-label={`移除${clip.dish}`} onClick={() => removeWorkspaceClip(workspace.id, clip.id)}>×</button></div>)}</div>
     <div className="compose-pool"><span className="muted">补入候选片段</span><div className="pool-grid">{candidates.filter(clip => !workspace.clips.some(item => item.id === clip.id)).map(clip => <button type="button" className="pool-card" key={clip.id} onClick={() => addWorkspaceClip(workspace.id, clip.id)}><span>{clip.dish} · {resolveDishCategory(clip)} · {clip.label}</span><small>{clip.sourcePath ? `质量 ${clip.qualityScore ?? "-"}/100 · 加入此方案${clip.qualityWarnings?.length ? ` · ${clip.qualityWarnings.length} 条质量提示` : ""}` : "待生成，暂不可合成"}</small></button>)}</div></div>
     {preflight && <div className={`step-callout ${preflight.ok ? "" : "error-panel"}`}><strong>{preflight.ok ? "预检通过" : "预检未通过"}</strong><span>{preflight.ok ? `片段 ${preflight.summary.clipCount} 个 · 预计 ${preflight.summary.totalDurationSeconds.toFixed(1)}s` : preflight.errors.map(item => item.message).join("；")}</span>{preflight.warnings.map(item => <small key={item.code}>提示：{item.message}</small>)}</div>}
