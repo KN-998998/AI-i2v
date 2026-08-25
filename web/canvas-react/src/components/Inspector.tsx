@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayItemsFromData, overlayPositionCoordinates, overlayStyleFromItem, voiceItemsFromData, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type WorkflowData, type WorkflowNode } from "../model";
-import { uploadDraftFile } from "../api";
+import { fetchTTSOptions, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { Field, formatNodeValue, SectionTitle, Select, Tag } from "./ui";
@@ -121,6 +121,10 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const bgmUrl = useWorkflowStore(state => state.bgmUrl);
   const draftId = useWorkflowStore(state => state.draftId);
   const setBgm = useWorkflowStore(state => state.setBgm);
+  const [ttsOptions, setTtsOptions] = useState<TTSVoiceOption[]>([]);
+  useEffect(() => {
+    fetchTTSOptions().then(result => setTtsOptions(result.voices)).catch(() => setTtsOptions([]));
+  }, []);
   const data = node.data;
   const overlayItems = overlayItemsFromData(data);
   const voiceItems = voiceItemsFromData(data);
@@ -153,7 +157,7 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
     updateNodeData(node.id, {
       voiceItems: items,
       voiceText: first?.text ?? "",
-      voiceName: first?.voiceName ?? "女声 · 温暖自然",
+      voiceName: first?.voiceName ?? "无",
       voiceVolume: String(first?.volume ?? 85),
     });
   };
@@ -161,7 +165,7 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const removeVoice = (id: string) => syncVoiceLegacyFields(voiceItems.filter(item => item.id !== id));
   const addVoice = () => {
     const start = voiceItems.reduce((max, item) => Math.max(max, item.endSeconds), 0);
-    syncVoiceLegacyFields([...voiceItems, { id: `voice_${Date.now()}`, text: "", startSeconds: start, endSeconds: start + 4, voiceName: "女声 · 温暖自然", volume: 85 }]);
+    syncVoiceLegacyFields([...voiceItems, { id: `voice_${Date.now()}`, text: "", startSeconds: start, endSeconds: start + 4, provider: "qwen", model: "", voiceId: "none", voiceName: "无", volume: 85 }]);
   };
   return <>
     <div className="tabs"><button type="button" className={`tab ${activePanel === "voice" ? "active" : ""}`} onClick={() => setActivePanel("voice")}>声音</button><button type="button" className={`tab ${activePanel === "overlay" ? "active" : ""}`} onClick={() => setActivePanel("overlay")}>文字</button></div>
@@ -183,7 +187,8 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
         <div className="overlay-editor-head"><div><strong>人声轨道 {index + 1}</strong><small>{item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s</small></div><button type="button" className="clip-remove" aria-label={`删除人声 ${index + 1}`} onClick={() => removeVoice(item.id)}>×</button></div>
         <textarea className="input textarea" value={item.text} placeholder="输入这一段人声文案" onChange={event => updateVoice(item.id, { text: event.target.value })} />
         <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateVoice(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateVoice(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
-        <Field label="音色"><Select value={item.voiceName || "女声 · 温暖自然"} options={["女声 · 温暖自然", "男声 · 稳重清晰"]} onChange={value => updateVoice(item.id, { voiceName: value })} /></Field>
+        <label className="field"><span>音色</span><select className="input" value={item.voiceId === "none" ? "none" : ttsOptions.find(option => option.voice_id === item.voiceId && (!item.model || option.model === item.model)) ? `${item.model || ttsOptions.find(option => option.voice_id === item.voiceId)?.model}:${item.voiceId}` : "none"} onChange={event => { const value = event.target.value; const [model, voiceId] = value.split(":"); const option = ttsOptions.find(candidate => candidate.model === model && candidate.voice_id === voiceId); updateVoice(item.id, { voiceId: value === "none" ? "none" : voiceId, voiceName: option?.label || "无", provider: option?.provider || "qwen", model: option?.model || "" }); }}><option value="none">无（默认，不生成 TTS）</option>{ttsOptions.map(option => <option key={`${option.model}:${option.voice_id}`} value={`${option.model}:${option.voice_id}`}>{option.label} · {option.model}</option>)}</select></label>
+        {ttsOptions.length === 0 && <small className="clip-sync-error">未检测到 Qwen TTS 配置，当前只能选择“无”。</small>}
         <Field label="音量"><input className="range" type="range" min="0" max="100" value={item.volume ?? 85} onChange={event => updateVoice(item.id, { volume: Number(event.target.value) })} /></Field>
       </div>)}</div>
       {voiceItems.length === 0 && <div className="empty-state compact">还没有人声，点击“添加人声”创建第一段。</div>}

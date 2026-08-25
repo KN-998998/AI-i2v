@@ -51,6 +51,10 @@ const segmentedVoice = voiceItemsFromData({
   ],
 });
 assert(segmentedVoice.length === 2 && segmentedVoice[1].startSeconds === 10 && segmentedVoice[1].endSeconds === 15, "voice segment timing was not preserved");
+const qwenVoice = voiceItemsFromData({ voiceText: "qwen", voiceName: "女声 · 温暖自然", voiceVolume: "85" });
+assert(qwenVoice[0].voiceId === "Cherry" && qwenVoice[0].provider === "qwen", "legacy voice was not migrated to Qwen");
+const noVoice = voiceItemsFromData({ voiceText: "", voiceName: "无", voiceVolume: "85" });
+assert(noVoice.length === 0, "default no-voice state should not create a TTS segment");
 
 const composePool = [
   { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "正餐" as const },

@@ -40,7 +40,7 @@
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 6: 手动文案 + 配音 + 固定 BGM                       │
-│  手动文案 → edge-tts 配音 → 固定 BGM 混音 → 最终成片       │
+│  手动文案 → Qwen TTS 配音 → 固定 BGM 混音 → 最终成片       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -51,7 +51,7 @@
 | 图生视频   | **可灵 Kling 3.0**      | 3s / 1080p / 无声 / 9:16，API Key 鉴权 |
 | 提示词生成  | **固定槽位装配器**           | L0/L1/L2 选择后生成确定性提示词              |
 | 文案编辑   | **画布节点手动填写**          | 人声文案与画面文字由运营直接编辑                  |
-| TTS 配音 | **edge-tts**          | 免费微软语音（可替换为 CosyVoice/火山引擎）       |
+| TTS 配音 | **Qwen TTS**          | 通过 DashScope 兼容接口生成；画布支持“无”或男女音色 |
 | BGM    | 固定音频文件                | 后续可升级为 AI 生成                      |
 | 视频合成   | **ffmpeg**            | 裁切/拼接/字幕/混音                       |
 | 图片处理   | **Pillow**            | 9:16 裁切、尺寸缩放、锐化                   |
@@ -75,8 +75,9 @@ ffmpeg 已预装在系统中。
 # 必须：可灵（Step 3 图生视频）
 set KLING_API_KEY=你的kling_api_key
 
-# 可选：自定义 TTS（不设则用 edge-tts 免费版）
-set TTS_API_KEY=你的tts_key
+# 可选：Qwen TTS（也可写入 .env）
+set QWEN_API_KEY=你的qwen_api_key
+set QWEN_TTS_MODEL=qwen3-tts-flash
 ```
 
 ### 3. 创建批量配置
@@ -151,7 +152,7 @@ FastAPI 文档：`http://127.0.0.1:8015/docs`
 - 生成视频节点会进入候选片段池；“成片合成”可设置成片数量和每条片段数，随机生成多套工作区，每个工作区可以独立拖拽、删除、补入片段。
 - 批量合成会为每个工作区创建独立的 ffmpeg 任务和输出文件，单条失败不会覆盖其他工作区结果。
 - 合成任务通过 `/api/canvas/drafts/{draft_id}/compose` 启动，状态和结果通过对应的查询接口获取。
-- 初次合成生成无声成片；声音页面可将每条文字的时间段/位置、edge-tts 人声和上传 BGM 传入 ffmpeg，生成 `canvas_final.mp4`。
+- 初次合成生成无声成片；声音页面可将每条文字的时间段/位置、Qwen TTS 人声和上传 BGM 传入 ffmpeg，生成 `canvas_final.mp4`。
 - 样片适配：文字默认支持上方品牌区、中上钩子区、中央和底部安全区；不再限制为一条固定底部字幕。
 - `output/`、媒体文件、`.env`、日志和本地开发配置均不会提交到 Git；`.env.example` 只保存配置项名称和示例值。
 
@@ -201,7 +202,7 @@ pipeline/
 ├── step3_gen_videos.py    # Kling API 批量图生视频（JWT 认证 + 轮询）
 ├── step4_manual_review.py # 生成 HTML 审核页 + CSV 清单
 ├── step5_compose.py       # ffmpeg 掐头去尾 + 拼接 + 字幕 + CTA
-└── step6_voice_bgm.py     # 手动文案 + edge-tts 配音 + BGM 混音
+└── step6_voice_bgm.py     # 手动文案 + Qwen TTS 配音 + BGM 混音
 
 web/
 ├── app.py                 # FastAPI 应用入口
@@ -242,7 +243,7 @@ output/canvas_clips/
 | **先生成无声，后期配音**           | 图生视频模型有声生成成本翻倍，且配音内容可控              |
 | **生成 3s，成片只用 ~2s**       | Kling API 固定 3s，AI 动态在开头最自然，掐头去尾取精华 |
 | **硬切无转场**                | 保证节奏感，转场在后续需要时再升级                   |
-| **edge-tts 免费配音**        | 验证流程用，后续可无缝替换为 CosyVoice/火山引擎       |
+| **Qwen TTS 配音**           | 画布按模型和 voice ID 选择；未配置时可选择“无”       |
 | **base64 图片直传**          | Kling API 原生支持，无需图床，简化流程            |
 
 ## 固定约束词（不可变）
@@ -269,7 +270,7 @@ output/canvas_clips/
 - [x] Pipeline 框架搭建
 - [x] Step 1-6 代码实现
 - [ ] 可灵 API Key 申请（等开会定档位）
-- [ ] TTS 工具选型确认（edge-tts 可用，或换 CosyVoice/火山引擎）
+- [x] TTS 工具选型确认（Qwen TTS）
 - [ ] 首个批次实测 + 调优
 - [ ] 提示词效果数据收集 + 固化模板
 - [x] 发布到 GitHub 仓库

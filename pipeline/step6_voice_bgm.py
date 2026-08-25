@@ -25,13 +25,15 @@ import json
 import os
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.config import (
-    BGM_FILE,
+    BGM_FILE, QWEN_API_KEY, QWEN_TTS_BASE_URL, QWEN_TTS_MODEL, QWEN_TTS_MODELS,
     TTS_PROVIDER, TTS_API_KEY, TTS_VOICE,
     get_batch_dir, batch_subdirs,
 )
@@ -53,7 +55,79 @@ def generate_caption(dishes, brand_info, video_id):
     return f"{'，'.join(parts)}。{cta}！"
 
 
-def generate_tts(text, out_path, voice="zh-CN-XiaoxiaoNeural"):
+QWEN_VOICE_OPTIONS = (
+    ("Cherry", "女声 · Cherry · 温暖自然", "female"),
+    ("Serena", "女声 · Serena · 清晰自然", "female"),
+    ("Ethan", "男声 · Ethan · 稳重清晰", "male"),
+    ("Chelsie", "女声 · Chelsie · 活泼清晰", "female"),
+    ("Momo", "女声 · Momo · 活泼明亮", "female"),
+    ("Dylan", "男声 · Dylan · 年轻自然", "male"),
+    ("Jada", "女声 · Jada · 温柔自然", "female"),
+    ("Sunny", "女声 · Sunny · 甜美明亮", "female"),
+    ("Eric", "男声 · Eric · 成熟稳重", "male"),
+)
+
+
+def qwen_tts_options() -> list[dict[str, str]]:
+    """Return safe, non-secret Qwen model/voice metadata for the web UI."""
+    model_names = [QWEN_TTS_MODEL]
+    model_names.extend(item.strip() for item in QWEN_TTS_MODELS.split(",") if item.strip())
+    return [
+        {
+            "provider": "qwen",
+            "model": model,
+            "voice_id": voice_id,
+            "label": label,
+            "gender": gender,
+        }
+        for model in dict.fromkeys(model_names)
+        for voice_id, label, gender in QWEN_VOICE_OPTIONS
+    ]
+
+
+def _qwen_voice_id(voice: str | None) -> str | None:
+    value = (voice or "").strip()
+    if not value or value == "none":
+        return None
+    if value.startswith("qwen:"):
+        return value.split(":", 1)[1].strip() or None
+    if "男" in value:
+        return "Ethan"
+    if "女" in value:
+        return "Cherry"
+    if value in {"female_warm", "female"}:
+        return "Cherry"
+    if value in {"male_clear", "male"}:
+        return "Ethan"
+    return value if any(item[0] == value for item in QWEN_VOICE_OPTIONS) else None
+
+
+def _generate_qwen_tts(text: str, out_path: str, voice: str | None = None, model: str | None = None) -> str | None:
+    if not QWEN_API_KEY:
+        print("    [TTS] 未配置 QWEN_API_KEY/DASHSCOPE_API_KEY/TTS_API_KEY")
+        return None
+    voice_id = _qwen_voice_id(voice) or _qwen_voice_id(TTS_VOICE)
+    if not voice_id:
+        return None
+    payload = json.dumps({"model": model or QWEN_TTS_MODEL, "input": {"text": text, "voice": voice_id}, "response_format": "mp3"}).encode("utf-8")
+    request = urllib.request.Request(
+        QWEN_TTS_BASE_URL,
+        data=payload,
+        headers={"Authorization": f"Bearer {QWEN_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            audio = response.read()
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_bytes(audio)
+        return out_path if Path(out_path).is_file() and Path(out_path).stat().st_size > 0 else None
+    except (OSError, urllib.error.HTTPError, urllib.error.URLError) as exc:
+        print(f"    [TTS] Qwen 生成失败: {exc}")
+        return None
+
+
+def generate_tts(text, out_path, voice=None, model=None):
     """
     调用 TTS API 生成配音音频。
 
@@ -66,7 +140,10 @@ def generate_tts(text, out_path, voice="zh-CN-XiaoxiaoNeural"):
     - 火山引擎 TTS：需火山引擎 API
     - 豆包 TTS：需豆包 API
     """
-    # 方案1: edge-tts（免费，推荐先用这个验证流程）
+    if TTS_PROVIDER in {"qwen", "dashscope"}:
+        return _generate_qwen_tts(text, out_path, voice=voice, model=model)
+
+    # Legacy fallback for CLI users who explicitly select edge-tts.
     try:
         import edge_tts
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)

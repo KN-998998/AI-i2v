@@ -40,6 +40,9 @@ export type VoiceItem = {
   text: string;
   startSeconds: number;
   endSeconds: number;
+  provider?: string;
+  model?: string;
+  voiceId?: string;
   voiceName?: string;
   volume?: number;
 };
@@ -269,7 +272,7 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
 }
 
 export function voiceItemsFromData(data: Pick<WorkflowData, "voiceItems" | "voiceText" | "voiceName" | "voiceVolume">): VoiceItem[] {
-  const defaultVoice = data.voiceName?.trim() || "女声 · 温暖自然";
+  const defaultVoice = data.voiceName?.trim() || "无";
   const defaultVolume = clampNumber(Number(data.voiceVolume), 0, 100, 85);
   if (data.voiceItems) {
     return data.voiceItems.map((item, index) => {
@@ -280,13 +283,23 @@ export function voiceItemsFromData(data: Pick<WorkflowData, "voiceItems" | "voic
         text: item.text || "",
         startSeconds: start,
         endSeconds: end,
+        provider: item.provider || "qwen",
+        model: item.model || "",
+        voiceId: item.voiceId || legacyVoiceId(item.voiceName || defaultVoice),
         voiceName: item.voiceName || defaultVoice,
         volume: clampNumber(Number(item.volume), 0, 100, defaultVolume),
       };
     });
   }
   const text = data.voiceText?.trim() || "";
-  return text ? [{ id: "voice_main", text, startSeconds: 0, endSeconds: 4, voiceName: defaultVoice, volume: defaultVolume }] : [];
+  return text ? [{ id: "voice_main", text, startSeconds: 0, endSeconds: 4, provider: "qwen", model: "", voiceId: legacyVoiceId(defaultVoice), voiceName: defaultVoice, volume: defaultVolume }] : [];
+}
+
+function legacyVoiceId(value: string): string {
+  if (!value || value === "无" || value === "none") return "none";
+  if (["女声 · 温暖自然", "female_warm", "女声 · Cherry · 温暖自然"].includes(value)) return "Cherry";
+  if (["男声 · 稳重清晰", "male_clear", "男声 · Ethan · 稳重清晰"].includes(value)) return "Ethan";
+  return value;
 }
 
 export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜／装饰", "餐具器皿", "桌面／台面", "手部", "厨师上半身", "背景陈设"];
@@ -304,7 +317,7 @@ export function dataFor(kind: NodeKind): WorkflowData {
   if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
   if (kind === "output") return { ...base, outputTarget: "5-6 道菜", outputDuration: "12-15s", outputAspect: "9:16" };
-  if (kind === "sound") return { ...base, voiceText: "本周到店即可领取限定优惠，欢迎来店品尝。", voiceName: "女声 · 温暖自然", voiceVolume: "85", bgmVolume: "30", overlayMain: "本周限定优惠", overlayCta: "到店即享 · 现在预订", overlayPosition: "中上钩子区", overlayStart: "0.0s", overlayEnd: "2.5s", overlayItems: DEFAULT_OVERLAY_ITEMS.map(item => ({ ...item })) };
+  if (kind === "sound") return { ...base, voiceText: "", voiceName: "无", voiceVolume: "85", bgmVolume: "30", overlayMain: "本周限定优惠", overlayCta: "到店即享 · 现在预订", overlayPosition: "中上钩子区", overlayStart: "0.0s", overlayEnd: "2.5s", overlayItems: DEFAULT_OVERLAY_ITEMS.map(item => ({ ...item })) };
   return base;
 }
 

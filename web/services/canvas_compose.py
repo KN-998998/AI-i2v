@@ -161,12 +161,15 @@ def _voice_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
                 "text": str(item["text"]),
                 "start": start,
                 "end": end,
-                "voice": str(item.get("voiceName") or sound.get("voiceName") or ""),
+                "voice_id": str(item.get("voiceId") or ""),
+                "provider": str(item.get("provider") or "qwen"),
+                "model": str(item.get("model") or ""),
+                "voice": str(item.get("voiceName") or sound.get("voiceName") or "none"),
                 "volume": max(0.0, min(float(item.get("volume", sound.get("voiceVolume", 85)) or 85) / 100, 1.0)),
             })
         return result
     text = str(sound.get("voiceText", "")).strip()
-    return [{"text": text, "start": 0.0, "end": 4.0, "voice": str(sound.get("voiceName", "")), "volume": max(0.0, min(float(sound.get("voiceVolume", 85) or 85) / 100, 1.0))}] if text else []
+    return [{"text": text, "start": 0.0, "end": 4.0, "voice_id": "", "provider": "qwen", "model": "", "voice": str(sound.get("voiceName", "none")), "volume": max(0.0, min(float(sound.get("voiceVolume", 85) or 85) / 100, 1.0))}] if text else []
 
 
 def start_compose(draft_id: str, workspace_id: str | None = None, include_sound: bool = False) -> dict[str, Any]:
@@ -226,11 +229,12 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                 bgm_file = _uploaded_audio_path(draft_id, draft.get("bgmUrl"))
                 voice_segments = []
                 for voice_index, item in enumerate(_voice_items(sound)):
+                    if item["voice"] in {"", "none", "无"} and not item.get("voice_id"):
+                        continue
                     segment_path = output_dir / f"voice_{voice_index:03d}.mp3"
-                    voice = "zh-CN-YunxiNeural" if "男" in item["voice"] else "zh-CN-XiaoxiaoNeural"
-                    generated = generate_tts(item["text"], str(segment_path), voice=voice)
+                    generated = generate_tts(item["text"], str(segment_path), voice=item.get("voice_id") or item["voice"], model=item.get("model") or None)
                     if not generated:
-                        raise RuntimeError("人声生成失败，请确认 edge-tts 可用或清空当前人声段")
+                        raise RuntimeError("Qwen 人声生成失败，请检查 QWEN_API_KEY 和音色配置，或将该段音色设置为“无”")
                     actual_duration = get_audio_duration(generated)
                     if actual_duration <= 0:
                         raise RuntimeError("无法读取 TTS 音频时长，请确认 ffprobe 可用")

@@ -70,9 +70,13 @@ KLING_BASE_URL    = os.environ.get("KLING_BASE_URL", "https://api-beijing.klinga
 KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-3.0-omni")
 
 # TTS 配置（待选型，先留占位）
-TTS_PROVIDER = ""
-TTS_API_KEY  = os.environ.get("TTS_API_KEY", "")
-TTS_VOICE    = os.environ.get("TTS_VOICE", "female_warm")  # 音色标识
+TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "qwen").strip().lower() or "qwen"
+TTS_API_KEY = os.environ.get("TTS_API_KEY", "")
+QWEN_API_KEY = os.environ.get("QWEN_API_KEY", "") or os.environ.get("DASHSCOPE_API_KEY", "") or TTS_API_KEY
+QWEN_TTS_BASE_URL = os.environ.get("QWEN_TTS_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech")
+QWEN_TTS_MODEL = os.environ.get("QWEN_TTS_MODEL", "qwen3-tts-flash")
+QWEN_TTS_MODELS = os.environ.get("QWEN_TTS_MODELS", "")
+TTS_VOICE = os.environ.get("TTS_VOICE", "none")  # 音色标识
 
 # ── 视频规格 ──────────────────────────────────────────────────────
 VIDEO_RESOLUTION = "1080p"     # 1080p

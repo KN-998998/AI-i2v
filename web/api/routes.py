@@ -24,12 +24,16 @@ from pipeline.config import (
     KLING_SECRET_KEY,
     CANVAS_CLIP_ROOT,
     OUTPUT_ROOT,
+    QWEN_API_KEY,
+    QWEN_TTS_MODEL,
+    TTS_PROVIDER,
     VIDEO_ASPECT,
     VIDEO_DURATION,
     VIDEO_RESOLUTION,
     VIDEO_SILENT,
     batch_subdirs,
 )
+from pipeline.step6_voice_bgm import qwen_tts_options
 from web.core.logging import get_logger
 from web.services.pipeline_tasks import run_compose, run_step1, run_step2, run_step3
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
@@ -42,6 +46,18 @@ from web.services.state import get_batch_state, load_manifest, load_state, save_
 router = APIRouter()
 logger = get_logger(__name__)
 CANVAS_CLIP_PREVIEW_ROOT = CANVAS_CLIP_ROOT / ".previews"
+
+
+@router.get("/api/canvas/tts/options")
+def list_canvas_tts_options() -> dict[str, Any]:
+    """Expose configured Qwen voice metadata without ever exposing API keys."""
+    configured = bool(QWEN_API_KEY) and TTS_PROVIDER in {"qwen", "dashscope"}
+    return {
+        "configured": configured,
+        "provider": "qwen" if configured else None,
+        "default_model": QWEN_TTS_MODEL if configured else None,
+        "voices": qwen_tts_options() if configured else [],
+    }
 
 
 def _clip_label(filename: str) -> str:

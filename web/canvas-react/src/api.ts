@@ -36,6 +36,26 @@ export async function fetchCanvasClips(): Promise<ClipLibraryItem[]> {
   return parseResponse<ClipLibraryItem[]>(response);
 }
 
+export type TTSVoiceOption = {
+  provider: "qwen";
+  model: string;
+  voice_id: string;
+  label: string;
+  gender: "female" | "male";
+};
+
+export type TTSOptions = {
+  configured: boolean;
+  provider: "qwen" | null;
+  default_model: string | null;
+  voices: TTSVoiceOption[];
+};
+
+export async function fetchTTSOptions(): Promise<TTSOptions> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/tts/options`, { cache: "no-store" });
+  return parseResponse<TTSOptions>(response);
+}
+
 export async function uploadDraftFile(draftId: string, file: File, kind: "image" | "audio", metadata?: { dish?: string; category?: string }) {
   const body = new FormData();
   body.append("kind", kind);
