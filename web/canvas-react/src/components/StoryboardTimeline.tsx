@@ -42,7 +42,7 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
   const outOfRangeOverlays = total > 0 ? overlayItems.filter(item => item.startSeconds >= total || item.endSeconds > total) : [];
   const trackWidth = Math.max(720, total * 100);
   const playheadRatio = clamp(playhead / Math.max(total, 0.1), 0, 1);
-  const playheadLeft = `calc(${playheadRatio * 100}% + ${60 * (1 - playheadRatio)}px)`;
+  const playheadLeft = `calc(${playheadRatio * 100}% + ${72 * (1 - playheadRatio)}px)`;
 
   useEffect(() => {
     setPlayhead(value => clamp(value, 0, Math.max(total, 0)));
