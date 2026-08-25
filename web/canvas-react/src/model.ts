@@ -142,6 +142,7 @@ export type TimelineClip = {
   status?: "pending" | "generated";
   sourcePath?: string;
   sourceUrl?: string;
+  previewUrl?: string;
   batchId?: string;
   filename?: string;
   generatorNodeId?: string;
@@ -183,6 +184,7 @@ export type ClipLibraryItem = TimelineClip & {
   filename: string;
   sourcePath: string;
   sourceUrl: string;
+  previewUrl?: string;
   durationSeconds: number;
 };
 

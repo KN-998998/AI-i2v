@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import uuid
 import zipfile
@@ -40,6 +41,7 @@ from web.services.state import get_batch_state, load_manifest, load_state, save_
 
 router = APIRouter()
 logger = get_logger(__name__)
+CANVAS_CLIP_PREVIEW_ROOT = CANVAS_CLIP_ROOT / ".previews"
 
 
 def _clip_label(filename: str) -> str:
@@ -76,6 +78,7 @@ def _canvas_clip_payload(clip_path: Path, source_url: str, batch_id: str | None 
         "status": "generated",
         "sourcePath": str(clip_path.resolve()),
         "sourceUrl": source_url,
+        "previewUrl": _ensure_browser_preview(clip_path, analysis),
         "qualityScore": analysis.get("qualityScore", 50),
         "qualityLabel": analysis.get("qualityLabel", "warning"),
         "qualityWarnings": analysis.get("qualityWarnings", []),
@@ -85,6 +88,38 @@ def _canvas_clip_payload(clip_path: Path, source_url: str, batch_id: str | None 
     if batch_id is not None:
         item["batchId"] = batch_id
     return item
+
+
+def _ensure_browser_preview(clip_path: Path, analysis: dict[str, Any]) -> str | None:
+    """Create a cached H.264 proxy when the source codec is not browser-safe."""
+    if str(analysis.get("codec") or "").lower() in {"h264", "avc1"}:
+        return None
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return None
+    CANVAS_CLIP_PREVIEW_ROOT.mkdir(parents=True, exist_ok=True)
+    preview_path = CANVAS_CLIP_PREVIEW_ROOT / f"{clip_path.stem}.preview.mp4"
+    if not preview_path.exists():
+        temporary = preview_path.with_suffix(".tmp.mp4")
+        result = subprocess.run(
+            [
+                ffmpeg, "-y", "-i", str(clip_path), "-an",
+                "-vf", "scale=w=720:h=-2:force_original_aspect_ratio=decrease",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporary),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            check=False,
+        )
+        if result.returncode != 0 or not temporary.is_file():
+            temporary.unlink(missing_ok=True)
+            return None
+        temporary.replace(preview_path)
+    return f"/api/canvas/clips/previews/{preview_path.name}"
 
 
 @router.get("/api/canvas/clips")
@@ -124,6 +159,14 @@ def serve_canvas_library_clip(filename: str) -> FileResponse:
     if clip_path.suffix.lower() != ".mp4" or not clip_path.is_file():
         raise _json_error("视频片段不存在", 404)
     return FileResponse(str(clip_path), media_type="video/mp4")
+
+
+@router.get("/api/canvas/clips/previews/{filename}")
+def serve_canvas_library_preview(filename: str) -> FileResponse:
+    preview_path = CANVAS_CLIP_PREVIEW_ROOT / Path(filename).name
+    if preview_path.suffix.lower() != ".mp4" or not preview_path.is_file():
+        raise _json_error("视频预览不存在", 404)
+    return FileResponse(str(preview_path), media_type="video/mp4")
 
 
 @router.get("/api/canvas/clips/{batch_id}/{filename}")
