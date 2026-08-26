@@ -388,10 +388,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     return { timeline, composeWorkspaces: syncPrimaryWorkspace(state.composeWorkspaces, timeline), revision: state.revision + 1 };
   }),
   updateWorkspaceClip: (_workspaceId, clipId, patch) => set(state => {
-    const trimChanged = patch.sourceStartSeconds !== undefined || patch.sourceEndSeconds !== undefined || patch.timelineDuration !== undefined;
     // A trim belongs to the source clip, so every composition reuses it.
     const update = <T extends TimelineClip>(clip: T): T => clip.id === clipId
-      ? normalizeTimelineClip({ ...clip, ...patch, ...(trimChanged ? { trimConfirmed: true } : {}) })
+      ? normalizeTimelineClip({ ...clip, ...patch })
       : clip;
     const composeWorkspaces = state.composeWorkspaces.map(workspace => {
       const includesClip = workspace.clips.some(clip => clip.id === clipId);
