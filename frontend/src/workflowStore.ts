@@ -101,7 +101,6 @@ function sameClipList(left: TimelineClip[], right: TimelineClip[]): boolean {
       && clip.sourcePath === other.sourcePath
       && clip.sourceUrl === other.sourceUrl
       && clip.dishCategory === other.dishCategory
-      && clip.batchId === other.batchId
       && clip.filename === other.filename
       && clip.generatorNodeId === other.generatorNodeId
       && clip.generationJobId === other.generationJobId

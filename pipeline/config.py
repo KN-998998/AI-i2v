@@ -2,7 +2,7 @@
 """
 全局配置：API Key、路径、视频规格参数
 ========================================
-所有 step 脚本共享此配置。
+所有画布领域模块共享此配置。
 
 密钥统一从 .env 文件读取（.env 已被 .gitignore 忽略，不会进仓库）：
   .env 格式：
@@ -45,25 +45,11 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent          # 仓库根目录
 PIPELINE_DIR = PROJECT_ROOT / "pipeline"
 OUTPUT_ROOT  = Path(os.environ.get("OUTPUT_ROOT", PROJECT_ROOT / "output"))
-# 新版画布统一使用的 Kling 视频片段库；旧版批处理仍写入 batch_*/03_clips。
+# 画布统一使用的 Kling 视频片段库。
 CANVAS_CLIP_ROOT = Path(os.environ.get("CANVAS_CLIP_ROOT", OUTPUT_ROOT / "canvas_clips"))
 BACKGROUND_TEMPLATE_DIR = Path(
     os.environ.get("BACKGROUND_TEMPLATE_DIR", OUTPUT_ROOT / "background_templates")
 )
-
-# 素材库路径（图生视频主库，按菜名分文件夹）
-#   示例：export IMAGE_LIBRARY="D:/素材库/菜品照片"
-#   或在本文件同级放一个 config.local.py（已被 .gitignore 忽略），
-#   在其中覆盖 IMAGE_LIBRARY / EXTRA_IMAGE_LIBS / BGM_FILE 等变量。
-IMAGE_LIBRARY = Path(os.environ.get("IMAGE_LIBRARY", "素材库/菜品照片"))
-EXTRA_IMAGE_LIBS = [
-    Path(os.environ.get("EXTRA_IMAGE_LIB_1", "")),
-    Path(os.environ.get("EXTRA_IMAGE_LIB_2", "")),
-]
-EXTRA_IMAGE_LIBS = [p for p in EXTRA_IMAGE_LIBS if str(p)]
-
-# 固定 BGM
-BGM_FILE = Path(os.environ.get("BGM_FILE") or "结尾音乐.mp3")
 
 # ── API Keys（从 .env / 环境变量读取，代码里不硬编码）──────────────
 KLING_API_KEY     = os.environ.get("KLING_API_KEY", "")
@@ -74,8 +60,7 @@ KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-3.0-omni")
 
 # TTS 配置（待选型，先留占位）
 TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "qwen").strip().lower() or "qwen"
-TTS_API_KEY = os.environ.get("TTS_API_KEY", "")
-QWEN_API_KEY = os.environ.get("QWEN_API_KEY", "") or os.environ.get("DASHSCOPE_API_KEY", "") or TTS_API_KEY
+QWEN_API_KEY = os.environ.get("QWEN_API_KEY", "") or os.environ.get("DASHSCOPE_API_KEY", "")
 QWEN_TTS_BASE_URL = os.environ.get("QWEN_TTS_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech")
 QWEN_TTS_MODEL = os.environ.get("QWEN_TTS_MODEL", "qwen3-tts-flash")
 QWEN_TTS_MODELS = os.environ.get("QWEN_TTS_MODELS", "")
@@ -96,7 +81,6 @@ VIDEO_RESOLUTION = "1080p"     # 1080p
 VIDEO_ASPECT     = "9:16"      # 竖版
 VIDEO_DURATION   = 3           # Kling 3.0 最短 3s（3.0 系列支持 3~15s 整数步进）
 VIDEO_SILENT     = True        # 无声生成
-ROLL_COUNT       = 3           # 每道菜生成 3 个版本供挑选
 
 # 成片规格（项目组 2026-08-20 确认：5-6 道菜 / 成片 12-15s）
 FINAL_DURATION_RANGE = (12, 15)   # 成片 12-15s
@@ -125,57 +109,3 @@ PROMPT_PREFIX = (
 PROMPT_SUFFIX = (
     "\u5f00\u573a\u6ca1\u6709\u9759\u6b62\u7b49\u5f85\uff0c\u8fd0\u52a8\u81ea\u7136\u7ed3\u675f\uff0c\u955c\u5934\u4e0d\u6296\u52a8\u3001\u4e0d\u7a81\u53d8"
 )
-
-# ── 成片结构模板 ──────────────────────────────────────────────────
-# 项目组规则（2026-08-20）：每片 5-6 道菜；甜品有且仅有一个且必须最后展示；
-# 成片 12-15s。源片段为 Kling 3s，掐头 0.5s 后每段最多取 2.5s：
-#   5 道菜 × 2.5s = 12.5s；6 道菜 × 2.5s = 15.0s（含 outro CTA 叠加）
-TEMPLATE_5_DISH = {
-    "total_duration": 12.5,
-    "segments": [
-        {"index": 0, "duration": 2.5, "role": "hook"},      # 钩子：最馋的菜（2.5s）
-        {"index": 1, "duration": 2.5, "role": "body"},
-        {"index": 2, "duration": 2.5, "role": "body"},
-        {"index": 3, "duration": 2.5, "role": "body"},
-        {"index": 4, "duration": 2.5, "role": "body"},
-        {"index": 5, "duration": 1.0, "role": "outro"},     # 片尾 CTA（叠加在最后一段）
-    ],
-}
-
-TEMPLATE_6_DISH = {
-    "total_duration": 15.0,
-    "segments": [
-        {"index": 0, "duration": 2.5, "role": "hook"},
-        {"index": 1, "duration": 2.5, "role": "body"},
-        {"index": 2, "duration": 2.5, "role": "body"},
-        {"index": 3, "duration": 2.5, "role": "body"},
-        {"index": 4, "duration": 2.5, "role": "body"},
-        {"index": 5, "duration": 2.5, "role": "body"},
-        {"index": 6, "duration": 1.0, "role": "outro"},
-    ],
-}
-
-
-def get_batch_dir(batch_date: str = None) -> Path:
-    """获取当次批量的输出目录。"""
-    import datetime
-    if batch_date is None:
-        batch_date = datetime.date.today().strftime("%Y%m%d")
-    d = OUTPUT_ROOT / f"batch_{batch_date}"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def batch_subdirs(batch_dir: Path) -> dict:
-    """返回批量目录下的标准子目录路径。"""
-    dirs = {
-        "images":   batch_dir / "01_images",       # 预处理后的 9:16 图片
-        "prompts":  batch_dir / "02_prompts",       # 每道菜的提示词 .txt
-        "clips":    batch_dir / "03_clips",         # Kling 生成的原始视频片段
-        "selected": batch_dir / "04_selected",      # 人工挑选后的最佳片段
-        "composed": batch_dir / "05_composed",      # ffmpeg 合成的无声成片
-        "final":    batch_dir / "06_final",         # 配音配乐后的最终成片
-    }
-    for d in dirs.values():
-        d.mkdir(parents=True, exist_ok=True)
-    return dirs

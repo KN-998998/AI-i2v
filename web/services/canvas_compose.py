@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT, batch_subdirs
+from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT
 from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import preflight_draft
 
@@ -54,11 +54,6 @@ def _find_generated_clip(dish: str) -> Path | None:
     candidates = []
     if CANVAS_CLIP_ROOT.is_dir():
         candidates.extend(path for path in CANVAS_CLIP_ROOT.glob("*.mp4") if dish in path.name)
-    if not OUTPUT_ROOT.exists():
-        return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
-    for batch_dir in OUTPUT_ROOT.glob("batch_*"):
-        clips_dir = batch_subdirs(batch_dir)["clips"]
-        candidates.extend(path for path in clips_dir.glob("*.mp4") if dish in path.name)
     return max(candidates, key=lambda path: path.stat().st_mtime) if candidates else None
 
 
@@ -269,7 +264,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
         output_dir.mkdir(parents=True, exist_ok=True)
         temporary_paths: list[str] = []
         try:
-            from pipeline.step5_compose import concat_clips, trim_clip
+            from pipeline.video_render import concat_clips, trim_clip
 
             trimmed_paths = []
             for index, (clip, source) in enumerate(prepared):
@@ -287,7 +282,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
             if not include_sound:
                 concat_clips(trimmed_paths, str(output_path), subtitles=[], brand_info=None)
             if include_sound:
-                from pipeline.step6_voice_bgm import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
+                from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
                 video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
                 bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))

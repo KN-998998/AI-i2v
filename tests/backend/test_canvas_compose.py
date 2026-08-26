@@ -1,4 +1,4 @@
-from pipeline.step5_compose import _typewriter_prefixes
+from pipeline.video_render import _typewriter_prefixes
 from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sync_caption_timings
 
 

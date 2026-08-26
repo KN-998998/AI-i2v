@@ -1,29 +1,29 @@
 # AI 引流视频批量生产流水线（餐饮品牌）
 
 ## 项目结构
-- `pipeline/` — 核心代码（6 个 Step 脚本 + 配置 + 入口）
-- `_archive/` — 历史文档/旧脚本（本地保留，不入仓库）
-- `output/` — 批量生产输出（按批次日期分目录）
-- 素材库：本地路径，通过 `pipeline/config.py` 环境变量 `IMAGE_LIBRARY` 配置
+- `frontend/` — React Flow 画布与独立操作页面
+- `web/` — FastAPI API、草稿持久化和后台任务编排
+- `pipeline/` — Kling、FFmpeg、TTS、提示词等领域能力模块
+- `output/` — 画布草稿、上传素材、片段库、背景模板和成片
 
 ## 核心规则
-1. Pipeline：菜品图片 → 可灵 Kling 3.0 图生视频 → ffmpeg 合成 → AI 配音配乐
-2. 素材主库：`IMAGE_LIBRARY`（按菜名分文件夹）
-3. 生产规模：每天 ~10 条，混合模式（不同菜品组合 + 同菜变体）
-4. 人工环节：仅 Step 4 片段审核
-5. 面向非技术运营/品牌部：交付中文说明文档，代码供技术侧维护
+1. 画布流程：素材上传 → 图片处理 → 提示词装配 → Kling 生成 → 批量合成 → 声音与文字 → 成片结果。
+2. 新片段统一保存至 `output/canvas_clips/`，草稿保存至 `output/canvas_drafts/`。
+3. 成片支持多个工作区；运营可手动排序、裁剪片段并编辑音频、文字轨道。
+4. 面向非技术运营/品牌部：交付中文说明文档，代码供技术侧维护。
 
-## 工作流 Step
-1. **Step 1** — 菜品清单 → 素材库找图 → 9:16/1080p 预处理（Pillow）
-2. **Step 2** — 固定槽位装配图生视频提示词 + 手动填写字幕文案
-3. **Step 3** — Kling 3.0 API 批量图生视频（3s/无声/9:16，每菜 3 roll）
-4. **Step 4** — 生成 HTML 审核页 + CSV 清单（人工挑选）
-5. **Step 5** — ffmpeg 掐头去尾 + 硬切拼接 + 字幕 + CTA → 无声成片
-6. **Step 6** — 手动文案 + edge-tts 配音 + 固定 BGM → 最终有声成片
+## 画布步骤
+1. **素材与菜品** — 上传菜品图、填写菜名和分类。
+2. **图片处理** — GoodsMatting 抠图并和背景模板合成首帧。
+3. **提示词装配** — 编辑 L0/L1/L2、镜头与动作并进行校验。
+4. **生成视频片段** — Kling 生成后自动下载到本地片段库。
+5. **成片合成** — 选择、排序、裁剪片段，批量生成无声成片。
+6. **声音与文字** — 多轨 BGM、人声和同步文字，输出最终有声成片。
+7. **成片结果** — 查看、预览和下载任务结果。
 
 ## API Key 配置
 ```bash
-set KLING_API_KEY=xxxx                # Step 3
+set KLING_API_KEY=xxxx                # Kling 视频生成
 ```
 
 ## Git 推送授权
@@ -32,5 +32,5 @@ set KLING_API_KEY=xxxx                # Step 3
 
 ## 运行
 ```bash
-python pipeline/run_batch.py --config pipeline/batch_template.yaml
+start_dev.bat
 ```

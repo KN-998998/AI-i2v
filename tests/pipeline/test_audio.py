@@ -1,4 +1,4 @@
-from pipeline import step6_voice_bgm as voice_bgm
+from pipeline import audio as voice_bgm
 
 
 def test_qwen_cloned_voice_is_exposed_and_bound_to_vc_model(monkeypatch):

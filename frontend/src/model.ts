@@ -173,7 +173,6 @@ export type TimelineClip = {
   sourcePath?: string;
   sourceUrl?: string;
   previewUrl?: string;
-  batchId?: string;
   filename?: string;
   generatorNodeId?: string;
   generationJobId?: string;
@@ -229,8 +228,6 @@ export type BackgroundTemplate = {
 };
 
 export type ClipLibraryItem = TimelineClip & {
-  /** 旧批次片段才有；新版公共画布片段不依赖 batch_id。 */
-  batchId?: string;
   filename: string;
   sourcePath: string;
   sourceUrl: string;

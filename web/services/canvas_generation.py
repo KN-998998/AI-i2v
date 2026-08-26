@@ -209,7 +209,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
 
     def worker() -> None:
         try:
-            from pipeline.step3_gen_videos import create_task, download_video, image_to_base64, session_with_retry, wait_for_video
+            from pipeline.kling import create_task, download_video, image_to_base64, session_with_retry, wait_for_video
 
             _update_job(draft_id, job, status="running", stage="准备图片和提示词")
             session = session_with_retry()

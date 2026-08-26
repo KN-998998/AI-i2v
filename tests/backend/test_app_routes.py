@@ -169,7 +169,6 @@ def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):
     clip_dir.mkdir(parents=True)
     clip_path = clip_dir / "天妇罗_roll1_1080p_5s.mp4"
     clip_path.write_bytes(b"fake-mp4")
-    monkeypatch.setattr(api_routes, "OUTPUT_ROOT", output_root)
     monkeypatch.setattr(api_routes, "CANVAS_CLIP_ROOT", clip_dir)
     monkeypatch.setattr(api_routes, "_read_video_duration_seconds", lambda _path: 5.0)
 
@@ -178,25 +177,8 @@ def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):
     assert clips.status_code == 200
     item = clips.json()[0]
     assert item["dish"] == "天妇罗"
-    assert "batchId" not in item
     assert item["timelineDuration"] == 2.5
     assert client.get(item["sourceUrl"]).content == b"fake-mp4"
-
-
-def test_canvas_clip_library_keeps_legacy_batch_compatibility(monkeypatch, tmp_path):
-    output_root = tmp_path / "output"
-    clip_dir = output_root / "batch_demo" / "03_clips"
-    clip_dir.mkdir(parents=True)
-    clip_path = clip_dir / "天妇罗_roll1_1080p_5s.mp4"
-    clip_path.write_bytes(b"legacy-mp4")
-    monkeypatch.setattr(api_routes, "OUTPUT_ROOT", output_root)
-    monkeypatch.setattr(api_routes, "CANVAS_CLIP_ROOT", output_root / "canvas_clips")
-    monkeypatch.setattr(api_routes, "_read_video_duration_seconds", lambda _path: 5.0)
-
-    client = TestClient(create_app())
-    item = client.get("/api/canvas/clips").json()[0]
-    assert item["batchId"] == "batch_demo"
-    assert client.get(item["sourceUrl"]).content == b"legacy-mp4"
 
 
 def test_video_quality_uses_rotation_metadata_for_display_ratio(monkeypatch, tmp_path):
@@ -230,9 +212,10 @@ def test_video_quality_uses_rotation_metadata_for_display_ratio(monkeypatch, tmp
 def test_canvas_compose_accepts_workspace_id(monkeypatch):
     captured = {}
 
-    def fake_start(draft_id, workspace_id=None):
+    def fake_start(draft_id, workspace_id=None, include_sound=False):
         captured["draft_id"] = draft_id
         captured["workspace_id"] = workspace_id
+        captured["include_sound"] = include_sound
         return {"job_id": "a" * 32, "status": "running", "timeline_count": 2, "output_url": None, "error": None}
 
     monkeypatch.setattr(api_routes, "start_compose", fake_start)
@@ -241,7 +224,7 @@ def test_canvas_compose_accepts_workspace_id(monkeypatch):
         json={"workspace_id": "compose_2"},
     )
     assert response.status_code == 200
-    assert captured == {"draft_id": "default", "workspace_id": "compose_2"}
+    assert captured == {"draft_id": "default", "workspace_id": "compose_2", "include_sound": False}
 
 
 def test_canvas_compose_accepts_sound_render_flag(monkeypatch):

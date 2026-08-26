@@ -2,7 +2,7 @@
 
 面向餐饮品牌的本地视频生产工作台：将菜品静态图处理为适合图生视频的首帧，生成短视频片段，组合为多条竖版成片，并在时间线上加入 BGM、TTS 人声和同步画面文字。
 
-当前推荐入口是 **React Flow 画布工作台**。旧的 `pipeline/run_batch.py` 仅保留为历史批处理兼容能力，不是日常运营流程。
+当前唯一入口是 **React Flow 画布工作台**。
 
 ## 当前生产流程
 
@@ -88,7 +88,7 @@ copy .env.example .env
 | Kling 生成视频 | `KLING_API_KEY` |
 | 商品抠图与背景合成 | `BACKGROUND_REMOVAL_PROVIDER=tencent`、腾讯云 SecretId/SecretKey、`TENCENT_COS_BUCKET` |
 | Qwen / 阿里云 TTS | `TTS_PROVIDER=qwen`、`QWEN_API_KEY`、音色及模型配置 |
-| 素材库或默认 BGM | `IMAGE_LIBRARY`、`BGM_FILE`，可选 |
+| BGM | 在“声音与文字”页面直接上传音频文件 |
 
 `.env`、视频、图片、草稿和日志都被 Git 忽略，不能提交到远程仓库。
 
@@ -128,20 +128,19 @@ output/
 │       ├── draft.json          # 节点、连线、时间线与工作区状态
 │       ├── files/              # 上传的菜品图、尾帧、BGM 等
 │       └── compositions/       # 每个工作区的无声/最终成片和任务记录
-└── _archive/batches/           # 历史 CLI 批次归档，不作为画布片段库
+└── <draft_id>/                   # 实际草稿与成片目录均由画布任务自动创建
 ```
 
 - 刷新浏览器后，画布节点、连线、素材引用、合成工作区和轨道配置都会从同一草稿恢复。
 - Kling 成功后，视频会自动下载至 `output/canvas_clips/`；前端可刷新片段库获取新片段。
 - 每个合成工作区各自创建 ffmpeg 任务，单条失败不会覆盖其他工作区的成片。
-- 旧目录 `output/batch_*/03_clips/` 只为历史素材兼容而扫描，新片段不再写入其中。
 
 ## 工程结构
 
 ```text
 frontend/                 # React Flow 前端源码、状态、组件和类型测试
 web/                      # FastAPI 应用、API 路由、后台任务和服务层
-pipeline/                 # Kling、ffmpeg、TTS 等可复用底层能力；含旧 CLI 兼容入口
+pipeline/                 # Kling、ffmpeg、TTS、提示词等可复用底层能力
 tests/
 ├── backend/              # FastAPI、合成、图片处理测试
 └── pipeline/             # 提示词、TTS 等底层能力测试
@@ -153,10 +152,6 @@ docs/
 ```
 
 前端构建结果会写入 `web/static/canvas-app/`，由 FastAPI 提供服务；该目录是可再生文件，不提交 Git。
-
-## 旧 CLI 兼容能力
-
-`pipeline/run_batch.py`、`pipeline/batch_template.yaml` 与 `output/batch_*` 是旧批处理流程的兼容保留：它们用于维护历史批次、复用既有脚本或技术侧排查，不用于日常品牌部操作。新内容请始终从 `/canvas-mvp` 创建和管理。
 
 ## 开发约定
 
