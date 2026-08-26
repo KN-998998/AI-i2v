@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as R
 import { overlayCoordinatesFromItem, overlayStyleFromItem, type OverlayItem, type TimelineClip, type VoiceItem } from "../model";
 
 type PositionedClip = { clip: TimelineClip; start: number; end: number };
-type TrimDrag = { clipId: string; edge: "start" | "end"; originX: number; originStart: number; originEnd: number; sourceDuration: number };
 type RangeDrag = { track: "overlay" | "voice"; itemId: string; mode: "start" | "end" | "move"; originX: number; originStart: number; originEnd: number };
 type OverlayPositionDrag = { itemId: string; originX: number; originY: number; originPosition: { x: number; y: number } };
 
@@ -25,7 +24,8 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
   const resolvedVoiceItems = voiceItems.length > 0 ? voiceItems : voiceText?.trim() ? [{ id: "voice_main", text: voiceText, startSeconds: 0, endSeconds: 4, volume: 85 }] : [];
   const total = clips.reduce((sum, clip) => sum + Math.max(0.1, clip.timelineDuration), 0);
   const [playhead, setPlayhead] = useState(0);
-  const [trimDrag, setTrimDrag] = useState<TrimDrag | null>(null);
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(clips[0]?.id ?? null);
+  const [previewSeek, setPreviewSeek] = useState<{ clipId: string; sourceTime: number } | null>(null);
   const [rangeDrag, setRangeDrag] = useState<RangeDrag | null>(null);
   const [overlayPositionDrag, setOverlayPositionDrag] = useState<OverlayPositionDrag | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
@@ -38,6 +38,7 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
     positionedClips.push({ clip, start, end: cursor });
   });
   const activeClip = positionedClips.find(item => playhead >= item.start && playhead < item.end) ?? positionedClips.at(-1);
+  const selectedClip = positionedClips.find(item => item.clip.id === selectedClipId) ?? positionedClips[0];
   const activeOverlays = overlayItems.filter(item => playhead >= item.startSeconds && playhead < item.endSeconds);
   const outOfRangeOverlays = total > 0 ? overlayItems.filter(item => item.startSeconds >= total || item.endSeconds > total) : [];
   const trackWidth = Math.max(720, total * 100);
@@ -46,29 +47,8 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
 
   useEffect(() => {
     setPlayhead(value => clamp(value, 0, Math.max(total, 0)));
+    setSelectedClipId(current => clips.some(clip => clip.id === current) ? current : clips[0]?.id ?? null);
   }, [total]);
-
-  useEffect(() => {
-    if (!trimDrag || !onUpdateClip) return;
-    const onPointerMove = (event: PointerEvent) => {
-      const delta = (event.clientX - trimDrag.originX) / 100;
-      const minimum = 0.1;
-      const nextStart = trimDrag.edge === "start" ? clamp(trimDrag.originStart + delta, 0, trimDrag.originEnd - minimum) : trimDrag.originStart;
-      const nextEnd = trimDrag.edge === "end" ? clamp(trimDrag.originEnd + delta, nextStart + minimum, trimDrag.sourceDuration) : trimDrag.originEnd;
-      onUpdateClip(trimDrag.clipId, {
-        sourceStartSeconds: roundSeconds(nextStart),
-        sourceEndSeconds: roundSeconds(nextEnd),
-        timelineDuration: roundSeconds(nextEnd - nextStart),
-      });
-    };
-    const onPointerUp = () => setTrimDrag(null);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp, { once: true });
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    };
-  }, [onUpdateClip, trimDrag]);
 
   useEffect(() => {
     if (!rangeDrag) return;
@@ -122,29 +102,29 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
     const video = previewVideoRef.current;
     if (!video || !(activeClip?.clip.previewUrl ?? activeClip?.clip.sourceUrl)) return;
     const clipStart = activeClip.clip.sourceStartSeconds ?? 0;
-    const localTime = clamp(clipStart + playhead - activeClip.start, clipStart, activeClip.clip.sourceEndSeconds ?? clipStart + activeClip.clip.timelineDuration);
+    const clipEnd = activeClip.clip.sourceEndSeconds ?? clipStart + activeClip.clip.timelineDuration;
+    const localTime = previewSeek?.clipId === activeClip.clip.id
+      ? clamp(previewSeek.sourceTime, 0, activeClip.clip.sourceDurationSeconds ?? clipEnd)
+      : clamp(clipStart + playhead - activeClip.start, clipStart, clipEnd);
     const seek = () => {
       try { video.currentTime = localTime; } catch { /* Metadata may not be available yet. */ }
     };
     if (video.readyState >= 1) seek();
     else video.addEventListener("loadedmetadata", seek, { once: true });
-    void video.play().catch(() => undefined);
+    if (previewSeek?.clipId === activeClip.clip.id) video.pause();
+    else void video.play().catch(() => undefined);
     return () => video.removeEventListener("loadedmetadata", seek);
-  }, [activeClip?.clip.id, activeClip?.clip.previewUrl, activeClip?.clip.sourceUrl, activeClip?.clip.sourceStartSeconds, activeClip?.clip.sourceEndSeconds, activeClip?.start, playhead]);
+  }, [activeClip?.clip.id, activeClip?.clip.previewUrl, activeClip?.clip.sourceUrl, activeClip?.clip.sourceStartSeconds, activeClip?.clip.sourceEndSeconds, activeClip?.clip.sourceDurationSeconds, activeClip?.start, playhead, previewSeek]);
 
-  const startTrim = (event: ReactPointerEvent<HTMLButtonElement>, item: PositionedClip, edge: TrimDrag["edge"]) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!onUpdateClip) return;
-    const sourceDuration = Math.max(item.clip.sourceDurationSeconds ?? 3, item.clip.sourceEndSeconds ?? 0.1);
-    setTrimDrag({
-      clipId: item.clip.id,
-      edge,
-      originX: event.clientX,
-      originStart: item.clip.sourceStartSeconds ?? 0,
-      originEnd: Math.min(sourceDuration, item.clip.sourceEndSeconds ?? sourceDuration),
-      sourceDuration,
-    });
+  const movePlayhead = (value: number) => {
+    setPreviewSeek(null);
+    setPlayhead(clamp(value, 0, total));
+  };
+
+  const previewSourceFrame = (item: PositionedClip, sourceTime: number) => {
+    setSelectedClipId(item.clip.id);
+    setPreviewSeek({ clipId: item.clip.id, sourceTime });
+    setPlayhead(item.start);
   };
 
   const startRangeDrag = (event: ReactPointerEvent<HTMLElement>, track: RangeDrag["track"], itemId: string, mode: RangeDrag["mode"], start: number, end: number) => {
@@ -158,7 +138,7 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
     event.preventDefault();
     event.stopPropagation();
     if (!onUpdateOverlay) return;
-    setPlayhead(clamp(item.startSeconds, 0, total));
+    movePlayhead(item.startSeconds);
     onOverlayFocus?.(item.id);
     setOverlayPositionDrag({ itemId: item.id, originX: event.clientX, originY: event.clientY, originPosition: overlayCoordinatesFromItem(item) });
   };
@@ -169,28 +149,129 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
     const index = overlayItems.findIndex(candidate => candidate.id === item.id);
     const active = activeOverlays.some(activeItem => activeItem.id === item.id);
     const paired = Boolean(item.syncVoiceId && resolvedVoiceItems.some(voice => voice.id === item.syncVoiceId));
-    return <TimelineRangeBlock key={item.id} className={"storyboard-overlay-item overlay-" + item.position + (active ? " is-active" : "")} total={total} locked={paired} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), ...overlayTrackStyle(item) }} label={"文字 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步人声" : "")} removeLabel={`删除文字 ${index + 1}`} onRemove={onRemoveOverlay ? () => onRemoveOverlay(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "overlay", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "overlay", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "overlay", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { setPlayhead(clamp(item.startSeconds, 0, total)); onOverlayFocus?.(item.id); }} />;
+    return <TimelineRangeBlock key={item.id} className={"storyboard-overlay-item overlay-" + item.position + (active ? " is-active" : "")} total={total} locked={paired} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), ...overlayTrackStyle(item) }} label={"文字 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步人声" : "")} removeLabel={`删除文字 ${index + 1}`} onRemove={onRemoveOverlay ? () => onRemoveOverlay(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "overlay", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "overlay", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "overlay", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onOverlayFocus?.(item.id); }} />;
   };
   const renderVoiceItem = (item: VoiceItem) => {
     const index = resolvedVoiceItems.findIndex(candidate => candidate.id === item.id);
     const paired = overlayItems.some(overlay => overlay.syncVoiceId === item.id);
-    return <TimelineRangeBlock key={item.id} className="storyboard-range-audio voice-track-block" tone="voice" total={total} locked={paired} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), top: "6px", bottom: "6px" }} label={"人声 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步文字" : "")} removeLabel={`删除人声 ${index + 1}`} onRemove={onRemoveVoice ? () => onRemoveVoice(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "voice", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "voice", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "voice", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { setPlayhead(clamp(item.startSeconds, 0, total)); onVoiceFocus?.(item.id); }} />;
+    return <TimelineRangeBlock key={item.id} className="storyboard-range-audio voice-track-block" tone="voice" total={total} locked={paired} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), top: "6px", bottom: "6px" }} label={"人声 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步文字" : "")} removeLabel={`删除人声 ${index + 1}`} onRemove={onRemoveVoice ? () => onRemoveVoice(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "voice", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "voice", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "voice", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onVoiceFocus?.(item.id); }} />;
   };
 
   return <section className="storyboard-editor">
-    <div className="storyboard-head"><div><span className="panel-label">STORYBOARD TIMELINE</span><strong>视频分镜与文字对齐</strong><p>按秒检查菜品切换点和当前画面文字；拖动预览中的文字可调整位置，拖动时间线两侧可调整时长。</p></div><span className="storyboard-current">当前 {formatSeconds(playhead)} / {formatSeconds(total)}</span></div>
+    <div className="storyboard-head"><div><span className="panel-label">STORYBOARD TIMELINE</span><strong>视频分镜与文字对齐</strong><p>先在下方胶片轨道定位原视频画面，再拖动入点和出点选择精彩片段。</p></div><span className="storyboard-current">当前 {formatSeconds(playhead)} / {formatSeconds(total)}</span></div>
     {outOfRangeOverlays.length > 0 && <div className="timeline-warning">有 {outOfRangeOverlays.length} 条文字超出当前成片时长，当前预览不会显示它们。</div>}
     <div className="storyboard-scroll"><div className="storyboard-track-stack" style={{ minWidth: `${trackWidth}px` }}>
       <TimeRuler total={total} />
-      <StoryboardTrack label="视频"><div className="storyboard-video-row">{positionedClips.map(item => <div className="storyboard-clip" key={item.clip.id} style={positionStyle(item.start, item.end, total)} onClick={() => setPlayhead(item.start)}><div className="storyboard-thumb">{item.clip.sourceUrl ? <video muted loop autoPlay playsInline preload="metadata" src={item.clip.previewUrl ?? item.clip.sourceUrl} /> : <span className="storyboard-thumb-placeholder">待下载</span>}</div><div className="storyboard-clip-label"><strong>{item.clip.dish}</strong><small>{formatSeconds(item.start)} - {formatSeconds(item.end)} · 源 {formatSeconds(item.clip.sourceStartSeconds ?? 0)} - {formatSeconds(item.clip.sourceEndSeconds ?? item.clip.sourceDurationSeconds ?? item.clip.timelineDuration)}</small></div>{onUpdateClip && <><button type="button" className="trim-handle trim-start" aria-label={`调整${item.clip.dish}入点`} onPointerDown={event => startTrim(event, item, "start")} /> <button type="button" className="trim-handle trim-end" aria-label={`调整${item.clip.dish}出点`} onPointerDown={event => startTrim(event, item, "end")} /></>}</div>)}</div></StoryboardTrack>
+      <StoryboardTrack label="视频"><div className="storyboard-video-row">{positionedClips.map(item => <div className={`storyboard-clip${selectedClip?.clip.id === item.clip.id ? " is-selected" : ""}`} key={item.clip.id} style={positionStyle(item.start, item.end, total)} onClick={() => { setSelectedClipId(item.clip.id); movePlayhead(item.start); }}><div className="storyboard-thumb">{item.clip.sourceUrl ? <video muted loop autoPlay playsInline preload="metadata" src={item.clip.previewUrl ?? item.clip.sourceUrl} /> : <span className="storyboard-thumb-placeholder">待下载</span>}</div><div className="storyboard-clip-label"><strong>{item.clip.dish}</strong><small>{formatSeconds(item.start)} - {formatSeconds(item.end)} · 源 {formatSeconds(item.clip.sourceStartSeconds ?? 0)} - {formatSeconds(item.clip.sourceEndSeconds ?? item.clip.sourceDurationSeconds ?? item.clip.timelineDuration)}</small></div></div>)}</div></StoryboardTrack>
+      {selectedClip && onUpdateClip && <ClipTrimEditor item={selectedClip} onUpdateClip={onUpdateClip} onPreviewSource={sourceTime => previewSourceFrame(selectedClip, sourceTime)} />}
       <StoryboardTrack label="文字" style={{ minHeight: rangeTrackHeight(overlayLanes.length) }}><div className="storyboard-range-lane-stack">{overlayLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"overlay-lane-" + laneIndex}>{lane.map(renderOverlayItem)}</div>)}</div></StoryboardTrack>
       <StoryboardTrack label="人声" style={{ minHeight: rangeTrackHeight(voiceLanes.length) }}><div className="storyboard-range-lane-stack">{voiceLanes.length > 0 ? voiceLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"voice-lane-" + laneIndex}>{lane.map(renderVoiceItem)}</div>) : <span className="storyboard-audio-empty">未配置人声</span>}</div></StoryboardTrack>
       <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={bgmName?.trim() ? `BGM · ${bgmName}` : "未上传 BGM"} tone="bgm" total={total} /></StoryboardTrack>
       <div className="storyboard-playhead" style={{ left: playheadLeft }} aria-hidden="true" />
     </div></div>
-    <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.1" value={playhead} onChange={event => setPlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>
+    <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.1" value={playhead} onChange={event => movePlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>
     <div className="storyboard-preview"><div className="storyboard-preview-media" ref={previewMediaRef}>{activeClip?.clip.sourceUrl ? <video ref={previewVideoRef} muted playsInline preload="metadata" src={activeClip.clip.previewUrl ?? activeClip.clip.sourceUrl} /> : <div className="storyboard-preview-placeholder">{clips.length ? "当前片段暂无本地视频" : "先把视频片段加入成片时间线"}</div>}{activeOverlays.length > 0 && <div className="storyboard-preview-overlays">{activeOverlays.map(item => <span className={`preview-overlay preview-${item.position}`} style={overlayPreviewStyle(item)} onPointerDown={event => startOverlayPositionDrag(event, item)} key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"}</span>)}</div>}</div><div className="storyboard-preview-meta"><strong>{activeClip?.clip.dish || "暂无片段"}</strong><span>{activeClip ? `${formatSeconds(activeClip.start)} - ${formatSeconds(activeClip.end)} · ${activeOverlays.length ? `当前文字：${activeOverlays.map(item => previewOverlayText(item, playhead) || "未填写").join(" / ")}` : "当前时间无画面文字"}` : "播放指针移动到文字时间段后，文字会出现在左侧 9:16 预览中"}</span>{activeOverlays.length > 0 && <div className="storyboard-active-overlay-list">{activeOverlays.map(item => <span key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"} · {positionLabel(item.position)}</span>)}</div>}</div></div>
   </section>;
+}
+
+function ClipTrimEditor({ item, onUpdateClip, onPreviewSource }: { item: PositionedClip; onUpdateClip: (clipId: string, patch: Partial<TimelineClip>) => void; onPreviewSource: (sourceTime: number) => void }) {
+  const clip = item.clip;
+  const sourceDuration = Math.max(0.1, clip.sourceDurationSeconds ?? clip.sourceEndSeconds ?? clip.timelineDuration);
+  const start = clamp(clip.sourceStartSeconds ?? 0, 0, sourceDuration);
+  const end = clamp(clip.sourceEndSeconds ?? Math.min(sourceDuration, start + clip.timelineDuration), start + 0.1, sourceDuration);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [frames, setFrames] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [dragEdge, setDragEdge] = useState<"start" | "end" | null>(null);
+
+  useEffect(() => {
+    if (!clip.sourceUrl) {
+      setFrames([]);
+      return;
+    }
+    let cancelled = false;
+    const video = document.createElement("video");
+    const canvas = document.createElement("canvas");
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = clip.sourceUrl;
+    setLoading(true);
+    const captureFrames = () => {
+      if (cancelled) return;
+      const width = 144;
+      const height = 82;
+      canvas.width = width;
+      canvas.height = height;
+      const count = Math.max(8, Math.min(18, Math.ceil(sourceDuration * 2)));
+      const captured: string[] = [];
+      let index = 0;
+      const capture = () => {
+        if (cancelled) return;
+        try {
+          canvas.getContext("2d")?.drawImage(video, 0, 0, width, height);
+          captured.push(canvas.toDataURL("image/jpeg", 0.72));
+        } catch {
+          captured.push("");
+        }
+        index += 1;
+        if (index >= count) {
+          setFrames(captured);
+          setLoading(false);
+          return;
+        }
+        video.currentTime = (index / (count - 1)) * sourceDuration;
+      };
+      video.addEventListener("seeked", capture);
+      video.currentTime = 0;
+      return () => video.removeEventListener("seeked", capture);
+    };
+    video.addEventListener("loadedmetadata", captureFrames, { once: true });
+    video.load();
+    return () => {
+      cancelled = true;
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+  }, [clip.id, clip.sourceUrl, sourceDuration]);
+
+  useEffect(() => {
+    if (!dragEdge) return;
+    const onPointerMove = (event: PointerEvent) => {
+      const rect = stripRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return;
+      const nextTime = clamp(((event.clientX - rect.left) / rect.width) * sourceDuration, 0, sourceDuration);
+      const minimum = 0.1;
+      if (dragEdge === "start") {
+        const nextStart = clamp(nextTime, 0, end - minimum);
+        onUpdateClip(clip.id, { sourceStartSeconds: roundSeconds(nextStart), timelineDuration: roundSeconds(end - nextStart) });
+      } else {
+        const nextEnd = clamp(nextTime, start + minimum, sourceDuration);
+        onUpdateClip(clip.id, { sourceEndSeconds: roundSeconds(nextEnd), timelineDuration: roundSeconds(nextEnd - start) });
+      }
+    };
+    const onPointerUp = () => setDragEdge(null);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [clip.id, dragEdge, end, onUpdateClip, sourceDuration, start]);
+
+  const sourceTimeFromEvent = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = stripRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    onPreviewSource(clamp(((event.clientX - rect.left) / rect.width) * sourceDuration, 0, sourceDuration));
+  };
+
+  return <div className="clip-trim-editor">
+    <div className="clip-trim-head"><div><span className="panel-label">PRECISION TRIM</span><strong>{clip.dish} · 选择精彩画面</strong><p>胶片轨道展示原视频完整时长；点击画面定位，拖动两侧标记设置入点和出点。</p></div><span className="clip-trim-values">原片 {formatSeconds(sourceDuration)} · 已选 {formatSeconds(end - start)}</span></div>
+    <div className="clip-filmstrip-wrap"><div className="clip-filmstrip" ref={stripRef} onPointerDown={sourceTimeFromEvent}>{frames.map((frame, index) => <button type="button" className="clip-film-frame" key={`${clip.id}-frame-${index}`} onPointerDown={event => event.stopPropagation()} onClick={() => onPreviewSource((index / Math.max(1, frames.length - 1)) * sourceDuration)}>{frame ? <img src={frame} alt={`${clip.dish} ${formatSeconds((index / Math.max(1, frames.length - 1)) * sourceDuration)}`} /> : <span />}</button>)}{!frames.length && <span className="clip-filmstrip-empty">{loading ? "正在提取视频画面..." : "暂无视频画面"}</span>}<div className="clip-trim-selected" style={{ left: `${(start / sourceDuration) * 100}%`, width: `${((end - start) / sourceDuration) * 100}%` }} /><button type="button" className="clip-source-handle clip-source-handle-start" aria-label={`调整${clip.dish}入点`} style={{ left: `${(start / sourceDuration) * 100}%` }} onPointerDown={event => { event.preventDefault(); event.stopPropagation(); setDragEdge("start"); }} /><button type="button" className="clip-source-handle clip-source-handle-end" aria-label={`调整${clip.dish}出点`} style={{ left: `${(end / sourceDuration) * 100}%` }} onPointerDown={event => { event.preventDefault(); event.stopPropagation(); setDragEdge("end"); }} /></div></div>
+    <div className="clip-trim-scale"><span>0s</span><span>{formatSeconds(sourceDuration / 2)}</span><span>{formatSeconds(sourceDuration)}</span></div>
+    <div className="clip-trim-foot"><span>入点 {formatSeconds(start)}</span><span>出点 {formatSeconds(end)}</span><span>成片使用 {formatSeconds(end - start)}</span></div>
+  </div>;
 }
 
 function TimelineRangeBlock({ className, label, tone, total: _total, locked = false, style, removeLabel, onRemove, onClick, onPointerDown, onResizeStart, onResizeEnd }: { className: string; label: string; tone?: "voice"; total: number; locked?: boolean; style?: CSSProperties; removeLabel?: string; onRemove?: () => void; onClick?: () => void; onPointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void; onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void; onResizeEnd?: (event: ReactPointerEvent<HTMLButtonElement>) => void }) {
