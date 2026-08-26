@@ -168,6 +168,7 @@ export type TimelineClip = {
   sourceDurationSeconds?: number;
   sourceStartSeconds?: number;
   sourceEndSeconds?: number;
+  trimConfirmed?: boolean;
   dishCategory?: DishCategory;
   status?: "pending" | "generated";
   sourcePath?: string;

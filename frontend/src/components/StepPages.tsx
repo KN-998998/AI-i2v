@@ -158,7 +158,6 @@ function SoundTextPreview() {
   const soundNode = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound"));
   const sound = soundNode?.data;
   const bgmName = useWorkflowStore(state => state.bgmName);
-  const updateTimelineClip = useWorkflowStore(state => state.updateTimelineClip);
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const captionSegments = captionSegmentsFromData(sound ?? {});
@@ -236,7 +235,7 @@ function SoundTextPreview() {
       <p>每条文字单独设置文案、开始秒数、结束秒数和画面位置；它只会在自己的时间段出现，不会新增流程节点。拖动下方播放指针，查看它对应哪一个视频片段。</p>
       <div className="sound-text-legend"><span><i className="legend-dot legend-top" />上方品牌区</span><span><i className="legend-dot legend-upper" />中上钩子区</span><span><i className="legend-dot legend-center" />画面中央</span><span><i className="legend-dot legend-bottom" />底部安全区</span></div>
     </div>
-    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceItems={voiceItems} bgmName={bgmName} onUpdateClip={updateTimelineClip} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} onVoiceFocus={() => setActivePanel("voice")} onOverlayFocus={() => setActivePanel("overlay")} />
+    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceItems={voiceItems} bgmName={bgmName} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} onVoiceFocus={() => setActivePanel("voice")} onOverlayFocus={() => setActivePanel("overlay")} />
   </>;
 }
 

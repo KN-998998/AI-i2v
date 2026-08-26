@@ -7,6 +7,7 @@ type OverlayPositionDrag = { itemId: string; originX: number; originY: number; o
 
 type StoryboardTimelineProps = {
   clips: TimelineClip[];
+  mode?: "clip" | "sound";
   overlayItems: OverlayItem[];
   onOverlayFocus?: (overlayId: string) => void;
   onUpdateOverlay?: (overlayId: string, patch: Partial<OverlayItem>) => void;
@@ -20,7 +21,8 @@ type StoryboardTimelineProps = {
   bgmName?: string;
 };
 
-export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpdateOverlay, onRemoveOverlay, onUpdateClip, voiceItems = [], voiceText, onVoiceFocus, onUpdateVoice, onRemoveVoice, bgmName }: StoryboardTimelineProps) {
+export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOverlayFocus, onUpdateOverlay, onRemoveOverlay, onUpdateClip, voiceItems = [], voiceText, onVoiceFocus, onUpdateVoice, onRemoveVoice, bgmName }: StoryboardTimelineProps) {
+  const showSoundTracks = mode === "sound";
   const resolvedVoiceItems = voiceItems.length > 0 ? voiceItems : voiceText?.trim() ? [{ id: "voice_main", text: voiceText, startSeconds: 0, endSeconds: 4, volume: 85 }] : [];
   const total = clips.reduce((sum, clip) => sum + Math.max(0.1, clip.timelineDuration), 0);
   const [playhead, setPlayhead] = useState(0);
@@ -39,8 +41,8 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
   });
   const activeClip = positionedClips.find(item => playhead >= item.start && playhead < item.end) ?? positionedClips.at(-1);
   const selectedClip = positionedClips.find(item => item.clip.id === selectedClipId) ?? positionedClips[0];
-  const activeOverlays = overlayItems.filter(item => playhead >= item.startSeconds && playhead < item.endSeconds);
-  const outOfRangeOverlays = total > 0 ? overlayItems.filter(item => item.startSeconds >= total || item.endSeconds > total) : [];
+  const activeOverlays = showSoundTracks ? overlayItems.filter(item => playhead >= item.startSeconds && playhead < item.endSeconds) : [];
+  const outOfRangeOverlays = showSoundTracks && total > 0 ? overlayItems.filter(item => item.startSeconds >= total || item.endSeconds > total) : [];
   const trackWidth = Math.max(720, total * 100);
   const playheadRatio = clamp(playhead / Math.max(total, 0.1), 0, 1);
   const playheadLeft = `calc(${playheadRatio * 100}% + ${72 * (1 - playheadRatio)}px)`;
@@ -157,20 +159,20 @@ export function StoryboardTimeline({ clips, overlayItems, onOverlayFocus, onUpda
     return <TimelineRangeBlock key={item.id} className="storyboard-range-audio voice-track-block" tone="voice" total={total} locked={paired} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), top: "6px", bottom: "6px" }} label={"人声 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步文字" : "")} removeLabel={`删除人声 ${index + 1}`} onRemove={onRemoveVoice ? () => onRemoveVoice(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "voice", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "voice", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "voice", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onVoiceFocus?.(item.id); }} />;
   };
 
-  return <section className="storyboard-editor">
-    <div className="storyboard-head"><div><span className="panel-label">STORYBOARD TIMELINE</span><strong>视频分镜与文字对齐</strong><p>先在下方胶片轨道定位原视频画面，再拖动入点和出点选择精彩片段。</p></div><span className="storyboard-current">当前 {formatSeconds(playhead)} / {formatSeconds(total)}</span></div>
+  return <section className={`storyboard-editor ${showSoundTracks ? "" : "storyboard-editor-clip"}`}>
+    <div className="storyboard-head"><div><span className="panel-label">STORYBOARD TIMELINE</span><strong>{showSoundTracks ? "视频分镜与文字对齐" : "视频片段选择与裁剪"}</strong><p>{showSoundTracks ? "先在下方胶片轨道定位原视频画面，再拖动入点和出点选择精彩片段。" : "选择一次合适的入点和出点后会自动保存，后续方案直接复用该片段长度。"}</p></div><span className="storyboard-current">当前 {formatSeconds(playhead)} / {formatSeconds(total)}</span></div>
     {outOfRangeOverlays.length > 0 && <div className="timeline-warning">有 {outOfRangeOverlays.length} 条文字超出当前成片时长，当前预览不会显示它们。</div>}
     <div className="storyboard-scroll"><div className="storyboard-track-stack" style={{ minWidth: `${trackWidth}px` }}>
       <TimeRuler total={total} />
       <StoryboardTrack label="视频"><div className="storyboard-video-row">{positionedClips.map(item => <div className={`storyboard-clip${selectedClip?.clip.id === item.clip.id ? " is-selected" : ""}`} key={item.clip.id} style={positionStyle(item.start, item.end, total)} onClick={() => { setSelectedClipId(item.clip.id); movePlayhead(item.start); }}><div className="storyboard-thumb">{item.clip.sourceUrl ? <video muted loop autoPlay playsInline preload="metadata" src={clipPlaybackUrl(item.clip)} /> : <span className="storyboard-thumb-placeholder">待下载</span>}</div><div className="storyboard-clip-label"><strong>{item.clip.dish}</strong><small>{formatSeconds(item.start)} - {formatSeconds(item.end)} · 源 {formatSeconds(item.clip.sourceStartSeconds ?? 0)} - {formatSeconds(item.clip.sourceEndSeconds ?? item.clip.sourceDurationSeconds ?? item.clip.timelineDuration)}</small></div></div>)}</div></StoryboardTrack>
       {selectedClip && onUpdateClip && <StoryboardTrack label="裁剪"><ClipTrimEditor item={selectedClip} onUpdateClip={onUpdateClip} onPreviewSource={sourceTime => previewSourceFrame(selectedClip, sourceTime)} /></StoryboardTrack>}
-      <StoryboardTrack label="文字" style={{ minHeight: rangeTrackHeight(overlayLanes.length) }}><div className="storyboard-range-lane-stack">{overlayLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"overlay-lane-" + laneIndex}>{lane.map(renderOverlayItem)}</div>)}</div></StoryboardTrack>
-      <StoryboardTrack label="人声" style={{ minHeight: rangeTrackHeight(voiceLanes.length) }}><div className="storyboard-range-lane-stack">{voiceLanes.length > 0 ? voiceLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"voice-lane-" + laneIndex}>{lane.map(renderVoiceItem)}</div>) : <span className="storyboard-audio-empty">未配置人声</span>}</div></StoryboardTrack>
-      <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={bgmName?.trim() ? `BGM · ${bgmName}` : "未上传 BGM"} tone="bgm" total={total} /></StoryboardTrack>
+      {showSoundTracks && <StoryboardTrack label="文字" style={{ minHeight: rangeTrackHeight(overlayLanes.length) }}><div className="storyboard-range-lane-stack">{overlayLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"overlay-lane-" + laneIndex}>{lane.map(renderOverlayItem)}</div>)}</div></StoryboardTrack>}
+      {showSoundTracks && <StoryboardTrack label="人声" style={{ minHeight: rangeTrackHeight(voiceLanes.length) }}><div className="storyboard-range-lane-stack">{voiceLanes.length > 0 ? voiceLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"voice-lane-" + laneIndex}>{lane.map(renderVoiceItem)}</div>) : <span className="storyboard-audio-empty">未配置人声</span>}</div></StoryboardTrack>}
+      {showSoundTracks && <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={bgmName?.trim() ? `BGM · ${bgmName}` : "未上传 BGM"} tone="bgm" total={total} /></StoryboardTrack>}
       <div className="storyboard-playhead" style={{ left: playheadLeft }} aria-hidden="true" />
     </div></div>
     <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.1" value={playhead} onChange={event => movePlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>
-    <div className="storyboard-preview"><div className="storyboard-preview-media" ref={previewMediaRef}>{activeClip?.clip.sourceUrl ? <video ref={previewVideoRef} muted playsInline preload="metadata" src={clipPlaybackUrl(activeClip.clip)} /> : <div className="storyboard-preview-placeholder">{clips.length ? "当前片段暂无本地视频" : "先把视频片段加入成片时间线"}</div>}{activeOverlays.length > 0 && <div className="storyboard-preview-overlays">{activeOverlays.map(item => <span className={`preview-overlay preview-${item.position}`} style={overlayPreviewStyle(item)} onPointerDown={event => startOverlayPositionDrag(event, item)} key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"}</span>)}</div>}</div><div className="storyboard-preview-meta"><strong>{activeClip?.clip.dish || "暂无片段"}</strong><span>{activeClip ? `${formatSeconds(activeClip.start)} - ${formatSeconds(activeClip.end)} · ${activeOverlays.length ? `当前文字：${activeOverlays.map(item => previewOverlayText(item, playhead) || "未填写").join(" / ")}` : "当前时间无画面文字"}` : "播放指针移动到文字时间段后，文字会出现在左侧 9:16 预览中"}</span>{activeOverlays.length > 0 && <div className="storyboard-active-overlay-list">{activeOverlays.map(item => <span key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"} · {positionLabel(item.position)}</span>)}</div>}</div></div>
+    <div className="storyboard-preview"><div className="storyboard-preview-media" ref={previewMediaRef}>{activeClip?.clip.sourceUrl ? <video ref={previewVideoRef} muted playsInline preload="metadata" src={clipPlaybackUrl(activeClip.clip)} /> : <div className="storyboard-preview-placeholder">{clips.length ? "当前片段暂无本地视频" : "先把视频片段加入成片时间线"}</div>}{showSoundTracks && activeOverlays.length > 0 && <div className="storyboard-preview-overlays">{activeOverlays.map(item => <span className={`preview-overlay preview-${item.position}`} style={overlayPreviewStyle(item)} onPointerDown={event => startOverlayPositionDrag(event, item)} key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"}</span>)}</div>}</div><div className="storyboard-preview-meta"><strong>{activeClip?.clip.dish || "暂无片段"}</strong><span>{activeClip ? `${formatSeconds(activeClip.start)} - ${formatSeconds(activeClip.end)} · ${showSoundTracks ? activeOverlays.length ? `当前文字：${activeOverlays.map(item => previewOverlayText(item, playhead) || "未填写").join(" / ")}` : "当前时间无画面文字" : `已选源片段 ${formatSeconds(activeClip.clip.sourceStartSeconds ?? 0)} - ${formatSeconds(activeClip.clip.sourceEndSeconds ?? activeClip.clip.timelineDuration)}`}` : showSoundTracks ? "播放指针移动到文字时间段后，文字会出现在左侧 9:16 预览中" : "选择视频片段后，可在左侧预览确认画面"}</span>{showSoundTracks && activeOverlays.length > 0 && <div className="storyboard-active-overlay-list">{activeOverlays.map(item => <span key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"} · {positionLabel(item.position)}</span>)}</div>}</div></div>
   </section>;
 }
 

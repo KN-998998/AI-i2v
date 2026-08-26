@@ -97,6 +97,7 @@ function sameClipList(left: TimelineClip[], right: TimelineClip[]): boolean {
       && clip.sourceDurationSeconds === other.sourceDurationSeconds
       && clip.sourceStartSeconds === other.sourceStartSeconds
       && clip.sourceEndSeconds === other.sourceEndSeconds
+      && clip.trimConfirmed === other.trimConfirmed
       && clip.status === other.status
       && clip.sourcePath === other.sourcePath
       && clip.sourceUrl === other.sourceUrl
@@ -129,6 +130,14 @@ function mergeAvailableClips(persisted: TimelineClip[], available: ClipLibraryIt
       generatorNodeId: item.generatorNodeId ?? match.generatorNodeId,
       generationJobId: item.generationJobId ?? match.generationJobId,
       dishCategory: item.dishCategory ?? match.dishCategory,
+      // The draft is the source of truth for clip timing. This also keeps
+      // trims made before the explicit confirmation flag was introduced.
+      ...(item.sourceStartSeconds !== undefined || item.sourceEndSeconds !== undefined ? {
+        sourceStartSeconds: item.sourceStartSeconds,
+        sourceEndSeconds: item.sourceEndSeconds,
+        timelineDuration: item.timelineDuration,
+        trimConfirmed: item.trimConfirmed,
+      } : {}),
     };
   });
   return [...merged, ...available.filter(item => !matched.has(item.id) && !persisted.some(existing => existing.sourcePath === item.sourcePath || existing.filename === item.filename))];
@@ -378,11 +387,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const timeline = state.timeline.map(clip => clip.id === clipId ? normalizeTimelineClip({ ...clip, ...patch }) : clip);
     return { timeline, composeWorkspaces: syncPrimaryWorkspace(state.composeWorkspaces, timeline), revision: state.revision + 1 };
   }),
-  updateWorkspaceClip: (workspaceId, clipId, patch) => set(state => {
-    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
-      ? { ...workspace, clips: workspace.clips.map(clip => clip.id === clipId ? normalizeTimelineClip({ ...clip, ...patch }) : clip), job: null }
-      : workspace);
-    return { composeWorkspaces, timeline: composeWorkspaces[0]?.clips ?? state.timeline, revision: state.revision + 1 };
+  updateWorkspaceClip: (_workspaceId, clipId, patch) => set(state => {
+    const trimChanged = patch.sourceStartSeconds !== undefined || patch.sourceEndSeconds !== undefined || patch.timelineDuration !== undefined;
+    // A trim belongs to the source clip, so every composition reuses it.
+    const update = <T extends TimelineClip>(clip: T): T => clip.id === clipId
+      ? normalizeTimelineClip({ ...clip, ...patch, ...(trimChanged ? { trimConfirmed: true } : {}) })
+      : clip;
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => {
+      const includesClip = workspace.clips.some(clip => clip.id === clipId);
+      return includesClip ? { ...workspace, clips: workspace.clips.map(update), job: null } : workspace;
+    });
+    return {
+      candidateClips: state.candidateClips.map(update),
+      availableClips: state.availableClips.map(clip => update(clip)),
+      composeWorkspaces,
+      timeline: composeWorkspaces[0]?.clips ?? state.timeline.map(update),
+      revision: state.revision + 1,
+    };
   }),
   toggleClip: clipId => set(state => {
     const clip = state.candidateClips.find(item => item.id === clipId) ?? state.availableClips.find(item => item.id === clipId) ?? clips.find(item => item.id === clipId);
