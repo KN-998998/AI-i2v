@@ -69,6 +69,14 @@ pip install -r requirements.txt
 
 ffmpeg 已预装在系统中。
 
+前端构建需要 Node.js 20+（已安装 npm 的电脑可跳过）。Python 依赖和 Node 依赖分开管理：
+
+```bat
+python -m pip install -r requirements.txt
+cd frontend
+npm.cmd install
+```
+
 ### 2. 配置 API Key
 
 ```bash
@@ -124,6 +132,12 @@ start_dev.bat
 ```
 
 双击脚本即可自动结束旧的 `8015` 服务、重新构建 React 前端、启动 FastAPI，并打开 `http://127.0.0.1:8015/canvas-mvp`。后端启用 reload；修改前端源码后重新运行一次 `start_dev.bat`，修改后端源码则刷新浏览器即可。停止开发服务请在独立的 FastAPI 窗口使用 `Ctrl+C`。
+
+完整验证（构建、TypeScript 类型检查、前端模型测试、Python 测试）可运行：
+
+```bat
+scripts\verify.bat
+```
 
 FastAPI 文档：`http://127.0.0.1:8015/docs`
 
@@ -211,9 +225,23 @@ web/
 ├── core/settings.py       # Web 配置与项目路径
 ├── core/logging.py        # 控制台 + 文件轮转日志
 ├── services/              # 状态、编排、后台任务服务
-├── test_app_routes.py     # Web 路由和画布持久化测试
-├── canvas-react/           # React Flow 前端源码和 Vite 配置
-└── static/canvas-app/      # React 生产构建产物
+└── static/canvas-app/      # React 本地构建产物（不提交 Git）
+
+frontend/
+├── src/                    # React Flow 前端源码、组件、状态与领域模型
+├── package.json            # 前端依赖、构建和模型测试命令
+└── vite.config.ts          # 输出到 web/static/canvas-app 的构建配置
+
+tests/
+├── backend/                # FastAPI 路由、合成、图片处理测试
+└── pipeline/               # 提示词与音频流水线测试
+
+scripts/
+├── build_frontend.bat      # 仅构建 React 前端
+└── verify.bat              # 全量本地验证入口
+
+docs/
+└── 工程结构说明.md          # 模块职责与开发约定
 ```
 
 ## 输出目录结构

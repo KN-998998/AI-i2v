@@ -56,23 +56,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-where npm >nul 2>nul
-if errorlevel 1 (
-    echo npm was not found on PATH.
-    pause
-    exit /b 1
-)
-
 echo Building React frontend...
-pushd "web\canvas-react"
-call npm run build
+call scripts\build_frontend.bat
 if errorlevel 1 (
-    popd
     echo Frontend build failed. Development server was not started.
     pause
     exit /b 1
 )
-popd
 
 echo Starting FastAPI on http://%APP_HOST%:%APP_PORT%...
 start "Restaurant Video Canvas - FastAPI" /D "%~dp0" cmd /k call "%~dp0web\run_backend.bat" "%PYTHON_EXE%"

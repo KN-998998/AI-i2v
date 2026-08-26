@@ -41,8 +41,9 @@ logs/
 *.bak
 ~*
 
-# 前端依赖
-web/canvas-react/node_modules/
+# 前端依赖与构建产物（由 scripts\\build_frontend.bat 自动生成）
+frontend/node_modules/
+web/static/canvas-app/
 
 # 历史归档（含品牌素材/业务文档，不提交公开仓库；本地保留）
 _archive/
@@ -55,3 +56,6 @@ pytest-cache-files-*/
 pytest-temp-*/
 .test-tmp/
 web/canvas-draft-*/
+
+# 本地诊断、测试临时文件
+.tmp/

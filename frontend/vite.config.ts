@@ -5,13 +5,16 @@ export default defineConfig({
   base: "/static/canvas-app/",
   plugins: [react()],
   build: {
-    outDir: "../../web/static/canvas-app",
+    outDir: "../web/static/canvas-app",
     emptyOutDir: true,
     rollupOptions: {
       output: {
         entryFileNames: "assets/index.js",
         chunkFileNames: "assets/[name].js",
         assetFileNames: "assets/[name][extname]",
+        manualChunks: {
+          "canvas-vendor": ["@xyflow/react", "zustand"],
+        },
       },
     },
   },
