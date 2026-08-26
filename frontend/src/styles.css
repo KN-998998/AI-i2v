@@ -329,6 +329,7 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-preview-meta { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 .storyboard-preview-meta strong { color: var(--text); font-size: 13px; }
 .storyboard-preview-meta span { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.storyboard-preview-replay { justify-self: start; margin-top: 3px; }
 .storyboard-active-overlay-list { display: grid; gap: 4px; color: #d8eeee; font-size: 10px; line-height: 1.45; }
 .storyboard-audio-row { position: absolute; inset: 0; display: flex; align-items: center; min-width: 100%; overflow: hidden; padding: 0 9px; border-radius: 3px; }
 .storyboard-audio-row-stack { position: absolute; inset: 0; }
