@@ -41,7 +41,7 @@ export type TTSVoiceOption = {
   model: string;
   voice_id: string;
   label: string;
-  gender: "female" | "male";
+  gender: "female" | "male" | "custom";
 };
 
 export type TTSOptions = {

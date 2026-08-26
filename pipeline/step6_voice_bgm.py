@@ -34,6 +34,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.config import (
     BGM_FILE, QWEN_API_KEY, QWEN_TTS_BASE_URL, QWEN_TTS_MODEL, QWEN_TTS_MODELS,
+    QWEN_TTS_CLONE_MODEL, QWEN_TTS_CLONED_VOICES,
     TTS_PROVIDER, TTS_API_KEY, TTS_VOICE,
     get_batch_dir, batch_subdirs,
 )
@@ -68,11 +69,42 @@ QWEN_VOICE_OPTIONS = (
 )
 
 
+def _qwen_cloned_voice_options() -> list[dict[str, str]]:
+    """Parse configured cloned voices without exposing any API credentials.
+
+    QWEN_TTS_CLONED_VOICES uses comma-separated ``voice_id|label|gender`` items.
+    ``gender`` may be ``female``, ``male``, or ``custom`` and is presentation-only.
+    """
+    options: list[dict[str, str]] = []
+    for raw_item in QWEN_TTS_CLONED_VOICES.split(","):
+        parts = [part.strip() for part in raw_item.split("|")]
+        voice_id = parts[0] if parts else ""
+        if not voice_id:
+            continue
+        label = parts[1] if len(parts) > 1 and parts[1] else "复刻音色"
+        gender = parts[2].lower() if len(parts) > 2 else "custom"
+        if gender not in {"female", "male", "custom"}:
+            gender = "custom"
+        options.append({
+            "provider": "qwen",
+            "model": QWEN_TTS_CLONE_MODEL,
+            "voice_id": voice_id,
+            "label": f"复刻音色 · {label}",
+            "gender": gender,
+        })
+    return options
+
+
+def _configured_qwen_cloned_voice_ids() -> set[str]:
+    return {option["voice_id"] for option in _qwen_cloned_voice_options()}
+
+
 def qwen_tts_options() -> list[dict[str, str]]:
     """Return safe, non-secret Qwen model/voice metadata for the web UI."""
     model_names = [QWEN_TTS_MODEL]
     model_names.extend(item.strip() for item in QWEN_TTS_MODELS.split(",") if item.strip())
-    return [
+    built_in_models = [model for model in dict.fromkeys(model_names) if model != QWEN_TTS_CLONE_MODEL]
+    built_in_options = [
         {
             "provider": "qwen",
             "model": model,
@@ -80,9 +112,10 @@ def qwen_tts_options() -> list[dict[str, str]]:
             "label": label,
             "gender": gender,
         }
-        for model in dict.fromkeys(model_names)
+        for model in built_in_models
         for voice_id, label, gender in QWEN_VOICE_OPTIONS
     ]
+    return [*built_in_options, *_qwen_cloned_voice_options()]
 
 
 def _qwen_voice_id(voice: str | None) -> str | None:
@@ -99,7 +132,18 @@ def _qwen_voice_id(voice: str | None) -> str | None:
         return "Cherry"
     if value in {"male_clear", "male"}:
         return "Ethan"
-    return value if any(item[0] == value for item in QWEN_VOICE_OPTIONS) else None
+    if any(item[0] == value for item in QWEN_VOICE_OPTIONS):
+        return value
+    return value if value in _configured_qwen_cloned_voice_ids() else None
+
+
+def _qwen_tts_model(voice_id: str, requested_model: str | None = None) -> str:
+    """Keep cloned voices on the DashScope VC model they require."""
+    if voice_id in _configured_qwen_cloned_voice_ids():
+        return QWEN_TTS_CLONE_MODEL
+    if requested_model and requested_model != QWEN_TTS_CLONE_MODEL:
+        return requested_model
+    return QWEN_TTS_MODEL
 
 
 def _generate_qwen_tts(text: str, out_path: str, voice: str | None = None, model: str | None = None) -> str | None:
@@ -109,7 +153,8 @@ def _generate_qwen_tts(text: str, out_path: str, voice: str | None = None, model
     voice_id = _qwen_voice_id(voice) or _qwen_voice_id(TTS_VOICE)
     if not voice_id:
         return None
-    payload = json.dumps({"model": model or QWEN_TTS_MODEL, "input": {"text": text, "voice": voice_id}, "response_format": "mp3"}).encode("utf-8")
+    model_id = _qwen_tts_model(voice_id, model)
+    payload = json.dumps({"model": model_id, "input": {"text": text, "voice": voice_id}, "response_format": "mp3"}).encode("utf-8")
     request = urllib.request.Request(
         QWEN_TTS_BASE_URL,
         data=payload,
