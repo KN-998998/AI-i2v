@@ -242,15 +242,27 @@ def preflight_draft(
         sound = {}
     overlays = _timeline_items(sound, "overlayItems", [])
     voices = _timeline_items(sound, "voiceItems", [])
+    voices_by_id = {str(item.get("id") or ""): item for item in voices if str(item.get("id") or "")}
+    overlay_voice_ids: set[str] = set()
     for index, item in enumerate(overlays, 1):
         start = float(item.get("startSeconds") or 0)
         end = float(item.get("endSeconds") or 0)
+        sync_voice_id = str(item.get("syncVoiceId") or "")
+        linked_voice = voices_by_id.get(sync_voice_id)
         if not str(item.get("text") or "").strip():
             warnings.append({"code": "EMPTY_OVERLAY", "message": f"文字轨道 {index} 没有文案"})
         if end <= start:
             errors.append({"code": "INVALID_OVERLAY_RANGE", "message": f"文字轨道 {index} 的结束时间必须晚于开始时间"})
         if end > total + 0.05:
             warnings.append({"code": "OVERLAY_OUT_OF_RANGE", "message": f"文字轨道 {index} 超出当前成片时长"})
+        if linked_voice is None:
+            warnings.append({"code": "UNPAIRED_CAPTION", "message": f"文字轨道 {index} 未绑定有效人声，无法保证文字与语音同步"})
+        else:
+            overlay_voice_ids.add(sync_voice_id)
+            voice_start = float(linked_voice.get("startSeconds") or 0)
+            voice_end = float(linked_voice.get("endSeconds") or 0)
+            if str(item.get("text") or "") != str(linked_voice.get("text") or "") or abs(start - voice_start) > 0.05 or abs(end - voice_end) > 0.05:
+                warnings.append({"code": "CAPTION_NOT_SYNCED", "message": f"文字轨道 {index} 与绑定人声不一致，最终生成时会按 TTS 实际时长自动同步"})
     for index, item in enumerate(voices, 1):
         start = float(item.get("startSeconds") or 0)
         end = float(item.get("endSeconds") or 0)
@@ -260,6 +272,8 @@ def preflight_draft(
             errors.append({"code": "INVALID_VOICE_RANGE", "message": f"人声轨道 {index} 的结束时间必须晚于开始时间"})
         if end > total + 0.05:
             warnings.append({"code": "VOICE_OUT_OF_RANGE", "message": f"人声轨道 {index} 超出当前成片时长，TTS 会被截断"})
+        if str(item.get("id") or "") not in overlay_voice_ids:
+            warnings.append({"code": "UNPAIRED_VOICE", "message": f"人声轨道 {index} 没有对应画面文字，无法保证文案同步"})
 
     bgm_url = draft.get("bgmUrl")
     if bgm_url and _uploaded_path(draft_id, str(bgm_url)) is None:

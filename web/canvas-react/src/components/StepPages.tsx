@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getCanvasComposeStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
-import { nodeCatalog, overlayItemsFromData, totalTimelineDuration, voiceItemsFromData, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
+import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, nodeCatalog, totalTimelineDuration, type ComposeJob, type NodeKind, type WorkflowNode } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
@@ -161,15 +161,21 @@ function SoundTextPreview() {
   const updateTimelineClip = useWorkflowStore(state => state.updateTimelineClip);
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
-  const overlayItems = overlayItemsFromData(sound ?? {});
-  const voiceItems = voiceItemsFromData(sound ?? {});
+  const captionSegments = captionSegmentsFromData(sound ?? {});
+  const overlayItems = captionSegments.map(segment => segment.overlay);
+  const voiceItems = captionSegments.map(segment => segment.voice);
   const updateOverlayTimeline = (id: string, patch: Partial<(typeof overlayItems)[number]>) => {
     if (!soundNode) return;
     const next = overlayItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const changed = next.find(item => item.id === id);
+    const syncedVoices = changed
+      ? voiceItems.map(item => item.id === changed.syncVoiceId ? { ...item, text: changed.text, startSeconds: changed.startSeconds, endSeconds: changed.endSeconds } : item)
+      : voiceItems;
     const first = next[0];
     const cta = next.find(item => item.id === "overlay_cta") ?? next[next.length - 1];
     updateNodeData(soundNode.id, {
       overlayItems: next,
+      voiceItems: syncedVoices,
       overlayMain: first?.text ?? "",
       overlayCta: cta?.text ?? "",
       overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
@@ -180,9 +186,14 @@ function SoundTextPreview() {
   const updateVoiceTimeline = (id: string, patch: Partial<(typeof voiceItems)[number]>) => {
     if (!soundNode) return;
     const next = voiceItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const changed = next.find(item => item.id === id);
+    const syncedOverlays = changed
+      ? overlayItems.map(item => item.syncVoiceId === changed.id ? { ...item, text: changed.text, startSeconds: changed.startSeconds, endSeconds: changed.endSeconds } : item)
+      : overlayItems;
     const first = next[0];
     updateNodeData(soundNode.id, {
       voiceItems: next,
+      overlayItems: syncedOverlays,
       voiceText: first?.text ?? "",
       voiceName: first?.voiceName ?? "女声 · 温暖自然",
       voiceVolume: String(first?.volume ?? 85),
@@ -190,11 +201,14 @@ function SoundTextPreview() {
   };
   const removeOverlayTimeline = (id: string) => {
     if (!soundNode) return;
+    const removed = overlayItems.find(item => item.id === id);
     const next = overlayItems.filter(item => item.id !== id);
+    const syncedVoices = voiceItems.filter(item => item.id !== removed?.syncVoiceId);
     const first = next[0];
     const cta = next.find(item => item.id === "overlay_cta") ?? next[next.length - 1];
     updateNodeData(soundNode.id, {
       overlayItems: next,
+      voiceItems: syncedVoices,
       overlayMain: first?.text ?? "",
       overlayCta: cta?.text ?? "",
       overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
@@ -205,9 +219,11 @@ function SoundTextPreview() {
   const removeVoiceTimeline = (id: string) => {
     if (!soundNode) return;
     const next = voiceItems.filter(item => item.id !== id);
+    const syncedOverlays = overlayItems.filter(item => item.syncVoiceId !== id);
     const first = next[0];
     updateNodeData(soundNode.id, {
       voiceItems: next,
+      overlayItems: syncedOverlays,
       voiceText: first?.text ?? "",
       voiceName: first?.voiceName ?? "女声 · 温暖自然",
       voiceVolume: String(first?.volume ?? 85),
@@ -227,8 +243,10 @@ function SoundTextPreview() {
 function SoundComposePanel({ onToast }: StepPageProps) {
   const draftId = useWorkflowStore(state => state.draftId);
   const composeJob = useWorkflowStore(state => state.composeJob);
+  const soundNode = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound"));
   const saveDraft = useWorkflowStore(state => state.saveDraft);
   const setComposeJob = useWorkflowStore(state => state.setComposeJob);
+  const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const [busy, setBusy] = useState(false);
   const [preflight, setPreflight] = useState<PreflightReport | null>(null);
   const compose = async () => {
@@ -247,6 +265,11 @@ function SoundComposePanel({ onToast }: StepPageProps) {
         setComposeJob(job);
       }
       if (job.status === "error") throw new Error(job.error || "合成失败");
+      if (soundNode && job.voice_timings) {
+        const synced = captionSegmentsWithTimings(captionSegmentsFromData(soundNode.data), job.voice_timings);
+        updateNodeData(soundNode.id, captionSegmentsPatch(synced));
+        await saveDraft();
+      }
       onToast("最终有声成片已生成");
     } catch (error) {
       onToast(`最终成片生成失败：${error instanceof Error ? error.message : "未知错误"}`);

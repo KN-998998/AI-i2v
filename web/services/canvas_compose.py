@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT, batch_subdirs
-from web.services.canvas_state import draft_directory, load_draft, uploaded_file
+from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import preflight_draft
 
 _JOB_ID_RE = r"^[0-9a-f]{32}$"
@@ -178,6 +178,64 @@ def _voice_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
     return [{"text": text, "start": 0.0, "end": 4.0, "voice_id": "", "provider": "qwen", "model": "", "voice": str(sound.get("voiceName", "none")), "volume": max(0.0, min(float(sound.get("voiceVolume", 85) or 85) / 100, 1.0))}] if text else []
 
 
+def _pair_caption_tracks(sound: dict[str, Any]) -> None:
+    """Migrate old separate text/voice arrays into one-to-one track pairs."""
+    voices = sound.get("voiceItems")
+    overlays = sound.get("overlayItems")
+    if not isinstance(voices, list) or not isinstance(overlays, list):
+        return
+    for index, voice in enumerate(voices, 1):
+        if isinstance(voice, dict) and not str(voice.get("id") or ""):
+            voice["id"] = f"voice_{index}"
+    for index, overlay in enumerate(overlays):
+        if not isinstance(overlay, dict) or index >= len(voices) or not isinstance(voices[index], dict):
+            continue
+        voice = voices[index]
+        voice_id = str(voice.get("id") or "")
+        if not voice_id:
+            continue
+        overlay["syncVoiceId"] = str(overlay.get("syncVoiceId") or voice_id)
+        if str(overlay.get("syncVoiceId")) != voice_id:
+            continue
+        text = str(voice.get("text") or overlay.get("text") or "")
+        voice["text"] = text
+        overlay["text"] = text
+        overlay["startSeconds"] = voice.get("startSeconds", overlay.get("startSeconds", 0))
+        overlay["endSeconds"] = voice.get("endSeconds", overlay.get("endSeconds", 2.5))
+
+
+def _sync_caption_timings(draft: dict[str, Any], voice_timings: dict[str, tuple[float, float]]) -> None:
+    """Persist actual TTS ranges to their paired voice and overlay tracks."""
+    if not voice_timings:
+        return
+    sound = _sound_node(draft)
+    _pair_caption_tracks(sound)
+    voices = sound.get("voiceItems")
+    overlays = sound.get("overlayItems")
+    if not isinstance(voices, list) or not isinstance(overlays, list):
+        return
+    voices_by_id = {
+        str(item.get("id")): item
+        for item in voices
+        if isinstance(item, dict) and str(item.get("id") or "") in voice_timings
+    }
+    for voice_id, voice in voices_by_id.items():
+        start, end = voice_timings[voice_id]
+        voice["startSeconds"] = round(start, 3)
+        voice["endSeconds"] = round(end, 3)
+    for overlay in overlays:
+        if not isinstance(overlay, dict):
+            continue
+        voice_id = str(overlay.get("syncVoiceId") or "")
+        voice = voices_by_id.get(voice_id)
+        if voice is None:
+            continue
+        overlay["syncVoiceId"] = voice_id
+        overlay["text"] = str(voice.get("text") or "")
+        overlay["startSeconds"] = voice["startSeconds"]
+        overlay["endSeconds"] = voice["endSeconds"]
+
+
 def start_compose(draft_id: str, workspace_id: str | None = None, include_sound: bool = False) -> dict[str, Any]:
     draft = load_draft(draft_id)
     if draft is None:
@@ -224,6 +282,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
 
             output_path = output_dir / ("canvas_final.mp4" if include_sound else "canvas_composed.mp4")
             sound = _sound_node(draft)
+            _pair_caption_tracks(sound)
             voice_timings: dict[str, tuple[float, float]] = {}
             if not include_sound:
                 concat_clips(trimmed_paths, str(output_path), subtitles=[], brand_info=None)
@@ -246,7 +305,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                     if actual_duration <= 0:
                         raise RuntimeError("无法读取 TTS 音频时长，请确认 ffprobe 可用")
                     temporary_paths.append(str(segment_path))
-                    effective_end = min(item["end"], item["start"] + actual_duration)
+                    effective_end = min(video_duration, item["start"] + actual_duration)
                     voice_segments.append((generated, item["start"], effective_end, item["volume"]))
                     if item.get("id"):
                         voice_timings[item["id"]] = (item["start"], effective_end)
@@ -258,12 +317,21 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                     merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), video_duration=video_duration)
                     output_path.unlink(missing_ok=True)
                     output_path.with_suffix(".with-audio.mp4").replace(output_path)
+                if voice_timings:
+                    latest_draft = load_draft(draft_id)
+                    if latest_draft is not None:
+                        _sync_caption_timings(latest_draft, voice_timings)
+                        save_draft(draft_id, latest_draft)
             for path in temporary_paths:
                 Path(path).unlink(missing_ok=True)
             job.update({
                 "status": "done",
                 "updated_at": _now(),
                 "output_url": f"/api/canvas/drafts/{draft_id}/compose/{job_id}/file",
+                "voice_timings": {
+                    voice_id: {"startSeconds": round(start, 3), "endSeconds": round(end, 3)}
+                    for voice_id, (start, end) in voice_timings.items()
+                },
             })
         except Exception as exc:
             for path in temporary_paths:

@@ -50,6 +50,17 @@ export type VoiceItem = {
   volume?: number;
 };
 
+export type CaptionSegment = {
+  id: string;
+  overlay: OverlayItem;
+  voice: VoiceItem;
+};
+
+export type CaptionTiming = {
+  startSeconds: number;
+  endSeconds: number;
+};
+
 export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "甜品", "水果", "饮品", "其他"] as const;
 export type DishCategory = typeof DISH_CATEGORY_OPTIONS[number];
 
@@ -136,6 +147,7 @@ export type ComposeJob = {
   output_url: string | null;
   error: string | null;
   workspace_id?: string;
+  voice_timings?: Record<string, CaptionTiming>;
 };
 
 export type ComposeWorkspace = {
@@ -331,6 +343,91 @@ export function voiceItemsFromData(data: Pick<WorkflowData, "voiceItems" | "voic
   }
   const text = data.voiceText?.trim() || "";
   return text ? [{ id: "voice_main", text, startSeconds: 0, endSeconds: 4, provider: "qwen", model: "", voiceId: legacyVoiceId(defaultVoice), voiceName: defaultVoice, volume: defaultVolume }] : [];
+}
+
+/** Build one-to-one caption segments while preserving old separate-track drafts. */
+export function captionSegmentsFromData(data: Pick<WorkflowData, "overlayItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd" | "voiceItems" | "voiceText" | "voiceName" | "voiceVolume">): CaptionSegment[] {
+  const overlays = overlayItemsFromData(data);
+  const voices = voiceItemsFromData(data);
+  const claimedVoiceIds = new Set<string>();
+  const segments: CaptionSegment[] = [];
+
+  overlays.forEach((overlay, index) => {
+    const matchedVoice = (overlay.syncVoiceId ? voices.find(voice => voice.id === overlay.syncVoiceId) : undefined)
+      ?? voices.find(voice => !claimedVoiceIds.has(voice.id) && voices.indexOf(voice) === index)
+      ?? voices.find(voice => !claimedVoiceIds.has(voice.id));
+    const voice = matchedVoice ? { ...matchedVoice } : {
+      id: `voice_for_${overlay.id}`,
+      text: overlay.text,
+      startSeconds: overlay.startSeconds,
+      endSeconds: overlay.endSeconds,
+      provider: "qwen",
+      model: "",
+      voiceId: "none",
+      voiceName: "none",
+      volume: 85,
+    };
+    claimedVoiceIds.add(voice.id);
+    const text = voice.text.trim() || overlay.text;
+    const startSeconds = matchedVoice ? voice.startSeconds : overlay.startSeconds;
+    const endSeconds = matchedVoice ? voice.endSeconds : overlay.endSeconds;
+    segments.push({
+      id: voice.id,
+      overlay: { ...overlay, text, startSeconds, endSeconds, syncVoiceId: voice.id },
+      voice: { ...voice, text, startSeconds, endSeconds },
+    });
+  });
+
+  voices.filter(voice => !claimedVoiceIds.has(voice.id)).forEach(voice => {
+    segments.push({
+      id: voice.id,
+      overlay: {
+        id: `overlay_for_${voice.id}`,
+        text: voice.text,
+        startSeconds: voice.startSeconds,
+        endSeconds: voice.endSeconds,
+        position: "custom",
+        ...overlayPositionCoordinates("custom"),
+        animation: "static",
+        syncVoiceId: voice.id,
+        style: { ...DEFAULT_OVERLAY_STYLE },
+      },
+      voice: { ...voice },
+    });
+  });
+  return segments;
+}
+
+export function captionSegmentsPatch(segments: CaptionSegment[]): Partial<WorkflowData> {
+  const overlayItems = segments.map(segment => ({ ...segment.overlay, text: segment.voice.text, startSeconds: segment.voice.startSeconds, endSeconds: segment.voice.endSeconds, syncVoiceId: segment.voice.id }));
+  const voiceItems = segments.map(segment => ({ ...segment.voice }));
+  const first = segments[0];
+  const last = segments.at(-1);
+  return {
+    overlayItems,
+    voiceItems,
+    overlayMain: first?.voice.text ?? "",
+    overlayCta: last?.voice.text ?? "",
+    overlayStart: first ? `${first.voice.startSeconds}s` : "0s",
+    overlayEnd: first ? `${first.voice.endSeconds}s` : "2.5s",
+    voiceText: first?.voice.text ?? "",
+    voiceName: first?.voice.voiceName ?? "none",
+    voiceVolume: String(first?.voice.volume ?? 85),
+  };
+}
+
+export function captionSegmentsWithTimings(segments: CaptionSegment[], timings: Record<string, CaptionTiming>): CaptionSegment[] {
+  return segments.map(segment => {
+    const timing = timings[segment.voice.id];
+    if (!timing) return segment;
+    const startSeconds = Math.max(0, Number(timing.startSeconds) || 0);
+    const endSeconds = Math.max(startSeconds + 0.1, Number(timing.endSeconds) || startSeconds + 0.1);
+    return {
+      ...segment,
+      overlay: { ...segment.overlay, text: segment.voice.text, startSeconds, endSeconds, syncVoiceId: segment.voice.id },
+      voice: { ...segment.voice, startSeconds, endSeconds },
+    };
+  });
 }
 
 function legacyVoiceId(value: string): string {

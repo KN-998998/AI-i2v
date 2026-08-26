@@ -1,4 +1,4 @@
-import { connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -57,6 +57,16 @@ const qwenVoice = voiceItemsFromData({ voiceText: "qwen", voiceName: "女声 · 
 assert(qwenVoice[0].voiceId === "Cherry" && qwenVoice[0].provider === "qwen", "legacy voice was not migrated to Qwen");
 const noVoice = voiceItemsFromData({ voiceText: "", voiceName: "无", voiceVolume: "85" });
 assert(noVoice.length === 0, "default no-voice state should not create a TTS segment");
+
+const captionSegments = captionSegmentsFromData({
+  overlayItems: [{ id: "overlay_1", text: "screen copy", startSeconds: 0, endSeconds: 2, position: "upper" }],
+  voiceItems: [{ id: "voice_1", text: "voice copy", startSeconds: 1, endSeconds: 4, voiceId: "Cherry" }],
+});
+assert(captionSegments.length === 1 && captionSegments[0].overlay.syncVoiceId === "voice_1", "caption tracks were not paired");
+assert(captionSegments[0].overlay.text === "voice copy" && captionSegments[0].overlay.startSeconds === 1, "voice copy and timing must be the source of a paired caption");
+const measuredCaptions = captionSegmentsWithTimings(captionSegments, { voice_1: { startSeconds: 1, endSeconds: 3.6 } });
+const captionPatch = captionSegmentsPatch(measuredCaptions);
+assert(captionPatch.overlayItems?.[0].endSeconds === 3.6 && captionPatch.voiceItems?.[0].endSeconds === 3.6, "actual TTS duration was not written to both tracks");
 
 const composePool = [
   { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "正餐" as const },
