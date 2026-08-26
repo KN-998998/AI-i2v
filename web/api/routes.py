@@ -41,6 +41,7 @@ from web.services.canvas_state import background_file, list_background_files, lo
 
 router = APIRouter()
 CANVAS_CLIP_PREVIEW_ROOT = CANVAS_CLIP_ROOT / ".previews"
+CANVAS_CLIP_THUMBNAIL_ROOT = CANVAS_CLIP_ROOT / ".thumbnails"
 
 
 @router.get("/api/canvas/tts/options")
@@ -108,6 +109,41 @@ def _ensure_browser_preview(clip_path: Path, analysis: dict[str, Any]) -> str | 
     return f"/api/canvas/clips/previews/{preview_path.name}"
 
 
+def _clip_thumbnail(clip_path: Path, at_seconds: float) -> Path | None:
+    """Extract and cache a JPEG frame so all source codecs remain inspectable."""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return None
+    duration = _read_video_duration_seconds(clip_path)
+    if duration is None:
+        return None
+    timestamp = max(0.0, min(float(at_seconds), max(0.0, duration - 0.04)))
+    token = int(round(timestamp * 100))
+    CANVAS_CLIP_THUMBNAIL_ROOT.mkdir(parents=True, exist_ok=True)
+    thumbnail_path = CANVAS_CLIP_THUMBNAIL_ROOT / f"{clip_path.stem}_{token:06d}.jpg"
+    if thumbnail_path.is_file():
+        return thumbnail_path
+    temporary = thumbnail_path.with_suffix(".tmp.jpg")
+    result = subprocess.run(
+        [
+            ffmpeg, "-y", "-ss", f"{timestamp:.3f}", "-i", str(clip_path),
+            "-frames:v", "1", "-vf", "scale=w=240:h=135:force_original_aspect_ratio=decrease",
+            "-q:v", "3", str(temporary),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0 or not temporary.is_file():
+        temporary.unlink(missing_ok=True)
+        return None
+    temporary.replace(thumbnail_path)
+    return thumbnail_path
+
+
 def _canvas_clip_payload(clip_path: Path) -> dict[str, Any] | None:
     analysis = analyze_video(clip_path, _canvas_clip_dish(clip_path.name))
     duration = analysis.get("durationSeconds") or _read_video_duration_seconds(clip_path)
@@ -150,6 +186,34 @@ def serve_canvas_library_clip(filename: str) -> FileResponse:
     if clip_path.suffix.lower() != ".mp4" or not clip_path.is_file():
         raise _json_error("视频片段不存在", 404)
     return FileResponse(str(clip_path), media_type="video/mp4")
+
+
+@router.get("/api/canvas/clips/playback/{filename}")
+def serve_canvas_playback_clip(filename: str) -> FileResponse:
+    clip_path = CANVAS_CLIP_ROOT / Path(filename).name
+    if clip_path.suffix.lower() != ".mp4" or not clip_path.is_file():
+        raise _json_error("视频片段不存在", 404)
+    analysis = analyze_video(clip_path, _canvas_clip_dish(clip_path.name))
+    preview_url = _ensure_browser_preview(clip_path, analysis)
+    if preview_url:
+        preview_path = CANVAS_CLIP_PREVIEW_ROOT / Path(preview_url).name
+        if preview_path.is_file():
+            return FileResponse(str(preview_path), media_type="video/mp4")
+    return FileResponse(str(clip_path), media_type="video/mp4")
+
+
+@router.get("/api/canvas/clips/thumbnails/{filename}")
+def serve_canvas_clip_thumbnail(filename: str, at: float = 0) -> FileResponse:
+    clip_path = CANVAS_CLIP_ROOT / Path(filename).name
+    if clip_path.suffix.lower() != ".mp4" or not clip_path.is_file():
+        raise _json_error("视频片段不存在", 404)
+    try:
+        thumbnail_path = _clip_thumbnail(clip_path, at)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise _json_error("视频缩略图生成失败", 500) from exc
+    if thumbnail_path is None:
+        raise _json_error("无法生成视频缩略图，请检查 ffmpeg", 500)
+    return FileResponse(str(thumbnail_path), media_type="image/jpeg")
 
 
 @router.get("/api/canvas/clips/previews/{filename}")

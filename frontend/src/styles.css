@@ -296,7 +296,7 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-scrubber { display: grid; grid-template-columns: 56px minmax(0, 1fr) 44px; align-items: center; gap: 8px; margin-top: 9px; color: var(--muted); font-size: 10px; }
 .storyboard-scrubber input { width: 100%; accent-color: var(--amber); }
 .storyboard-scrubber output { color: var(--amber); text-align: right; }
-.clip-trim-editor { grid-column: 2; display: grid; gap: 8px; margin: 4px 0 2px; padding: 11px 12px 9px; border: 1px solid rgba(113,212,209,.35); border-radius: 5px; background: #182124; }
+.clip-trim-editor { display: grid; width: 100%; box-sizing: border-box; gap: 8px; margin: 0; padding: 11px 12px 9px; border: 1px solid rgba(113,212,209,.35); border-radius: 4px; background: #182124; }
 .clip-trim-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .clip-trim-head strong { display: block; margin-top: 3px; color: var(--text); font-size: 11px; }
 .clip-trim-head p { margin-top: 3px; color: var(--muted); font-size: 10px; }

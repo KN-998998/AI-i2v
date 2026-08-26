@@ -181,6 +181,23 @@ def test_canvas_clip_library_lists_and_serves_real_mp4(monkeypatch, tmp_path):
     assert client.get(item["sourceUrl"]).content == b"fake-mp4"
 
 
+def test_canvas_clip_thumbnail_is_generated_from_the_library(monkeypatch, tmp_path):
+    clip_dir = tmp_path / "canvas_clips"
+    clip_dir.mkdir()
+    clip_path = clip_dir / "test_01.mp4"
+    clip_path.write_bytes(b"fake-mp4")
+    thumbnail_path = tmp_path / "test_01_00100.jpg"
+    thumbnail_path.write_bytes(b"jpeg-bytes")
+    monkeypatch.setattr(api_routes, "CANVAS_CLIP_ROOT", clip_dir)
+    monkeypatch.setattr(api_routes, "_clip_thumbnail", lambda path, at: thumbnail_path if path == clip_path and at == 1.0 else None)
+
+    response = TestClient(create_app()).get("/api/canvas/clips/thumbnails/test_01.mp4?at=1")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content == b"jpeg-bytes"
+
+
 def test_video_quality_uses_rotation_metadata_for_display_ratio(monkeypatch, tmp_path):
     monkeypatch.setattr(
         canvas_quality,
