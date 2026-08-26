@@ -11,7 +11,8 @@ def test_single_image_cold_dish_close_up():
         l1_subject="dish_cold", l2_dynamics=[],
     ))
 
-    assert result.prompt == """【镜头】缓慢推进（dolly in），极慢匀速，单镜头一镜到底，画面轻微变化（约15%）。
+    assert result.prompt.startswith("【景别】特写，菜品主体约占画面70%-85%")
+    assert result.prompt.split("\n", 1)[1] == """【镜头】缓慢推进（dolly in），极慢匀速，单镜头一镜到底，画面轻微变化（约15%）。
 【主运动】菜品与摆盘保持原位不动，仅湿润切面高光随镜头角度缓慢滑移。
 【锁定】配菜与装饰、餐具器皿、桌面保持绝对静止，位置、数量、形状、颜色不变。
 【光线】光源固定，明暗关系不变，无重新打光。
@@ -33,7 +34,8 @@ def test_keyframes_chef_pours_sauce():
         speed_curve="uniform",
     ))
 
-    assert result.prompt == """【过渡】从首帧画面平滑连续过渡到尾帧画面，单镜头一镜到底，无切换、无叠化。
+    assert result.prompt.startswith("【景别】特写，菜品主体约占画面70%-85%")
+    assert result.prompt.split("\n", 1)[1] == """【过渡】从首帧画面平滑连续过渡到尾帧画面，单镜头一镜到底，无切换、无叠化。
 【主运动】手连贯自然地从首帧姿态过渡到尾帧姿态，完成淋下酱汁的动作片段，中途不停顿、不回退，全程匀速。
 【次级动态】极轻缓热气自菜品持续缓慢上升，不成团、不遮挡主体；细流从酱汁壶匀速落下，落点固定，流量恒定，全程连续不中断。
 【锁定】餐具器皿、桌面在整个过渡过程中保持位置与形态不变。
@@ -50,10 +52,11 @@ def test_single_image_crane_down_warns_about_low_motion():
     result = assemble_prompt(PromptConfig(
         mode="single_image", camera_move="crane_down", camera_amplitude="subtle",
         elements=["dish_cold", "garnish", "tableware"],
-        l1_subject="none", l2_dynamics=[],
+        l1_subject="none", l2_dynamics=[], shot_size="wide",
     ))
 
-    assert result.prompt == """【镜头】缓慢俯视下降（crane down），极慢匀速，单镜头一镜到底，画面极轻微变化（约8%）。
+    assert result.prompt.startswith("【景别】远景，菜品主体约占画面20%-35%")
+    assert result.prompt.split("\n", 1)[1] == """【镜头】缓慢俯视下降（crane down），极慢匀速，单镜头一镜到底，画面极轻微变化（约8%）。
 【主运动】画面内所有元素保持完全静止，仅视角发生变化。
 【锁定】菜品、配菜与装饰、餐具器皿保持绝对静止，位置、数量、形状、颜色不变。
 【光线】光源固定，明暗关系不变，无重新打光。
@@ -87,7 +90,8 @@ def test_complete_single_image_action_warns_about_motion_risk():
         l2_dynamics=[],
     ))
 
-    assert result.prompt == """【镜头】固定机位不动（locked-off），画面构图保持不变。
+    assert result.prompt.startswith("【景别】特写，菜品主体约占画面70%-85%")
+    assert result.prompt.split("\n", 1)[1] == """【镜头】固定机位不动（locked-off），画面构图保持不变。
 【主运动】手在三秒内缓慢完成一次夹起食材并自然停住。
 【锁定】菜品、餐具器皿保持绝对静止，位置、数量、形状、颜色不变。
 【光线】光源固定，明暗关系不变，无重新打光。

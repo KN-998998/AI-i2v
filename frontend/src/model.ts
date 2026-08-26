@@ -96,6 +96,7 @@ export type WorkflowData = {
   promptL0?: string[];
   promptMotion?: string;
   promptAmplitude?: string;
+  promptShotSize?: string;
   promptL1?: string;
   promptL2Type1?: string;
   promptL2Target1?: string;

@@ -1,5 +1,5 @@
 import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, resolveGeneratorNodeStatus, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
-import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
+import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -99,12 +99,14 @@ assert(["甜品", "水果"].includes(resolveDishCategory(recommended.at(-1)!)), 
 
 assert(ELEMENT_OPTIONS.length === 8, "L0 options are incomplete");
 assert(CAMERA_OPTIONS.length === 8, "camera options are incomplete");
+assert(SHOT_SIZE_OPTIONS.length === 4, "shot size options are incomplete");
 assert(L2_OPTIONS.length === 8, "L2 options are incomplete");
 
 const validPrompt: PromptConfig = {
   mode: "keyframes",
   camera_move: "locked_off",
   camera_amplitude: "subtle",
+  shot_size: "medium",
   elements: ["dish_hot", "tableware", "surface", "hand"],
   l1_subject: "hand",
   l1_action_level: 2,
@@ -117,6 +119,7 @@ const validPrompt: PromptConfig = {
 const assembled = assemblePrompt(validPrompt);
 assert(assembled.blocked === false, "valid structured prompt was blocked");
 assert(assembled.prompt.includes("【过渡】") && assembled.prompt.includes("淋下酱汁"), "keyframe prompt sections were not assembled");
+assert(assembled.prompt.includes("【景别】中景，菜品主体约占画面35%-55%"), "shot size was not assembled");
 assert(assembled.negative_prompt.includes("飞溅") && assembled.cfg_scale === 0.45, "negative prompt or cfg scale was not assembled");
 
 const invalidPrompt = assemblePrompt({ ...validPrompt, l2_dynamics: [...validPrompt.l2_dynamics, { type: "flame", target: "菜品" }] });

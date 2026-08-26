@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { inferDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
-import { assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData } from "../promptAssembler";
+import { assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData, SHOT_SIZE_OPTIONS } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
 import { ActionButton, Footer, formatNodeValue, Row, Tag } from "./ui";
@@ -54,6 +54,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
     </>,
     prompt: <>
       <Row label="L0 画面元素" value={`${promptConfig?.elements.length ?? 0} / 8 项`} />
+      <Row label="景别" value={SHOT_SIZE_OPTIONS.find(item => item.value === promptConfig?.shot_size)?.label ?? "特写"} />
       <Row label="L1 主运动" value={promptConfig?.l1_subject === "none" ? "无（纯运镜）" : ELEMENT_OPTIONS.find(item => item.id === promptConfig?.l1_subject)?.label ?? "待配置"} />
       <Row label="L2 次级动态" value={`${promptConfig?.l2_dynamics.length ?? 0} / 2 项`} />
       <div className="tag-list"><Tag good={!promptResult?.blocked} warn={Boolean(promptResult?.blocked)}>{promptResult?.blocked ? `阻断 ${promptResult.errors[0]?.code ?? ""}` : "校验通过"}</Tag>{promptResult?.warnings.slice(0, 1).map(warning => <Tag warn key={warning.code}>{warning.code}</Tag>)}</div>

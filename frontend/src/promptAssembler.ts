@@ -1,6 +1,7 @@
 export type PromptMode = "single_image" | "keyframes";
 export type CameraMove = "dolly_in" | "dolly_out" | "crane_down" | "crane_up" | "truck_left" | "truck_right" | "orbit_right" | "locked_off";
 export type Amplitude = "subtle" | "light" | "medium";
+export type ShotSize = "close_up" | "medium_close" | "medium" | "wide";
 export type ElementId = "dish_cold" | "dish_hot" | "garnish" | "tableware" | "surface" | "hand" | "chef" | "backdrop";
 export type L1Subject = "dish_cold" | "dish_hot" | "tableware" | "hand" | "chef" | "none";
 export type ActionLevel = 1 | 2 | 3;
@@ -14,6 +15,7 @@ export type PromptConfig = {
   mode: PromptMode;
   camera_move: CameraMove;
   camera_amplitude: Amplitude;
+  shot_size: ShotSize;
   elements: ElementId[];
   l1_subject: L1Subject;
   l1_action_level: ActionLevel | null;
@@ -61,6 +63,13 @@ export const AMPLITUDE_OPTIONS: ReadonlyArray<{ value: Amplitude; label: string;
   { value: "subtle", label: "极轻微（约8%）", text: "画面极轻微变化（约8%）" },
   { value: "light", label: "轻微（约15%）", text: "画面轻微变化（约15%）" },
   { value: "medium", label: "中等（约25%）", text: "画面中等变化（约25%）" },
+];
+
+export const SHOT_SIZE_OPTIONS: ReadonlyArray<{ value: ShotSize; label: string; text: string }> = [
+  { value: "close_up", label: "特写", text: "特写，菜品主体约占画面70%-85%，突出食材质感与细节，保持原图构图和主体位置不变" },
+  { value: "medium_close", label: "近景", text: "近景，菜品主体约占画面55%-70%，兼顾菜品细节与摆盘关系，保持原图构图和主体位置不变" },
+  { value: "medium", label: "中景", text: "中景，菜品主体约占画面35%-55%，保留餐具与桌面环境，保持原图构图和主体位置不变" },
+  { value: "wide", label: "远景", text: "远景，菜品主体约占画面20%-35%，展示完整餐桌与环境氛围，保持原图构图和主体位置不变" },
 ];
 
 export const ACTION_LEVEL_OPTIONS: ReadonlyArray<{ value: ActionLevel; label: string }> = [
@@ -131,6 +140,7 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   mode: "single_image",
   camera_move: "orbit_right",
   camera_amplitude: "subtle",
+  shot_size: "close_up",
   elements: ["dish_hot", "garnish", "tableware", "surface", "backdrop"],
   l1_subject: "dish_hot",
   l1_action_level: null,
@@ -156,6 +166,7 @@ function l2Type(type: L2Type) {
 function normalizeConfig(config: PromptConfig): PromptConfig {
   return {
     ...config,
+    shot_size: SHOT_SIZE_OPTIONS.some(item => item.value === config.shot_size) ? config.shot_size : DEFAULT_PROMPT_CONFIG.shot_size,
     elements: [...config.elements],
     l2_dynamics: config.l2_dynamics.map(item => ({ ...item })),
   };
@@ -238,6 +249,7 @@ function dynamicText(config: PromptConfig): string[] {
 function buildPrompt(config: PromptConfig, locked: string[]): string {
   const dynamics = dynamicText(config);
   const sections: string[] = [];
+  sections.push(`【景别】${SHOT_SIZE_OPTIONS.find(item => item.value === config.shot_size)?.text ?? SHOT_SIZE_OPTIONS[0].text}。`);
   if (config.mode === "single_image") {
     if (config.camera_move === "locked_off") sections.push("【镜头】固定机位不动（locked-off），画面构图保持不变。");
     else sections.push(`【镜头】${CAMERA_OPTIONS.find(item => item.value === config.camera_move)?.text ?? ""}，极慢匀速，单镜头一镜到底，${AMPLITUDE_OPTIONS.find(item => item.value === config.camera_amplitude)?.text ?? ""}。`);
@@ -287,6 +299,7 @@ type LegacyPromptData = {
   promptL0?: string[];
   promptMotion?: string;
   promptAmplitude?: string;
+  promptShotSize?: string;
   promptL1?: string;
   promptL1ActionLevel?: ActionLevel | null;
   promptL1ActionVerb?: string | null;
@@ -306,6 +319,7 @@ export function promptConfigFromData(data: LegacyPromptData): PromptConfig {
   if (data.promptConfig) return normalizeConfig(data.promptConfig);
   const camera = findByLabel(CAMERA_OPTIONS, data.promptMotion, CAMERA_OPTIONS[6]);
   const amplitude = findByLabel(AMPLITUDE_OPTIONS, data.promptAmplitude?.replace("约 8%", "约8%"), AMPLITUDE_OPTIONS[0]);
+  const shotSize = findByLabel(SHOT_SIZE_OPTIONS, data.promptShotSize, SHOT_SIZE_OPTIONS[0]);
   const mode: PromptMode = data.promptMode === "首尾帧模式" ? "keyframes" : "single_image";
   const elements = ELEMENT_OPTIONS.filter(item => data.promptL0?.includes(item.label.replace("／", "/")) || data.promptL0?.includes(item.label)).map(item => item.id);
   const subjectOption = ELEMENT_OPTIONS.find(item => item.label === data.promptL1 && item.canBeL1);
@@ -320,6 +334,7 @@ export function promptConfigFromData(data: LegacyPromptData): PromptConfig {
     mode,
     camera_move: camera.value,
     camera_amplitude: amplitude.value,
+    shot_size: shotSize.value,
     elements: elements.length ? elements : [...DEFAULT_PROMPT_CONFIG.elements],
     l1_subject: subject,
     l1_action_level: data.promptL1ActionLevel ?? null,
@@ -339,12 +354,14 @@ export function promptLegacyPatch(config: PromptConfig): PromptLegacyPatch {
   const subject = config.l1_subject === "none" ? "无（纯运镜）" : labelFor(config.l1_subject);
   const camera = CAMERA_OPTIONS.find(item => item.value === config.camera_move)!;
   const amplitude = AMPLITUDE_OPTIONS.find(item => item.value === config.camera_amplitude)!;
+  const shotSize = SHOT_SIZE_OPTIONS.find(item => item.value === config.shot_size) ?? SHOT_SIZE_OPTIONS[0];
   const l2Label = (item: L2Item | undefined) => item ? l2Type(item.type)?.label ?? item.type : "（无）";
   return {
     promptMode: config.mode === "keyframes" ? "首尾帧模式" : "单图模式",
     promptL0: config.elements.map(labelFor),
     promptMotion: camera.label,
     promptAmplitude: amplitude.label,
+    promptShotSize: shotSize.label,
     promptL1: subject,
     promptL1ActionLevel: config.l1_action_level,
     promptL1ActionVerb: config.l1_action_verb,

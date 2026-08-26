@@ -28,6 +28,7 @@ from typing import Optional
 Mode = str          # "single_image" | "keyframes"
 CameraMove = str    # dolly_in / dolly_out / crane_down / crane_up / truck_left / truck_right / orbit_right / locked_off
 Amplitude = str     # subtle / light / medium
+ShotSize = str      # close_up / medium_close / medium / wide
 Element = str       # dish_cold / dish_hot / garnish / tableware / surface / hand / chef / backdrop
 L1Subject = str     # dish_cold / dish_hot / tableware / hand / chef / none
 ActionLevel = int   # 1 / 2 / 3
@@ -49,6 +50,7 @@ class PromptConfig:
     camera_amplitude: Amplitude
     elements: list                       # L0 画面元素勾选，长度 >= 1
     l1_subject: L1Subject                # L1 主运动对象
+    shot_size: ShotSize = "close_up"
     l1_action_level: Optional[int] = None   # 仅 hand/chef 时非空
     l1_action_verb: Optional[str] = None    # 仅 action_level ∈ {2,3} 时非空
     l2_dynamics: list = field(default_factory=list)   # L2 次级动态，0..2 项
@@ -93,6 +95,13 @@ AMPLITUDE_TEXT = {
     "subtle": "画面极轻微变化（约8%）",
     "light":  "画面轻微变化（约15%）",
     "medium": "画面中等变化（约25%）",
+}
+
+SHOT_SIZE_TEXT = {
+    "close_up": "特写，菜品主体约占画面70%-85%，突出食材质感与细节，保持原图构图和主体位置不变",
+    "medium_close": "近景，菜品主体约占画面55%-70%，兼顾菜品细节与摆盘关系，保持原图构图和主体位置不变",
+    "medium": "中景，菜品主体约占画面35%-55%，保留餐具与桌面环境，保持原图构图和主体位置不变",
+    "wide": "远景，菜品主体约占画面20%-35%，展示完整餐桌与环境氛围，保持原图构图和主体位置不变",
 }
 
 ELEMENT_LABEL = {
@@ -317,6 +326,7 @@ def _l1_text(cfg: PromptConfig) -> str:
 
 def _build_sections(cfg: PromptConfig, locked: list) -> list:
     sections = []
+    sections.append(f"【景别】{SHOT_SIZE_TEXT.get(cfg.shot_size, SHOT_SIZE_TEXT['close_up'])}。")
 
     if cfg.mode == "single_image":
         # 镜头段

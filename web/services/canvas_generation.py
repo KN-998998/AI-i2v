@@ -102,6 +102,7 @@ def _prompt_from_node(data: dict[str, Any]) -> tuple[str, str, bool]:
         mode=str(raw.get("mode", "single_image")),
         camera_move=str(raw.get("camera_move", "dolly_in")),
         camera_amplitude=str(raw.get("camera_amplitude", "subtle")),
+        shot_size=str(raw.get("shot_size", "close_up")),
         elements=list(raw.get("elements") or []),
         l1_subject=str(raw.get("l1_subject", "dish_hot")),
         l1_action_level=raw.get("l1_action_level"),
