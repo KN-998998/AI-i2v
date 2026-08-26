@@ -1,304 +1,163 @@
-# AI 引流视频批量生产流水线
+# AI 餐饮引流视频工作台
 
-餐饮品牌引流短视频自动化生产：**静态菜品图片 → AI 动态视频片段 → 合成成片 → 配音配乐**。
+面向餐饮品牌的本地视频生产工作台：将菜品静态图处理为适合图生视频的首帧，生成短视频片段，组合为多条竖版成片，并在时间线上加入 BGM、TTS 人声和同步画面文字。
 
-## 项目目标
+当前推荐入口是 **React Flow 画布工作台**。旧的 `pipeline/run_batch.py` 仅保留为历史批处理兼容能力，不是日常运营流程。
 
-每天批量产出 **~10 条** 引流短视频，供抖音/小红书等平台投放。
-- **生产规模**：10 条/天（混合模式：不同菜品组合 + 同菜变体）
-- **视频规格**：1080p / 9:16 竖版 / 12-15s
-- **人工介入**：仅在片段审核环节（挑选每道菜最佳版本）
+## 当前生产流程
 
-## Pipeline 流程
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Step 1: 匹配素材 + 预处理                                │
-│  菜品清单 → 素材库按菜名找图 → 9:16 / 1080p 裁切缩放       │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│  Step 2: 固定槽位装配提示词 + 手动文案                     │
-│  L0/L1/L2 选择 → 生成图生视频提示词；运营填写字幕文案       │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│  Step 3: Kling API 批量图生视频                           │
-│  图片 + 提示词 → 可灵 3.0 API → 3s 无声 9:16 视频       │
-│  每道菜生成 3 个版本供挑选                                │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│  Step 4: 人工审核                                        │
-│  生成 HTML 审核页 + CSV 清单，运营挑选每道菜最佳片段        │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│  Step 5: ffmpeg 合成无声成片                              │
-│  掐头去尾 → 硬切拼接 → 字幕叠加 → 片尾 CTA → 无声成片       │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│  Step 6: 手动文案 + 配音 + 固定 BGM                       │
-│  手动文案 → Qwen TTS 配音 → 固定 BGM 混音 → 最终成片       │
-└─────────────────────────────────────────────────────────┘
+```text
+流程画布总览
+    ↓
+1. 素材与菜品
+   上传菜品原图，可填写菜名、菜品分类，按需上传首帧/尾帧素材
+    ↓
+2. 图片处理
+   腾讯云 GoodsMatting 抠出菜品主体 + 背景模板合成
+   生成独立的 9:16 视频首帧，原图始终保留
+    ↓
+3. 提示词装配
+   配置 L0/L1/L2 画面元素、主运动、镜头与固定约束词
+   自动进行联动校验并预览最终 Kling 提示词
+    ↓
+4. 生成视频片段
+   每个生成节点独立调用 Kling 图生视频
+   完成后自动下载到本地片段库，并按本地规则给出质量提示
+    ↓
+5. 成片合成
+   选择批量成片数量，创建多个合成工作区
+   系统可随机或按质量推荐片段；可手动增删、拖拽排序、裁剪片段范围
+   每个工作区独立生成无声成片
+    ↓
+6. 声音与文字
+   上传 BGM；在多条人声、文字轨道中调整起止时间和位置
+   同步的人声与画面文字共用文案，TTS 实际时长会回写到文字轨道
+    ↓
+7. 成片结果
+   查看每个合成任务状态，播放或下载最终成片
 ```
 
-## 技术栈
+## 工作台页面
 
-| 环节     | 工具                    | 说明                                |
-|--------|-----------------------|-----------------------------------|
-| 图生视频   | **可灵 Kling 3.0**      | 3s / 1080p / 无声 / 9:16，API Key 鉴权 |
-| 提示词生成  | **固定槽位装配器**           | L0/L1/L2 选择后生成确定性提示词              |
-| 文案编辑   | **画布节点手动填写**          | 人声文案与画面文字由运营直接编辑                  |
-| TTS 配音 | **Qwen TTS**          | 通过 DashScope 兼容接口生成；画布支持“无”或男女音色 |
-| BGM    | 固定音频文件                | 后续可升级为 AI 生成                      |
-| 视频合成   | **ffmpeg**            | 裁切/拼接/字幕/混音                       |
-| 图片处理   | **Pillow**            | 9:16 裁切、尺寸缩放、锐化                   |
-| 图床     | **无需**                | Kling API 支持 base64 图片直传          |
-| 配置管理   | **PyYAML**            | batch.yaml 驱动全流程                  |
-| Web 后端 | **FastAPI + Uvicorn** | 运营工作台 API、文件服务、后台任务编排             |
+| 步骤 | 页面 | 路径 | 主要职责 |
+| --- | --- | --- | --- |
+| 总览 | 流程画布 | `/canvas-mvp` | 节点 CRUD、拖拽、缩放、连线和流程入口 |
+| 1 | 素材与菜品 | `/workflow/assets` | 菜品资料、分类、首帧和尾帧图片上传 |
+| 2 | 图片处理 | `/workflow/image-processing` | 商品抠图、背景模板、主体位置和合成首帧 |
+| 3 | 提示词装配 | `/workflow/prompts` | L0/L1/L2、镜头、动作、提示词校验与预览 |
+| 4 | 生成视频片段 | `/workflow/generator` | 生成节点管理、Kling 任务状态、片段库刷新 |
+| 5 | 成片合成 | `/workflow/compose` | 批量工作区、片段推荐、排序、裁剪和无声合成 |
+| 6 | 声音与文字 | `/workflow/sound` | BGM、人声、文字、多轨时间线和最终有声合成 |
+| 7 | 成片结果 | `/workflow/output` | 查看任务结果、预览和下载 |
+
+## 核心能力与边界
+
+- **图生视频**：Kling 3.0 图生视频。当前画布提供 3 秒、5 秒选项；后端支持 3-15 秒整数时长。
+- **图片处理**：腾讯云数据万象 `GoodsMatting` 商品抠图。未配置腾讯云密钥时，图片处理步骤会明确提示，不会覆盖原图。
+- **片段质量提示**：基于本地规则分析视频分辨率、画幅、时长、帧率与编码，生成质量分数和检查提示；这不是云端训练模型评分。
+- **批量合成**：一个草稿可创建多个合成工作区。推荐逻辑优先考虑质量与菜品多样性，甜品或水果最多选一段并排在末尾；运营可以手工覆盖推荐结果。
+- **声音与文字同步**：一段人声可绑定一段文字。最终渲染时按 TTS 的实际音频时长同步更新两条轨道。
+- **文字轨道**：支持多条文字轨道、重叠、拖动位置、起止时间、字体、字号、颜色、描边、背景框及打字机效果。
+- **人工决策仍然保留**：菜品图片、背景模板、提示词动作和最终片段组合由运营确认；系统不替代品牌判断。
 
 ## 快速开始
 
 ### 1. 安装依赖
 
-```bash
-pip install -r requirements.txt
-```
-
-ffmpeg 已预装在系统中。
-
-前端构建需要 Node.js 20+（已安装 npm 的电脑可跳过）。Python 依赖和 Node 依赖分开管理：
+Python 使用项目的 Conda `PY3_11` 环境或其他 Python 3.11 环境：
 
 ```bat
 python -m pip install -r requirements.txt
 cd frontend
 npm.cmd install
+cd ..
 ```
 
-### 2. 配置 API Key
+还需要安装 ffmpeg，并确保 `ffmpeg`、`ffprobe` 可在命令行中调用。
 
-```bash
-# 必须：可灵（Step 3 图生视频）
-set KLING_API_KEY=你的kling_api_key
+### 2. 配置 `.env`
 
-# 可选：Qwen TTS（也可写入 .env）
-set QWEN_API_KEY=你的qwen_api_key
-set QWEN_TTS_MODEL=qwen3-tts-flash
+复制模板并仅在本机填写密钥：
+
+```bat
+copy .env.example .env
 ```
 
-### 3. 创建批量配置
+| 能力 | 需要的配置 |
+| --- | --- |
+| Kling 生成视频 | `KLING_API_KEY` |
+| 商品抠图与背景合成 | `BACKGROUND_REMOVAL_PROVIDER=tencent`、腾讯云 SecretId/SecretKey、`TENCENT_COS_BUCKET` |
+| Qwen / 阿里云 TTS | `TTS_PROVIDER=qwen`、`QWEN_API_KEY`、音色及模型配置 |
+| 素材库或默认 BGM | `IMAGE_LIBRARY`、`BGM_FILE`，可选 |
 
-复制模板并修改：
+`.env`、视频、图片、草稿和日志都被 Git 忽略，不能提交到远程仓库。
 
-```bash
-copy pipeline\batch_template.yaml pipeline\batch_20260814.yaml
-```
+### 3. 启动工作台
 
-编辑 `batch_20260814.yaml`：
-
-```yaml
-batch:
-  date: "2026-08-14"
-
-dishes:
-  - name: "海胆天妇罗"
-    category: "烤物/炸物"
-    highlight: "酥脆外皮"
-  # ... 添加更多菜品
-
-videos:
-  - id: v01
-    type: multi_dish
-    template: 5_dish
-    dishes: [海胆天妇罗, 松叶蟹三吃, ...]
-    hook_dish: 海胆天妇罗
-  # ... 10条视频编排
-```
-
-### 4. 启动 Web 工作台
-
-```bash
-python web/app.py
-```
-
-开发环境固定使用 `8015` 端口，并默认启用 reload。浏览器打开：`http://127.0.0.1:8015`
-
-推荐使用项目根目录的一键 BAT 开发入口：
+直接双击项目根目录的：
 
 ```bat
 start_dev.bat
 ```
 
-双击脚本即可自动结束旧的 `8015` 服务、重新构建 React 前端、启动 FastAPI，并打开 `http://127.0.0.1:8015/canvas-mvp`。后端启用 reload；修改前端源码后重新运行一次 `start_dev.bat`，修改后端源码则刷新浏览器即可。停止开发服务请在独立的 FastAPI 窗口使用 `Ctrl+C`。
+脚本会结束旧的 `8015` 服务、构建前端、启动 FastAPI，并自动打开：
 
-完整验证（构建、TypeScript 类型检查、前端模型测试、Python 测试）可运行：
+```text
+http://127.0.0.1:8015/canvas-mvp
+```
+
+后端启用 reload。修改 `frontend/` 后重新运行一次 `start_dev.bat`；修改 Python 后端后刷新浏览器即可。FastAPI API 文档位于 `http://127.0.0.1:8015/docs`。
+
+### 4. 全量验证
 
 ```bat
 scripts\verify.bat
 ```
 
-FastAPI 文档：`http://127.0.0.1:8015/docs`
+该脚本依次执行 TypeScript 类型检查、React 前端模型测试和 Python 测试。
 
-启动窗口使用 UTF-8 编码，并按日志级别显示彩色输出；日志文件保存在 `logs/app.log`，保持无颜色的 UTF-8 文本。
-
-## 当前 Web 工作台
-
-新版 Web 工作台由 React Flow 画布和 FastAPI 服务组成。画布只负责流程总览、节点拖拽、节点连接、节点 CRUD 和进入独立操作页；实际业务操作在各步骤页面完成，数据通过同一个持久化草稿贯通。
-
-| 页面     | 路径                    | 主要功能                         |
-|--------|-----------------------|------------------------------|
-| 流程画布总览 | `/canvas-mvp`         | 节点拖拽、连接线、节点增删改、流程入口          |
-| 素材与菜品  | `/workflow/assets`    | 菜品、首帧/尾帧图片和素材信息              |
-| 提示词装配  | `/workflow/prompts`   | L0/L1/L2 槽位、提示词预览和编辑         |
-| 生成视频片段 | `/workflow/generator` | 生成或刷新本地真实 MP4 片段             |
-| 成片合成   | `/workflow/compose`   | 设置批量成片数量，选择、拖拽排序片段并合成 |
-| 声音与文字  | `/workflow/sound`     | 合成后配置 BGM、人声和多段画面文字，并生成最终有声成片 |
-| 成片结果   | `/workflow/output`    | 查看合成状态和最终视频                  |
-
-### 持久化与文件流转
-
-- 画布草稿和上传文件保存在 `output/canvas_drafts/<draft_id>/`，前端刷新后可恢复节点、连线、编辑内容和时间线。
-- 新版画布下载的真实视频片段统一放在 `output/canvas_clips/`，不需要 `batch_id`；画布刷新会优先读取该目录。
-- 为兼容旧项目，画布仍会扫描 `output/batch_*/03_clips/`，旧片段可继续复用，但旧版批处理仍按 `batch_id` 管理自己的目录和清单。
-- 已完成的历史批次归档在 `output/_archive/batches/`，归档目录用于保留原始图片、提示词、清单和旧版成片，不作为新版片段库扫描入口。
-- 生成视频节点会进入候选片段池；“成片合成”可设置成片数量和每条片段数，随机生成多套工作区，每个工作区可以独立拖拽、删除、补入片段。
-- 批量合成会为每个工作区创建独立的 ffmpeg 任务和输出文件，单条失败不会覆盖其他工作区结果。
-- 合成任务通过 `/api/canvas/drafts/{draft_id}/compose` 启动，状态和结果通过对应的查询接口获取。
-- 初次合成生成无声成片；声音页面可将每条文字的时间段/位置、Qwen TTS 人声和上传 BGM 传入 ffmpeg，生成 `canvas_final.mp4`。
-- 样片适配：文字默认支持上方品牌区、中上钩子区、中央和底部安全区；不再限制为一条固定底部字幕。
-- `output/`、媒体文件、`.env`、日志和本地开发配置均不会提交到 Git；`.env.example` 只保存配置项名称和示例值。
-
-### 主要画布 API
+## 数据流与本地目录
 
 ```text
-GET  /api/canvas/drafts/{draft_id}
-PUT  /api/canvas/drafts/{draft_id}
-POST /api/canvas/drafts/{draft_id}/files
-GET  /api/canvas/clips
-POST /api/canvas/drafts/{draft_id}/compose
-GET  /api/canvas/drafts/{draft_id}/compose/{job_id}
-GET  /api/canvas/drafts/{draft_id}/compose/{job_id}/file
+output/
+├── background_templates/       # 可复用背景模板
+├── canvas_clips/               # 画布生成或导入的真实视频片段
+│   └── .previews/              # 非浏览器兼容编码的本地代理预览
+├── canvas_drafts/
+│   └── <draft_id>/
+│       ├── draft.json          # 节点、连线、时间线与工作区状态
+│       ├── files/              # 上传的菜品图、尾帧、BGM 等
+│       └── compositions/       # 每个工作区的无声/最终成片和任务记录
+└── _archive/batches/           # 历史 CLI 批次归档，不作为画布片段库
 ```
 
-### 5. 运行流水线（CLI 可选）
+- 刷新浏览器后，画布节点、连线、素材引用、合成工作区和轨道配置都会从同一草稿恢复。
+- Kling 成功后，视频会自动下载至 `output/canvas_clips/`；前端可刷新片段库获取新片段。
+- 每个合成工作区各自创建 ffmpeg 任务，单条失败不会覆盖其他工作区的成片。
+- 旧目录 `output/batch_*/03_clips/` 只为历史素材兼容而扫描，新片段不再写入其中。
 
-```bash
-# 方式一：全流程（Step 4 后暂停等人工审核）
-python pipeline/run_batch.py --config pipeline/batch_20260814.yaml
+## 工程结构
 
-# 方式二：分步执行
-python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --only 1   # 仅 Step 1
-python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --only 2   # 仅 Step 2
-
-# 方式三：从指定步骤开始
-python pipeline/run_batch.py --config pipeline/batch_20260814.yaml --start 5   # 审核后继续
-```
-
-### 6. 人工审核
-
-Step 4 完成后：
-1. 打开 `output/batch_YYYYMMDD/04_selected/review.html` 查看所有视频片段
-2. 打开 `output/batch_YYYYMMDD/04_selected/checklist.csv`
-3. 在 `selected` 列填 `y` 标记每道菜选用的片段
-4. 运行 Step 5-6 继续
-
-## 代码结构
-
-```
-pipeline/
-├── config.py              # 全局配置（API Key、路径、规格、约束词、成片模板）
-├── batch_template.yaml    # 批量配置模板
-├── run_batch.py           # 统一入口脚本
-├── step1_match_images.py  # 菜品→素材库找图→9:16/1080p 预处理
-├── step2_gen_prompts.py   # 固定槽位装配图生视频提示词 + 手动文案
-├── step3_gen_videos.py    # Kling API 批量图生视频（JWT 认证 + 轮询）
-├── step4_manual_review.py # 生成 HTML 审核页 + CSV 清单
-├── step5_compose.py       # ffmpeg 掐头去尾 + 拼接 + 字幕 + CTA
-└── step6_voice_bgm.py     # 手动文案 + Qwen TTS 配音 + BGM 混音
-
-web/
-├── app.py                 # FastAPI 应用入口
-├── run_server.py          # Windows 开发启动入口
-├── api/routes.py          # HTTP 路由层（保持 /api 契约）
-├── core/settings.py       # Web 配置与项目路径
-├── core/logging.py        # 控制台 + 文件轮转日志
-├── services/              # 状态、编排、后台任务服务
-└── static/canvas-app/      # React 本地构建产物（不提交 Git）
-
-frontend/
-├── src/                    # React Flow 前端源码、组件、状态与领域模型
-├── package.json            # 前端依赖、构建和模型测试命令
-└── vite.config.ts          # 输出到 web/static/canvas-app 的构建配置
-
+```text
+frontend/                 # React Flow 前端源码、状态、组件和类型测试
+web/                      # FastAPI 应用、API 路由、后台任务和服务层
+pipeline/                 # Kling、ffmpeg、TTS 等可复用底层能力；含旧 CLI 兼容入口
 tests/
-├── backend/                # FastAPI 路由、合成、图片处理测试
-└── pipeline/               # 提示词与音频流水线测试
-
+├── backend/              # FastAPI、合成、图片处理测试
+└── pipeline/             # 提示词、TTS 等底层能力测试
 scripts/
-├── build_frontend.bat      # 仅构建 React 前端
-└── verify.bat              # 全量本地验证入口
-
+├── build_frontend.bat    # 仅构建前端
+└── verify.bat            # 本地全量验证
 docs/
-└── 工程结构说明.md          # 模块职责与开发约定
+└── 工程结构说明.md        # 模块职责和开发约定
 ```
 
-## 输出目录结构
+前端构建结果会写入 `web/static/canvas-app/`，由 FastAPI 提供服务；该目录是可再生文件，不提交 Git。
 
-```
-output/batch_YYYYMMDD/
-├── 01_images/       # 预处理后的 9:16 图片
-├── 02_prompts/      # 每道菜的提示词(.txt) + 元数据(.json)
-├── 03_clips/        # Kling 生成的原始视频片段
-├── 04_selected/     # 审核清单（review.html + checklist.csv）
-├── 05_composed/     # ffmpeg 合成的无声成片
-└── 06_final/        # 最终有声成片
+## 旧 CLI 兼容能力
 
-output/canvas_drafts/
-└── <draft_id>/       # 画布草稿、上传素材、合成任务和结果
+`pipeline/run_batch.py`、`pipeline/batch_template.yaml` 与 `output/batch_*` 是旧批处理流程的兼容保留：它们用于维护历史批次、复用既有脚本或技术侧排查，不用于日常品牌部操作。新内容请始终从 `/canvas-mvp` 创建和管理。
 
-output/canvas_clips/
-└── *.mp4              # 新版画布统一片段库；文件名应包含菜名和变体标识
-```
+## 开发约定
 
-## 关键设计决策
-
-| 决策                       | 理由                                  |
-|--------------------------|-------------------------------------|
-| **提示词 = 固定槽位装配 + 固定约束词** | L0/L1/L2 选择后确定性生成提示词，避免自由文本导致约束漂移   |
-| **每菜 3 roll**            | 可灵一次生成多个版本，人工挑选最佳，废片率高时可回退          |
-| **先生成无声，后期配音**           | 图生视频模型有声生成成本翻倍，且配音内容可控              |
-| **生成 3s，成片只用 ~2s**       | Kling API 固定 3s，AI 动态在开头最自然，掐头去尾取精华 |
-| **硬切无转场**                | 保证节奏感，转场在后续需要时再升级                   |
-| **Qwen TTS 配音**           | 画布按模型和 voice ID 选择；未配置时可选择“无”       |
-| **base64 图片直传**          | Kling API 原生支持，无需图床，简化流程            |
-
-## 固定约束词（不可变）
-
-所有提示词自动追加以下约束，不交给 AI 生成：
-
-- **前缀**：`真实餐饮广告质感，`
-- **后缀**：`画面稳定，高清，食欲感强，暖色餐厅灯光，浅景深，不生成文字，不生成Logo，不出现人物`
-- **负向约束**：`不要改变菜品主体，不要让食物变形，不要凭空增加新食材，不要生成文字，不要生成Logo，不要生成二维码，不要出现人物手部，不要夸张动画，不要卡通风格，不要低清画质`
-
-## 视频规格
-
-| 参数   | 值                           |
-|------|-----------------------------|
-| 分辨率  | 1080p                       |
-| 比例   | 9:16 竖版                     |
-| 每段时长 | 3s（API 固定）→ 2.5s（成片掐头去尾）    |
-| 成片时长 | 12-15s（5 道菜≈12.5s，6 道菜≈15s） |
-| 帧率   | 30fps                       |
-| 音频   | 无声生成 → 后期配音                 |
-
-## 待办事项
-
-- [x] Pipeline 框架搭建
-- [x] Step 1-6 代码实现
-- [ ] 可灵 API Key 申请（等开会定档位）
-- [x] TTS 工具选型确认（Qwen TTS）
-- [ ] 首个批次实测 + 调优
-- [ ] 提示词效果数据收集 + 固化模板
-- [x] 发布到 GitHub 仓库
+详细说明见 [docs/工程结构说明.md](docs/工程结构说明.md)。提交前运行 `scripts\verify.bat`；密钥、素材绝对路径和任何生成媒体不得写入源码或提交 Git。
