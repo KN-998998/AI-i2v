@@ -9,6 +9,7 @@ WEB_ROOT = PROJECT_ROOT / "web"
 STATIC_DIR = WEB_ROOT / "static"
 LOG_DIR = PROJECT_ROOT / "logs"
 CANVAS_DRAFT_ROOT = PROJECT_ROOT / "output" / "canvas_drafts"
+CANVAS_BACKGROUND_ROOT = PROJECT_ROOT / "output" / "background_templates"
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

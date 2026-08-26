@@ -80,7 +80,7 @@ def create_app() -> FastAPI:
 
     @app.get("/workflow/{step}")
     async def workflow_step(step: str) -> FileResponse:
-        allowed_steps = {"assets", "prompts", "generator", "timeline", "compose", "sound", "output"}
+        allowed_steps = {"assets", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output"}
         if step not in allowed_steps:
             raise HTTPException(status_code=404, detail="工作流页面不存在")
         return react_entry()

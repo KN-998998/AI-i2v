@@ -13,6 +13,7 @@ pytest==8.4.1              # Python 测试运行器
 colorama==0.4.6            # Windows 控制台彩色日志
 numpy==2.4.3              # 数值计算
 requests==2.33.0          # HTTP 调用（Kling / LLM 等 API）
+cos-python-sdk-v5==1.9.39 # 腾讯云 COS / 数据万象 GoodsMatting
 urllib3==2.7.0            # requests 底层（代码中有直接 import）
 PyJWT==2.10.1             # 可灵 AK/SK JWT 鉴权
 PyYAML==6.0.3             # yaml：批量配置（batch_template.yaml 等）

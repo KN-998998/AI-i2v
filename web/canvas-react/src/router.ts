@@ -1,6 +1,7 @@
 export type WorkflowRoute =
   | "/canvas-mvp"
   | "/workflow/assets"
+  | "/workflow/image-processing"
   | "/workflow/prompts"
   | "/workflow/generator"
   | "/workflow/compose"
@@ -9,11 +10,12 @@ export type WorkflowRoute =
 
 export const workflowRoutes: Array<{ path: WorkflowRoute; label: string; step: string }> = [
   { path: "/workflow/assets", label: "素材与菜品", step: "1" },
-  { path: "/workflow/prompts", label: "提示词装配", step: "2" },
-  { path: "/workflow/generator", label: "生成视频片段", step: "3" },
-  { path: "/workflow/compose", label: "成片合成", step: "4" },
-  { path: "/workflow/sound", label: "声音与文字", step: "5" },
-  { path: "/workflow/output", label: "成片结果", step: "6" },
+  { path: "/workflow/image-processing", label: "图片处理", step: "2" },
+  { path: "/workflow/prompts", label: "提示词装配", step: "3" },
+  { path: "/workflow/generator", label: "生成视频片段", step: "4" },
+  { path: "/workflow/compose", label: "成片合成", step: "5" },
+  { path: "/workflow/sound", label: "声音与文字", step: "6" },
+  { path: "/workflow/output", label: "成片结果", step: "7" },
 ];
 
 export function routeForPath(pathname: string): WorkflowRoute {

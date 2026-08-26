@@ -25,7 +25,7 @@ def test_canvas_routes_serve_react_page_only():
 
 def test_workflow_pages_use_react_spa_fallback():
     client = TestClient(create_app())
-    for step in ("assets", "prompts", "generator", "timeline", "compose", "sound", "output"):
+    for step in ("assets", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output"):
         response = client.get(f"/workflow/{step}")
         assert response.status_code == 200
         assert "/static/canvas-app/assets/index.js" in response.text

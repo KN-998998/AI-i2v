@@ -66,6 +66,29 @@ def _uploaded_image(draft_id: str, url: str | None) -> Path | None:
     return uploaded_file(draft_id, Path(str(url).split("?", 1)[0]).name)
 
 
+def _upstream_data(draft: dict[str, Any], start_id: str, kind: str, allow_legacy_fallback: bool = True) -> dict[str, Any]:
+    """Return the nearest upstream node data, retaining legacy first-node fallback."""
+    pending = [start_id]
+    seen: set[str] = set()
+    nodes = {str(item.get("id")): item for item in draft.get("nodes", [])}
+    while pending:
+        target = pending.pop(0)
+        if target in seen:
+            continue
+        seen.add(target)
+        for edge in draft.get("edges", []):
+            if edge.get("target") != target:
+                continue
+            source_id = str(edge.get("source"))
+            source = nodes.get(source_id)
+            if source and source.get("data", {}).get("kind") == kind:
+                return source.get("data", {})
+            pending.append(source_id)
+    if allow_legacy_fallback:
+        return next((item.get("data", {}) for item in draft.get("nodes", []) if item.get("data", {}).get("kind") == kind), {})
+    return {}
+
+
 def _prompt_from_node(data: dict[str, Any]) -> tuple[str, str, bool]:
     from pipeline.prompt_assembler import L2Item, PromptConfig, assemble_prompt
 
@@ -149,9 +172,12 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
     if not ((KLING_ACCESS_KEY and KLING_SECRET_KEY) or KLING_API_KEY):
         raise ValueError("未配置 Kling 鉴权信息")
 
-    input_data = next((item.get("data", {}) for item in draft.get("nodes", []) if item.get("data", {}).get("kind") == "input"), {})
-    prompt_data = next((item.get("data", {}) for item in draft.get("nodes", []) if item.get("data", {}).get("kind") == "prompt"), {})
-    image_path = _uploaded_image(draft_id, input_data.get("imagePreview"))
+    input_data = _upstream_data(draft, node_id, "input")
+    processing_data = _upstream_data(draft, node_id, "image_process", allow_legacy_fallback=False)
+    prompt_data = _upstream_data(draft, node_id, "prompt")
+    image_path = _uploaded_image(draft_id, processing_data.get("processedImagePreview"))
+    if image_path is None:
+        image_path = _uploaded_image(draft_id, input_data.get("imagePreview"))
     if image_path is None or not image_path.is_file():
         raise ValueError("请先在素材与菜品节点上传首帧图片")
     prompt, negative_prompt, keyframe_mode = _prompt_from_node(prompt_data)

@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import time
+from io import BytesIO
+
+from fastapi.testclient import TestClient
+from PIL import Image
+
+from web.app import create_app
+from web.services import canvas_image_processing, canvas_state
+
+
+def _png_bytes(color: tuple[int, int, int, int]) -> bytes:
+    image = Image.new("RGBA", (240, 320), color)
+    output = BytesIO()
+    image.save(output, "PNG")
+    return output.getvalue()
+
+
+def test_background_template_upload_and_list(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_BACKGROUND_ROOT", tmp_path / "backgrounds")
+    client = TestClient(create_app())
+
+    uploaded = client.post(
+        "/api/canvas/backgrounds",
+        files={"file": ("bar.png", _png_bytes((100, 60, 30, 255)), "image/png")},
+    )
+
+    assert uploaded.status_code == 200
+    item = uploaded.json()
+    assert item["name"] == "bar.png"
+    assert client.get(item["url"]).status_code == 200
+    assert client.get("/api/canvas/backgrounds").json()[0]["id"] == item["id"]
+
+
+def test_image_processing_composites_and_persists_result(monkeypatch, tmp_path):
+    draft_root = tmp_path / "drafts"
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", draft_root)
+
+    def fake_goods_matting(source, destination, _draft_id):
+        with Image.open(source) as image:
+            image.convert("RGBA").save(destination, "PNG")
+
+    monkeypatch.setattr(canvas_image_processing, "_goods_matting", fake_goods_matting)
+    draft_directory = draft_root / "default" / "files"
+    draft_directory.mkdir(parents=True)
+    (draft_directory / "source.png").write_bytes(_png_bytes((240, 120, 80, 255)))
+
+    payload = {
+        "activePanel": "prompt",
+        "nextNodeNumber": 1,
+        "nodes": [
+            {"id": "assets", "type": "workflow", "position": {"x": 0, "y": 0}, "data": {"kind": "input", "dishName": "测试菜品", "imagePreview": "/api/canvas/drafts/default/files/source.png"}},
+            {"id": "image_process", "type": "workflow", "position": {"x": 100, "y": 0}, "data": {"kind": "image_process", "subjectScale": 0.6, "subjectX": 0.5, "subjectY": 0.58, "backgroundBlur": 4, "backgroundBrightness": 0.7}},
+        ],
+        "edges": [{"id": "assets-process", "source": "assets", "target": "image_process"}],
+        "timeline": [],
+        "candidateClips": [],
+        "bgmName": "",
+        "bgmUrl": "",
+    }
+    client = TestClient(create_app())
+    assert client.put("/api/canvas/drafts/default", json=payload).status_code == 200
+
+    response = client.post("/api/canvas/drafts/default/image-processing", json={"node_id": "image_process"})
+    assert response.status_code == 200
+    job = response.json()
+    for _ in range(40):
+        job = client.get(f"/api/canvas/drafts/default/image-processing/{job['job_id']}").json()
+        if job["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+
+    assert job["status"] == "done", job.get("error")
+    assert job["result_url"]
+    result = client.get(job["result_url"])
+    assert result.status_code == 200
+    with Image.open(BytesIO(result.content)) as image:
+        assert image.size == (1080, 1920)

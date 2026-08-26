@@ -10,7 +10,7 @@ assert(connectWouldCycle(initialEdges, "assets", "sound") === false, "acyclic co
 
 const next = removeNodeAndEdges(initialNodes, initialEdges, "prompt");
 assert(!next.nodes.some(node => node.id === "prompt"), "node was not removed");
-assert(next.edges.length === 2, "connected edges were not removed");
+assert(next.edges.length === 3, "connected edges were not removed");
 assert(!next.edges.some(edge => edge.source === "prompt" || edge.target === "prompt"), "dangling edge remained");
 
 const timeline = [

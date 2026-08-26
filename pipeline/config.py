@@ -47,6 +47,9 @@ PIPELINE_DIR = PROJECT_ROOT / "pipeline"
 OUTPUT_ROOT  = Path(os.environ.get("OUTPUT_ROOT", PROJECT_ROOT / "output"))
 # 新版画布统一使用的 Kling 视频片段库；旧版批处理仍写入 batch_*/03_clips。
 CANVAS_CLIP_ROOT = Path(os.environ.get("CANVAS_CLIP_ROOT", OUTPUT_ROOT / "canvas_clips"))
+BACKGROUND_TEMPLATE_DIR = Path(
+    os.environ.get("BACKGROUND_TEMPLATE_DIR", OUTPUT_ROOT / "background_templates")
+)
 
 # 素材库路径（图生视频主库，按菜名分文件夹）
 #   示例：export IMAGE_LIBRARY="D:/素材库/菜品照片"
@@ -77,6 +80,14 @@ QWEN_TTS_BASE_URL = os.environ.get("QWEN_TTS_BASE_URL", "https://dashscope.aliyu
 QWEN_TTS_MODEL = os.environ.get("QWEN_TTS_MODEL", "qwen3-tts-flash")
 QWEN_TTS_MODELS = os.environ.get("QWEN_TTS_MODELS", "")
 TTS_VOICE = os.environ.get("TTS_VOICE", "none")  # 音色标识
+
+# 腾讯云数据万象商品抠图（可选）。密钥只从 .env / 系统环境读取。
+BACKGROUND_REMOVAL_PROVIDER = os.environ.get("BACKGROUND_REMOVAL_PROVIDER", "").strip().lower()
+TENCENTCLOUD_SECRET_ID = os.environ.get("TENCENTCLOUD_SECRET_ID", "")
+TENCENTCLOUD_SECRET_KEY = os.environ.get("TENCENTCLOUD_SECRET_KEY", "")
+TENCENTCLOUD_REGION = os.environ.get("TENCENTCLOUD_REGION", "ap-guangzhou")
+TENCENT_COS_BUCKET = os.environ.get("TENCENT_COS_BUCKET", "")
+TENCENT_COS_MODEL = os.environ.get("TENCENT_COS_MODEL", "GoodsMatting")
 
 # ── 视频规格 ──────────────────────────────────────────────────────
 VIDEO_RESOLUTION = "1080p"     # 1080p

@@ -1,8 +1,8 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
-import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, waitForCanvasGeneration } from "./api";
+import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 
 type WorkflowState = {
   nodes: WorkflowNode[];
@@ -37,6 +37,7 @@ type WorkflowState = {
   registerGeneratorClip: (nodeId: string) => void;
   attachGeneratedClip: (nodeId: string, clip: TimelineClip) => void;
   generateNode: (nodeId: string) => Promise<GenerationJob>;
+  processImageNode: (nodeId: string) => Promise<ImageProcessingJob>;
   addNode: (kind: NodeKind) => void;
   deleteNode: (nodeId: string) => void;
   duplicateNode: (nodeId: string) => void;
@@ -64,7 +65,24 @@ type WorkflowState = {
   saveDraft: () => Promise<void>;
 };
 
-const protectedNodeIds = new Set(["assets", "prompt", "clips", "output", "sound"]);
+const protectedNodeIds = new Set(["assets", "image_process", "prompt", "clips", "output", "sound"]);
+
+function migrateImageProcessNode(nodes: WorkflowNode[], edges: Edge[]): { nodes: WorkflowNode[]; edges: Edge[] } {
+  if (nodes.some(node => node.data.kind === "image_process")) return { nodes, edges };
+  const assets = nodes.find(node => node.id === "assets" || node.data.kind === "input");
+  const prompt = nodes.find(node => node.id === "prompt" || node.data.kind === "prompt");
+  if (!assets || !prompt) return { nodes, edges };
+  const processNode = createWorkflowNode("image_process", "image_process", { x: (assets.position.x + prompt.position.x) / 2, y: Math.min(assets.position.y, prompt.position.y) });
+  const withoutLegacy = edges.filter(edge => !(edge.source === assets.id && edge.target === prompt.id));
+  return {
+    nodes: [...nodes, processNode],
+    edges: [
+      ...withoutLegacy,
+      { id: `${assets.id}-image-process`, source: assets.id, target: processNode.id, type: "smoothstep" },
+      { id: `image-process-${prompt.id}`, source: processNode.id, target: prompt.id, type: "smoothstep" },
+    ],
+  };
+}
 
 function sameClipList(left: TimelineClip[], right: TimelineClip[]): boolean {
   if (left.length !== right.length) return false;
@@ -263,6 +281,29 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       throw error;
     }
   },
+  processImageNode: async nodeId => {
+    const state = get();
+    state.updateNodeData(nodeId, { status: "处理中" });
+    await get().saveDraft();
+    try {
+      const started = await startCanvasImageProcessing(get().draftId, nodeId);
+      const completed = await waitForCanvasImageProcessing(get().draftId, started);
+      if (completed.status === "error") throw new Error(completed.error || "图片处理失败");
+      if (completed.status !== "done" || !completed.result_url || !completed.result_name) throw new Error("图片处理任务超时，请检查后端日志");
+      get().updateNodeData(nodeId, {
+        status: "已处理",
+        imageProcessingJobId: completed.job_id,
+        processedImagePreview: completed.result_url,
+        processedImageName: completed.result_name,
+        processedImageAnalysis: completed.analysis ?? undefined,
+      });
+      await get().saveDraft();
+      return completed;
+    } catch (error) {
+      get().updateNodeData(nodeId, { status: "处理失败" });
+      throw error;
+    }
+  },
   addNode: kind => set(state => {
     const id = `node_${kind}_${state.nextNodeNumber}`;
     const index = state.nextNodeNumber - 1;
@@ -425,11 +466,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       set({ hydrated: true });
       return;
     }
+    const migrated = migrateImageProcessNode(draft.nodes as WorkflowNode[], draft.edges);
     set({
-      nodes: draft.nodes.map(node => node.data.kind === "input" && !node.data.dishCategory
+      nodes: migrated.nodes.map(node => node.data.kind === "input" && !node.data.dishCategory
         ? { ...node, data: { ...node.data, dishCategory: node.data.dishName ? inferDishCategory(node.data.dishName) : "正餐" } }
         : node),
-      edges: draft.edges,
+      edges: migrated.edges,
       timeline: draft.timeline.map(normalizeTimelineClip),
       candidateClips: (draft.candidateClips ?? draft.timeline).map(normalizeTimelineClip),
       composeBatchCount: draft.composeBatchCount ?? 1,

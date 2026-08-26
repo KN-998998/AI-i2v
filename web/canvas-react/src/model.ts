@@ -1,7 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type ActionVerb, type PromptConfig } from "./promptAssembler.ts";
 
-export type NodeKind = "input" | "prompt" | "generator" | "output" | "sound" | "custom";
+export type NodeKind = "input" | "image_process" | "prompt" | "generator" | "output" | "sound" | "custom";
 export type Panel = "prompt" | "voice" | "overlay";
 
 export type OverlayPosition = "top" | "upper" | "center" | "bottom" | "custom";
@@ -65,6 +65,18 @@ export type WorkflowData = {
   imageName?: string;
   imagePreview?: string;
   assetAnalysis?: MediaAnalysis;
+  backgroundTemplateId?: string;
+  backgroundTemplateName?: string;
+  backgroundPreview?: string;
+  backgroundBlur?: number;
+  backgroundBrightness?: number;
+  subjectScale?: number;
+  subjectX?: number;
+  subjectY?: number;
+  processedImageName?: string;
+  processedImagePreview?: string;
+  processedImageAnalysis?: MediaAnalysis;
+  imageProcessingJobId?: string;
   duration?: string;
   resolution?: string;
   audio?: string;
@@ -184,6 +196,26 @@ export type GenerationJob = {
   error?: string | null;
 };
 
+export type ImageProcessingJob = {
+  job_id: string;
+  draft_id?: string;
+  node_id: string;
+  status: "queued" | "running" | "done" | "error";
+  stage?: string;
+  result_url?: string | null;
+  result_name?: string | null;
+  cutout_name?: string | null;
+  analysis?: MediaAnalysis | null;
+  error?: string | null;
+};
+
+export type BackgroundTemplate = {
+  id: string;
+  name: string;
+  url: string;
+  source: "local";
+};
+
 export type ClipLibraryItem = TimelineClip & {
   /** 旧批次片段才有；新版公共画布片段不依赖 batch_id。 */
   batchId?: string;
@@ -198,6 +230,7 @@ export type NodeCatalogItem = Pick<WorkflowData, "title" | "status" | "descripti
 
 export const nodeCatalog: Record<NodeKind, NodeCatalogItem> = {
   input: { kicker: "INPUT", title: "素材与菜品", status: "已就绪", description: "提供菜品图片、首帧或尾帧素材。" },
+  image_process: { kicker: "IMAGE PROCESS", title: "图片处理", status: "待处理", description: "商品抠图、背景模板合成并输出视频首帧。" },
   prompt: { kicker: "PROMPT", title: "槽位化提示词", status: "可生成", description: "装配并校验图生视频提示词。" },
   generator: { kicker: "KLING 3.0", title: "3 秒视频片段", status: "待生成", description: "按当前提示词生成视频片段。" },
   output: { kicker: "OUTPUT", title: "成片合成", status: "草稿", description: "先将视频片段合成为无声成片。" },
@@ -319,6 +352,7 @@ export const clips: TimelineClip[] = [
 export function dataFor(kind: NodeKind): WorkflowData {
   const base = { kind, ...nodeCatalog[kind] };
   if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", dishCategory: "正餐", assetMode: "单图模式", imageName: "当前素材" };
+  if (kind === "image_process") return { ...base, backgroundBlur: 4, backgroundBrightness: 0.72, subjectScale: 0.68, subjectX: 0.5, subjectY: 0.58 };
   if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
   if (kind === "output") return { ...base, outputTarget: "5-6 道菜", outputDuration: "12-15s", outputAspect: "9:16" };
@@ -435,14 +469,16 @@ function shuffle<T>(items: T[], random: () => number): T[] {
 
 export const initialNodes: WorkflowNode[] = [
   createWorkflowNode("input", "assets", { x: 24, y: 54 }),
-  createWorkflowNode("prompt", "prompt", { x: 286, y: 42 }),
-  createWorkflowNode("generator", "clips", { x: 548, y: 54 }),
-  createWorkflowNode("output", "output", { x: 810, y: 54 }),
-  createWorkflowNode("sound", "sound", { x: 810, y: 282 }),
+  createWorkflowNode("image_process", "image_process", { x: 286, y: 42 }),
+  createWorkflowNode("prompt", "prompt", { x: 548, y: 42 }),
+  createWorkflowNode("generator", "clips", { x: 810, y: 54 }),
+  createWorkflowNode("output", "output", { x: 1072, y: 54 }),
+  createWorkflowNode("sound", "sound", { x: 1072, y: 282 }),
 ];
 
 export const initialEdges: Edge[] = [
-  { id: "assets-prompt", source: "assets", target: "prompt", type: "smoothstep" },
+  { id: "assets-image-process", source: "assets", target: "image_process", type: "smoothstep" },
+  { id: "image-process-prompt", source: "image_process", target: "prompt", type: "smoothstep" },
   { id: "prompt-clips", source: "prompt", target: "clips", type: "smoothstep" },
   { id: "clips-output", source: "clips", target: "output", type: "smoothstep" },
   { id: "output-sound", source: "output", target: "sound", type: "smoothstep" },

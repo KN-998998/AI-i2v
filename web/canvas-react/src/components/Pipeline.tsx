@@ -9,6 +9,7 @@ function PipelineItem({ item, active }: { item: typeof workflowRoutes[number]; a
   const setSelection = useWorkflowStore(state => state.setSelection);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const selectStage = () => {
+    if (item.path === "/workflow/image-processing") setSelection("image_process");
     if (item.path === "/workflow/sound") { setActivePanel("voice"); setSelection("sound"); }
     if (item.path === "/workflow/compose" || item.path === "/workflow/output") setSelection("output");
     navigate(item.path);

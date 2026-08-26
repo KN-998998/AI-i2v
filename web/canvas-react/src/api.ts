@@ -1,4 +1,4 @@
-import type { ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, MediaAnalysis } from "./model";
+import type { BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, MediaAnalysis } from "./model";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -64,6 +64,41 @@ export async function uploadDraftFile(draftId: string, file: File, kind: "image"
   body.append("file", file);
   const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/files`, { method: "POST", body });
   return parseResponse<{ url: string; original_name: string; stored_name: string; size: number; analysis?: MediaAnalysis }>(response);
+}
+
+export async function fetchBackgroundTemplates(): Promise<BackgroundTemplate[]> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/backgrounds`, { cache: "no-store" });
+  return parseResponse<BackgroundTemplate[]>(response);
+}
+
+export async function uploadBackgroundTemplate(file: File): Promise<BackgroundTemplate> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(`${API_BASE_URL}/api/canvas/backgrounds`, { method: "POST", body });
+  return parseResponse<BackgroundTemplate>(response);
+}
+
+export async function startCanvasImageProcessing(draftId: string, nodeId: string): Promise<ImageProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/image-processing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ node_id: nodeId }),
+  });
+  return parseResponse<ImageProcessingJob>(response);
+}
+
+export async function getCanvasImageProcessingStatus(draftId: string, jobId: string): Promise<ImageProcessingJob> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/image-processing/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+  return parseResponse<ImageProcessingJob>(response);
+}
+
+export async function waitForCanvasImageProcessing(draftId: string, job: ImageProcessingJob): Promise<ImageProcessingJob> {
+  let current = job;
+  for (let attempt = 0; attempt < 120 && (current.status === "queued" || current.status === "running"); attempt += 1) {
+    await new Promise(resolve => window.setTimeout(resolve, 1000));
+    current = await getCanvasImageProcessingStatus(draftId, job.job_id);
+  }
+  return current;
 }
 
 export type PreflightIssue = { code: string; message: string };

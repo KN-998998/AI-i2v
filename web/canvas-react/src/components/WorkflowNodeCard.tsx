@@ -45,6 +45,13 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <div className="tag-list"><Tag good>{formatNodeValue(data.foodType, "待确认")}</Tag><Tag>{dishCategory}</Tag><Tag>{formatNodeValue(data.assetMode, "单图模式")}</Tag></div>
       <Footer><ActionButton onClick={() => action()}>编辑素材</ActionButton></Footer>
     </>,
+    image_process: <>
+      <div className="dish-preview"><div className="dish-image-fallback">{data.processedImagePreview ? <img src={data.processedImagePreview} alt="处理后首帧" /> : data.backgroundPreview ? <img src={data.backgroundPreview} alt="背景模板" /> : "待处理"}</div></div>
+      <Row label="模型" value="GoodsMatting" />
+      <Row label="背景" value={formatNodeValue(data.backgroundTemplateName, "未选择") } />
+      <Row label="输出" value={formatNodeValue(data.processedImageName, "尚未生成") } />
+      <Footer><ActionButton primary onClick={() => { setSelection(id); navigate("/workflow/image-processing"); }}>编辑图片处理</ActionButton></Footer>
+    </>,
     prompt: <>
       <Row label="L0 画面元素" value={`${promptConfig?.elements.length ?? 0} / 8 项`} />
       <Row label="L1 主运动" value={promptConfig?.l1_subject === "none" ? "无（纯运镜）" : ELEMENT_OPTIONS.find(item => item.id === promptConfig?.l1_subject)?.label ?? "待配置"} />

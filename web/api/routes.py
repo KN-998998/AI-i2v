@@ -24,6 +24,10 @@ from pipeline.config import (
     KLING_SECRET_KEY,
     CANVAS_CLIP_ROOT,
     OUTPUT_ROOT,
+    BACKGROUND_REMOVAL_PROVIDER,
+    TENCENT_COS_BUCKET,
+    TENCENT_COS_MODEL,
+    TENCENTCLOUD_REGION,
     QWEN_API_KEY,
     QWEN_TTS_MODEL,
     TTS_PROVIDER,
@@ -38,9 +42,10 @@ from web.core.logging import get_logger
 from web.services.pipeline_tasks import run_compose, run_step1, run_step2, run_step3
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
 from web.services.canvas_generation import get_generation_job, start_generation
+from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
 from web.services.planning import write_selection_csv
-from web.services.canvas_state import load_draft, save_draft, save_upload, uploaded_file
+from web.services.canvas_state import background_file, list_background_files, load_draft, save_background_upload, save_draft, save_upload, uploaded_file
 from web.services.state import get_batch_state, load_manifest, load_state, save_state
 
 router = APIRouter()
@@ -242,6 +247,59 @@ def get_canvas_file(draft_id: str, stored_name: str) -> FileResponse:
     return FileResponse(str(path))
 
 
+@router.get("/api/canvas/backgrounds")
+def list_canvas_backgrounds() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": path.name,
+            "name": path.name,
+            "url": f"/api/canvas/backgrounds/{path.name}",
+            "source": "local",
+        }
+        for path in list_background_files()
+    ]
+
+
+@router.post("/api/canvas/backgrounds")
+async def upload_canvas_background(file: UploadFile = File(...)) -> dict[str, Any]:
+    try:
+        metadata = await save_background_upload(file)
+    except (ValueError, OSError) as exc:
+        raise _json_error(str(exc), 400) from exc
+    metadata.update({
+        "id": metadata["stored_name"],
+        "name": metadata["original_name"],
+        "url": f"/api/canvas/backgrounds/{metadata['stored_name']}",
+        "source": "local",
+    })
+    return metadata
+
+
+@router.get("/api/canvas/backgrounds/{stored_name}")
+def get_canvas_background(stored_name: str) -> FileResponse:
+    path = background_file(stored_name)
+    if path is None:
+        raise _json_error("背景模板不存在", 404)
+    return FileResponse(str(path))
+
+
+@router.post("/api/canvas/drafts/{draft_id}/image-processing")
+def start_canvas_image_processing(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    request = payload or {}
+    try:
+        return start_image_processing(draft_id, str(request.get("node_id") or ""))
+    except (ValueError, RuntimeError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/canvas/drafts/{draft_id}/image-processing/{job_id}")
+def get_canvas_image_processing_status(draft_id: str, job_id: str) -> dict[str, Any]:
+    job = get_image_processing_job(draft_id, job_id)
+    if job is None:
+        raise _json_error("图片处理任务不存在", 404)
+    return job
+
+
 @router.post("/api/canvas/drafts/{draft_id}/generations")
 def start_canvas_generation(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     request = payload or {}
@@ -382,6 +440,13 @@ def get_config() -> dict[str, Any]:
         "kling_key_suffix": kling_key_suffix,
         "image_library": str(IMAGE_LIBRARY),
         "image_library_exists": IMAGE_LIBRARY.exists(),
+        "image_processing": {
+            "provider": BACKGROUND_REMOVAL_PROVIDER or None,
+            "model": TENCENT_COS_MODEL,
+            "region": TENCENTCLOUD_REGION,
+            "bucket_configured": bool(TENCENT_COS_BUCKET),
+            "configured": tencent_matting_configured(),
+        },
     }
 
 
