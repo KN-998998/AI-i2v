@@ -192,7 +192,7 @@ export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOver
       {showSoundTracks && <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={bgmName?.trim() ? `BGM · ${bgmName}` : "未上传 BGM"} tone="bgm" total={total} /></StoryboardTrack>}
       <div className="storyboard-playhead" style={{ left: playheadLeft }} aria-hidden="true" />
     </div></div>
-    <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.1" value={playhead} onChange={event => movePlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>
+    <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.05" value={playhead} onChange={event => movePlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>
     <div className="storyboard-preview"><div className="storyboard-preview-media" ref={previewMediaRef}>{activeClip?.clip.sourceUrl ? <video ref={previewVideoRef} muted playsInline preload="metadata" src={clipPlaybackUrl(activeClip.clip)} /> : <div className="storyboard-preview-placeholder">{clips.length ? "当前片段暂无本地视频" : "先把视频片段加入成片时间线"}</div>}{showSoundTracks && activeOverlays.length > 0 && <div className="storyboard-preview-overlays">{activeOverlays.map(item => <span className={`preview-overlay preview-${item.position}`} style={overlayPreviewStyle(item)} onPointerDown={event => startOverlayPositionDrag(event, item)} key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"}</span>)}</div>}</div><div className="storyboard-preview-meta"><strong>{activeClip?.clip.dish || "暂无片段"}</strong><span>{activeClip ? `${formatSeconds(activeClip.start)} - ${formatSeconds(activeClip.end)} · ${showSoundTracks ? activeOverlays.length ? `当前文字：${activeOverlays.map(item => previewOverlayText(item, playhead) || "未填写").join(" / ")}` : "当前时间无画面文字" : `已选源片段 ${formatSeconds(activeClip.clip.sourceStartSeconds ?? 0)} - ${formatSeconds(activeClip.clip.sourceEndSeconds ?? activeClip.clip.timelineDuration)}`}` : showSoundTracks ? "播放指针移动到文字时间段后，文字会出现在左侧 9:16 预览中" : "选择视频片段后，可在左侧预览确认画面"}</span>{!showSoundTracks && activeClip && <button type="button" className="btn storyboard-preview-replay" onClick={replaySelectedRange}>预览所选片段</button>}{showSoundTracks && activeOverlays.length > 0 && <div className="storyboard-active-overlay-list">{activeOverlays.map(item => <span key={item.id}>{previewOverlayText(item, playhead) || "未填写文字"} · {positionLabel(item.position)}</span>)}</div>}</div></div>
   </section>;
 }
@@ -216,10 +216,10 @@ function ClipTrimEditor({ item, onUpdateClip, onPreviewSource }: { item: Positio
       const minimum = 0.1;
       if (dragEdge === "start") {
         const nextStart = clamp(nextTime, 0, end - minimum);
-        onUpdateClip(clip.id, { sourceStartSeconds: roundSeconds(nextStart), timelineDuration: roundSeconds(end - nextStart) });
+        onUpdateClip(clip.id, { sourceStartSeconds: roundClipSeconds(nextStart), timelineDuration: roundClipSeconds(end - nextStart) });
       } else {
         const nextEnd = clamp(nextTime, start + minimum, sourceDuration);
-        onUpdateClip(clip.id, { sourceEndSeconds: roundSeconds(nextEnd), timelineDuration: roundSeconds(nextEnd - start) });
+        onUpdateClip(clip.id, { sourceEndSeconds: roundClipSeconds(nextEnd), timelineDuration: roundClipSeconds(nextEnd - start) });
       }
     };
     const onPointerUp = () => setDragEdge(null);
@@ -290,7 +290,8 @@ function StoryboardTrack({ label, children, style }: { label: string; children: 
 }
 
 function formatSeconds(value: number) {
-  return `${value.toFixed(1)}s`;
+  const rounded = Math.round(value * 100) / 100;
+  return `${Number.isInteger(rounded * 10) ? rounded.toFixed(1) : rounded.toFixed(2)}s`;
 }
 
 function previewOverlayText(item: OverlayItem, playhead: number) {
@@ -302,6 +303,10 @@ function previewOverlayText(item: OverlayItem, playhead: number) {
 
 function roundSeconds(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function roundClipSeconds(value: number) {
+  return Math.round(value * 20) / 20;
 }
 
 function roundRatio(value: number) {
