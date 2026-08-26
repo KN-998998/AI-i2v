@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.config import CANVAS_CLIP_ROOT, KLING_ACCESS_KEY, KLING_API_KEY, KLING_SECRET_KEY, VIDEO_DURATION
-from web.services.canvas_state import draft_directory, load_draft, uploaded_file
+from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import analyze_video, infer_category
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -162,6 +162,57 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
     }
 
 
+def _persist_generator_status(draft_id: str, node_id: str, status: str) -> None:
+    """Keep the persisted canvas node in sync when the browser is no longer open."""
+    draft = load_draft(draft_id)
+    if draft is None:
+        return
+    changed = False
+    for node in draft.get("nodes", []):
+        if node.get("id") != node_id or node.get("data", {}).get("kind") != "generator":
+            continue
+        if node["data"].get("status") != status:
+            node["data"]["status"] = status
+            changed = True
+        break
+    if changed:
+        save_draft(draft_id, draft)
+
+
+def _persist_generated_clip(draft_id: str, node_id: str, clip: dict[str, Any]) -> None:
+    """Replace the node's pending clip in the draft with the downloaded MP4."""
+    draft = load_draft(draft_id)
+    if draft is None:
+        return
+
+    candidates = list(draft.get("candidateClips") or draft.get("timeline") or [])
+    existing = next((item for item in candidates if item.get("generatorNodeId") == node_id), None)
+    persisted_clip = {**clip, "id": existing.get("id", clip["id"]) if existing else clip["id"]}
+
+    if existing is None:
+        candidates.append(persisted_clip)
+    else:
+        candidates = [persisted_clip if item.get("generatorNodeId") == node_id else item for item in candidates]
+
+    def replace_linked(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            persisted_clip if item.get("generatorNodeId") == node_id else item
+            for item in items
+        ]
+
+    draft["candidateClips"] = candidates
+    draft["timeline"] = replace_linked(list(draft.get("timeline") or []))
+    draft["composeWorkspaces"] = [
+        {**workspace, "clips": replace_linked(list(workspace.get("clips") or []))}
+        for workspace in draft.get("composeWorkspaces") or []
+    ]
+    for node in draft.get("nodes", []):
+        if node.get("id") == node_id and node.get("data", {}).get("kind") == "generator":
+            node["data"]["status"] = "已生成"
+            break
+    save_draft(draft_id, draft)
+
+
 def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[str, Any]:
     draft = load_draft(draft_id)
     if draft is None:
@@ -206,6 +257,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)
+        _persist_generator_status(draft_id, node_id, "生成中")
 
     def worker() -> None:
         try:
@@ -229,8 +281,10 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
             clip = _build_clip(job, output_path, input_dish, category)
             _append_manifest({**clip, "videoTaskId": task_id, "prompt": prompt})
             _update_job(draft_id, job, status="done", stage="已下载到本地片段库", clip=clip)
+            _persist_generated_clip(draft_id, node_id, clip)
         except Exception as exc:
             _update_job(draft_id, job, status="error", stage="生成失败", error=str(exc))
+            _persist_generator_status(draft_id, node_id, "生成失败")
 
     threading.Thread(target=worker, name=f"canvas-generate-{job_id}", daemon=True).start()
     return job

@@ -182,6 +182,21 @@ export type TimelineClip = {
   analysisMode?: string;
 };
 
+/**
+ * The persisted node label is only a snapshot. Resolve it from the actual
+ * clip reference whenever a draft or the local clip library is loaded.
+ */
+export function resolveGeneratorNodeStatus(
+  currentStatus: string,
+  clip?: Pick<TimelineClip, "status" | "sourcePath">,
+): string {
+  if (clip?.sourcePath) return "已生成";
+  if (clip?.status === "pending") return "生成中";
+  return ["生成中", "待关联真实文件", "已生成"].includes(currentStatus)
+    ? "待生成"
+    : currentStatus;
+}
+
 export type MediaAnalysis = {
   kind: "image" | "video";
   analysisMode: string;

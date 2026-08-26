@@ -1,4 +1,4 @@
-import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, resolveGeneratorNodeStatus, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -24,6 +24,8 @@ assert(totalTimelineDuration(timeline) === 9, "timeline duration is incorrect");
 const pendingClip = createPendingGeneratorClip("clips", 1, "炙烤三文鱼");
 assert(pendingClip.id === "clips_clip" && pendingClip.generatorNodeId === "clips", "generator clip is not linked to node");
 assert(pendingClip.status === "pending" && !pendingClip.sourcePath, "generator clip should wait for a real file");
+assert(resolveGeneratorNodeStatus("生成中", { status: "generated", sourcePath: "clip.mp4" }) === "已生成", "linked generator clip should be completed");
+assert(resolveGeneratorNodeStatus("生成中") === "待生成", "stale generator status should reset when its clip is gone");
 assert(pendingClip.dishCategory === "正餐", "pending generator clip should have a default dish category");
 
 assert(inferDishCategory("蜜瓜") === "水果", "fruit fallback classification is incorrect");

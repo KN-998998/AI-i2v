@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 
@@ -132,6 +132,15 @@ function mergeAvailableClips(persisted: TimelineClip[], available: ClipLibraryIt
     };
   });
   return [...merged, ...available.filter(item => !matched.has(item.id) && !persisted.some(existing => existing.sourcePath === item.sourcePath || existing.filename === item.filename))];
+}
+
+function syncGeneratorNodeStatuses(nodes: WorkflowNode[], candidateClips: TimelineClip[]): WorkflowNode[] {
+  return nodes.map(node => {
+    if (node.data.kind !== "generator") return node;
+    const clip = candidateClips.find(item => item.generatorNodeId === node.id);
+    const status = resolveGeneratorNodeStatus(node.data.status, clip);
+    return status === node.data.status ? node : { ...node, data: { ...node.data, status } };
+  });
 }
 
 function syncPrimaryWorkspace(workspaces: ComposeWorkspace[], timeline: TimelineClip[]): ComposeWorkspace[] {
@@ -397,10 +406,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const candidateClips = isUnlinkedSeedCandidates && availableClips.length
           ? availableClips.map(item => ({ ...item }))
           : mergeAvailableClips(normalizedCandidates, availableClips);
+        const nodes = syncGeneratorNodeStatuses(state.nodes, candidateClips);
         const timelineChanged = !sameClipList(timeline, state.timeline);
         const candidateClipsChanged = !sameClipList(candidateClips, state.candidateClips);
+        const nodesChanged = nodes.some((node, index) => node !== state.nodes[index]);
         const workspaces = timelineChanged ? syncPrimaryWorkspace(state.composeWorkspaces, timeline) : state.composeWorkspaces;
         return {
+          nodes,
           availableClips,
           clipsLoaded: true,
           clipsLastLoadedAt: new Date().toISOString(),
@@ -408,7 +420,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           timeline,
           candidateClips,
           composeWorkspaces: workspaces,
-          revision: timelineChanged || candidateClipsChanged ? state.revision + 1 : state.revision,
+          revision: timelineChanged || candidateClipsChanged || nodesChanged ? state.revision + 1 : state.revision,
         };
       });
     } catch (error) {
@@ -466,13 +478,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return;
     }
     const migrated = migrateImageProcessNode(draft.nodes as WorkflowNode[], draft.edges);
-    set({
-      nodes: migrated.nodes.map(node => node.data.kind === "input" && !node.data.dishCategory
+    const normalizedCandidates = (draft.candidateClips ?? draft.timeline).map(normalizeTimelineClip);
+    const normalizedNodes = migrated.nodes.map(node => node.data.kind === "input" && !node.data.dishCategory
         ? { ...node, data: { ...node.data, dishCategory: node.data.dishName ? inferDishCategory(node.data.dishName) : "正餐" } }
-        : node),
+        : node);
+    const nodes = syncGeneratorNodeStatuses(normalizedNodes, normalizedCandidates);
+    const nodesChanged = nodes.some((node, index) => node !== migrated.nodes[index]);
+    set({
+      nodes,
       edges: migrated.edges,
       timeline: draft.timeline.map(normalizeTimelineClip),
-      candidateClips: (draft.candidateClips ?? draft.timeline).map(normalizeTimelineClip),
+      candidateClips: normalizedCandidates,
       composeBatchCount: draft.composeBatchCount ?? 1,
       composeClipCount: draft.composeClipCount ?? draft.timeline.length,
       composeWorkspaces: (draft.composeWorkspaces ?? [{ id: "compose_1", title: "成片 1", clips: draft.timeline, job: draft.composeJob ?? null }]).map(workspace => ({ ...workspace, clips: workspace.clips.map(normalizeTimelineClip) })),
@@ -482,7 +498,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       activePanel: draft.activePanel as Panel,
       nextNodeNumber: draft.nextNodeNumber,
       hydrated: true,
-      revision: 0,
+      revision: nodesChanged ? 1 : 0,
       lastSavedAt: (draft as DraftPayload & { updated_at?: string }).updated_at ?? null,
     });
   },
