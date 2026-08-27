@@ -216,6 +216,11 @@ def test_video_quality_uses_rotation_metadata_for_display_ratio(monkeypatch, tmp
             "format": {"duration": "4.0"},
         },
     )
+    monkeypatch.setattr(
+        canvas_quality,
+        "_timing_and_freeze_checks",
+        lambda _path: {"vfrRatio": 0.0, "maxFreezeSeconds": 0.0, "decodeOk": True},
+    )
 
     analysis = canvas_quality.analyze_video(tmp_path / "rotated.mp4")
 

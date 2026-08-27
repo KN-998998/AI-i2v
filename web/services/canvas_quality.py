@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -123,6 +124,50 @@ def _probe_media(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def _run_ffmpeg_check(path: Path, video_filter: str | None = None, level: str = "error") -> tuple[int, str]:
+    command = ["ffmpeg", "-hide_banner", "-v", level, "-i", str(path)]
+    if video_filter:
+        command.extend(["-vf", video_filter])
+    command.extend(["-map", "0:v:0", "-an", "-f", "null", os.devnull])
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=45,
+            check=False,
+        )
+        return result.returncode, f"{result.stdout}\n{result.stderr}"
+    except (OSError, subprocess.SubprocessError) as exc:
+        return -1, str(exc)
+
+
+def _timing_and_freeze_checks(path: Path) -> dict[str, Any]:
+    """Check source timing before render; normalization happens in trim_clip."""
+    _, timing_output = _run_ffmpeg_check(path, "vfrdet", level="info")
+    vfr_match = re.findall(r"VFR:\s*([0-9]+(?:\.[0-9]+)?)", timing_output)
+    try:
+        vfr_ratio = max(float(value) for value in vfr_match) if vfr_match else 0.0
+    except ValueError:
+        vfr_ratio = 0.0
+
+    _, freeze_output = _run_ffmpeg_check(path, "freezedetect=n=-60dB:d=0.25", level="info")
+    freeze_matches = re.findall(r"freeze_duration:\s*([0-9]+(?:\.[0-9]+)?)", freeze_output)
+    try:
+        max_freeze_seconds = max(float(value) for value in freeze_matches) if freeze_matches else 0.0
+    except ValueError:
+        max_freeze_seconds = 0.0
+
+    decode_code, _ = _run_ffmpeg_check(path)
+    return {
+        "vfrRatio": round(vfr_ratio, 4),
+        "maxFreezeSeconds": round(max_freeze_seconds, 3),
+        "decodeOk": decode_code == 0,
+    }
+
+
 def _display_video_dimensions(video_stream: dict[str, Any]) -> tuple[int, int, int]:
     width = int(video_stream.get("width") or 0)
     height = int(video_stream.get("height") or 0)
@@ -138,7 +183,7 @@ def _display_video_dimensions(video_stream: dict[str, Any]) -> tuple[int, int, i
     return width, height, rotation
 
 
-def analyze_video(path: str | Path, dish_name: str = "", category: str | None = None) -> dict[str, Any]:
+def analyze_video(path: str | Path, dish_name: str = "", category: str | None = None, deep_checks: bool = False) -> dict[str, Any]:
     """Score technical video readiness; semantic quality remains a future model step."""
     video_path = Path(path)
     payload = _probe_media(video_path)
@@ -181,6 +226,21 @@ def analyze_video(path: str | Path, dish_name: str = "", category: str | None = 
         score -= 10
         warnings.append("帧率偏低，运动画面可能不流畅")
 
+    diagnostics = {
+        "vfrRatio": 0.0,
+        "maxFreezeSeconds": 0.0,
+        "decodeOk": True,
+    }
+    if deep_checks:
+        diagnostics = _timing_and_freeze_checks(video_path)
+    if not diagnostics["decodeOk"]:
+        score -= 30
+        warnings.append("视频存在解码错误，合成前需要重新导出或替换")
+    if diagnostics["vfrRatio"] >= 0.02:
+        warnings.append("视频时间戳不均匀，合成时会统一重采样为 30fps")
+    if diagnostics["maxFreezeSeconds"] >= 0.25:
+        warnings.append(f"视频检测到约 {diagnostics['maxFreezeSeconds']:.1f}s 的连续静止画面，请人工确认")
+
     score = max(0, min(100, int(round(score))))
     return {
         "kind": "video",
@@ -195,6 +255,7 @@ def analyze_video(path: str | Path, dish_name: str = "", category: str | None = 
         "rotation": rotation,
         "fps": round(fps, 2),
         "codec": video_stream.get("codec_name", ""),
+        **diagnostics,
         "semanticReview": "未接入视觉模型",
     }
 
@@ -232,7 +293,9 @@ def preflight_draft(
             continue
         if clip.get("trimConfirmed") is not True:
             errors.append({"code": "TRIM_NOT_CONFIRMED", "message": f"第 {index} 个片段尚未确认裁剪区间，请先在第 5 步点击“确定所选片段”"})
-        quality = analyze_video(source, str(clip.get("dish") or ""), str(clip.get("dishCategory") or ""))
+        quality = analyze_video(source, str(clip.get("dish") or ""), str(clip.get("dishCategory") or ""), True)
+        if quality.get("decodeOk") is False:
+            errors.append({"code": "CLIP_DECODE_ERROR", "message": f"第 {index} 个片段无法被 FFmpeg 完整解码，请重新导出或替换"})
         if quality.get("qualityLabel") == "reject":
             warnings.append({"code": "LOW_CLIP_QUALITY", "message": f"片段“{clip.get('dish') or clip.get('id')}”技术质量评分较低"})
 
@@ -243,29 +306,17 @@ def preflight_draft(
     sound = workspace_sound if isinstance(workspace_sound, dict) else next((node.get("data", {}) for node in draft.get("nodes", []) if node.get("data", {}).get("kind") == "sound"), {})
     if not include_sound:
         sound = {}
-    overlays = _timeline_items(sound, "overlayItems", [])
-    voices = _timeline_items(sound, "voiceItems", [])
-    voices_by_id = {str(item.get("id") or ""): item for item in voices if str(item.get("id") or "")}
-    overlay_voice_ids: set[str] = set()
+    overlays = [item for item in _timeline_items(sound, "overlayItems", []) if item.get("enabled") is not False]
+    voices = [item for item in _timeline_items(sound, "voiceItems", []) if item.get("enabled") is not False]
     for index, item in enumerate(overlays, 1):
         start = float(item.get("startSeconds") or 0)
         end = float(item.get("endSeconds") or 0)
-        sync_voice_id = str(item.get("syncVoiceId") or "")
-        linked_voice = voices_by_id.get(sync_voice_id)
         if not str(item.get("text") or "").strip():
             warnings.append({"code": "EMPTY_OVERLAY", "message": f"文字轨道 {index} 没有文案"})
         if end <= start:
             errors.append({"code": "INVALID_OVERLAY_RANGE", "message": f"文字轨道 {index} 的结束时间必须晚于开始时间"})
         if end > total + 0.05:
             warnings.append({"code": "OVERLAY_OUT_OF_RANGE", "message": f"文字轨道 {index} 超出当前成片时长"})
-        if linked_voice is None:
-            warnings.append({"code": "UNPAIRED_CAPTION", "message": f"文字轨道 {index} 未绑定有效人声，无法保证文字与语音同步"})
-        else:
-            overlay_voice_ids.add(sync_voice_id)
-            voice_start = float(linked_voice.get("startSeconds") or 0)
-            voice_end = float(linked_voice.get("endSeconds") or 0)
-            if str(item.get("text") or "") != str(linked_voice.get("text") or "") or abs(start - voice_start) > 0.05 or abs(end - voice_end) > 0.05:
-                warnings.append({"code": "CAPTION_NOT_SYNCED", "message": f"文字轨道 {index} 与绑定人声不一致，最终生成时会按 TTS 实际时长自动同步"})
     for index, item in enumerate(voices, 1):
         start = float(item.get("startSeconds") or 0)
         end = float(item.get("endSeconds") or 0)
@@ -275,8 +326,6 @@ def preflight_draft(
             errors.append({"code": "INVALID_VOICE_RANGE", "message": f"人声轨道 {index} 的结束时间必须晚于开始时间"})
         if end > total + 0.05:
             warnings.append({"code": "VOICE_OUT_OF_RANGE", "message": f"人声轨道 {index} 超出当前成片时长，TTS 会被截断"})
-        if str(item.get("id") or "") not in overlay_voice_ids:
-            warnings.append({"code": "UNPAIRED_VOICE", "message": f"人声轨道 {index} 没有对应画面文字，无法保证文案同步"})
 
     bgm_url = sound.get("bgmUrl")
     if bgm_url and _uploaded_path(draft_id, str(bgm_url)) is None:

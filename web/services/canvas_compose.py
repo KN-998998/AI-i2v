@@ -136,7 +136,7 @@ def _overlay_items(sound: dict[str, Any], voice_timings: dict[str, tuple[float, 
     if isinstance(items, list):
         result = []
         for item in items:
-            if not isinstance(item, dict) or not str(item.get("text", "")).strip():
+            if not isinstance(item, dict) or item.get("enabled") is False or not str(item.get("text", "")).strip():
                 continue
             start = max(0.0, float(item.get("startSeconds", 0) or 0))
             end = max(start + 0.1, float(item.get("endSeconds", start + 2.5) or start + 2.5))
@@ -180,7 +180,7 @@ def _voice_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(items, list):
         result = []
         for index, item in enumerate(items):
-            if not isinstance(item, dict) or not str(item.get("text", "")).strip():
+            if not isinstance(item, dict) or item.get("enabled") is False or not str(item.get("text", "")).strip():
                 continue
             start = max(0.0, float(item.get("startSeconds", 0) or 0))
             end = max(start + 0.1, float(item.get("endSeconds", start + 4) or start + 4))
@@ -219,11 +219,6 @@ def _pair_caption_tracks(sound: dict[str, Any]) -> None:
         overlay["syncVoiceId"] = str(overlay.get("syncVoiceId") or voice_id)
         if str(overlay.get("syncVoiceId")) != voice_id:
             continue
-        text = str(voice.get("text") or overlay.get("text") or "")
-        voice["text"] = text
-        overlay["text"] = text
-        overlay["startSeconds"] = voice.get("startSeconds", overlay.get("startSeconds", 0))
-        overlay["endSeconds"] = voice.get("endSeconds", overlay.get("endSeconds", 2.5))
 
 
 def _sync_caption_timings(draft: dict[str, Any], voice_timings: dict[str, tuple[float, float]], workspace_id: str | None = None) -> None:
@@ -250,10 +245,9 @@ def _sync_caption_timings(draft: dict[str, Any], voice_timings: dict[str, tuple[
             continue
         voice_id = str(overlay.get("syncVoiceId") or "")
         voice = voices_by_id.get(voice_id)
-        if voice is None:
+        if voice is None or overlay.get("enabled") is False:
             continue
         overlay["syncVoiceId"] = voice_id
-        overlay["text"] = str(voice.get("text") or "")
         overlay["startSeconds"] = voice["startSeconds"]
         overlay["endSeconds"] = voice["endSeconds"]
 

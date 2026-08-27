@@ -41,6 +41,8 @@ const centeredOverlay = overlayCoordinatesFromItem({ position: "custom" });
 assert(centeredOverlay.x === 0.5 && centeredOverlay.y === 0.5, "custom overlay position should default to center");
 const draggedOverlay = overlayItemsFromData({ overlayItems: [{ id: "dragged", text: "可拖动", startSeconds: 0, endSeconds: 2, position: "custom", x: 0.21, y: 0.74 }] })[0];
 assert(draggedOverlay.x === 0.21 && draggedOverlay.y === 0.74, "custom overlay coordinates were not persisted");
+const hiddenOverlay = overlayItemsFromData({ overlayItems: [{ id: "hidden", text: "仅保留人声", enabled: false, startSeconds: 0, endSeconds: 2, position: "upper" }] })[0];
+assert(hiddenOverlay.enabled === false, "overlay visibility switch was not persisted");
 const animatedOverlay = overlayItemsFromData({ overlayItems: [{ id: "typed", text: "typewriter", startSeconds: 0, endSeconds: 2, position: "upper", animation: "typewriter", syncVoiceId: "voice_1" }] })[0];
 assert(animatedOverlay.animation === "typewriter" && animatedOverlay.syncVoiceId === "voice_1", "overlay animation binding was not persisted");
 const defaultOverlayStyle = overlayStyleFromItem({ style: {} });
@@ -59,16 +61,59 @@ const qwenVoice = voiceItemsFromData({ voiceText: "qwen", voiceName: "女声 · 
 assert(qwenVoice[0].voiceId === "Cherry" && qwenVoice[0].provider === "qwen", "legacy voice was not migrated to Qwen");
 const noVoice = voiceItemsFromData({ voiceText: "", voiceName: "无", voiceVolume: "85" });
 assert(noVoice.length === 0, "default no-voice state should not create a TTS segment");
+const disabledExplicitVoice = voiceItemsFromData({ voiceItems: [{ id: "voice_none", text: "只显示文字", voiceId: "none", enabled: true, startSeconds: 0, endSeconds: 2 }] });
+assert(disabledExplicitVoice.length === 1 && disabledExplicitVoice[0].enabled === false, "explicit no-voice item should be disabled");
+const textWithNoVoice = captionSegmentsFromData({
+  overlayItems: [{ id: "overlay_only", text: "只显示文字", startSeconds: 0, endSeconds: 2, position: "upper" }],
+  voiceItems: [{ id: "voice_none", text: "不应播报", voiceId: "none", startSeconds: 0, endSeconds: 2 }],
+});
+assert(textWithNoVoice[0].overlay.enabled !== false && textWithNoVoice[0].voice.enabled === false, "text-only segment should not enter TTS");
 
 const captionSegments = captionSegmentsFromData({
   overlayItems: [{ id: "overlay_1", text: "screen copy", startSeconds: 0, endSeconds: 2, position: "upper" }],
   voiceItems: [{ id: "voice_1", text: "voice copy", startSeconds: 1, endSeconds: 4, voiceId: "Cherry" }],
 });
-assert(captionSegments.length === 1 && captionSegments[0].overlay.syncVoiceId === "voice_1", "caption tracks were not paired");
-assert(captionSegments[0].overlay.text === "voice copy" && captionSegments[0].overlay.startSeconds === 1, "voice copy and timing must be the source of a paired caption");
+assert(captionSegments.length === 1 && captionSegments[0].voice.id === "voice_1" && captionSegments[0].overlay.syncVoiceId === undefined, "caption tracks were not auto-paired");
+assert(captionSegments[0].overlay.text === "screen copy" && captionSegments[0].overlay.startSeconds === 0, "overlay text and timing should remain independent");
+assert(captionSegments[0].voice.text === "voice copy" && captionSegments[0].voice.startSeconds === 1, "voice text and timing should remain independent");
+const independentPatch = captionSegmentsPatch(captionSegments);
+assert(independentPatch.overlayItems?.[0].text === "screen copy" && independentPatch.voiceItems?.[0].text === "voice copy", "caption patch overwrote independent track text");
 const measuredCaptions = captionSegmentsWithTimings(captionSegments, { voice_1: { startSeconds: 1, endSeconds: 3.6 } });
 const captionPatch = captionSegmentsPatch(measuredCaptions);
 assert(captionPatch.overlayItems?.[0].endSeconds === 3.6 && captionPatch.voiceItems?.[0].endSeconds === 3.6, "actual TTS duration was not written to both tracks");
+assert(captionPatch.overlayItems?.[0].syncVoiceId === undefined, "automatic binding was converted into an explicit binding");
+const unboundCaption = captionSegmentsFromData({
+  overlayItems: [{ id: "overlay_unbound", text: "仅显示文字", syncVoiceId: "", startSeconds: 0, endSeconds: 2, position: "upper" }],
+  voiceItems: [{ id: "voice_unbound", text: "不应同步", voiceId: "Cherry", startSeconds: 0, endSeconds: 2 }],
+});
+assert(unboundCaption.length === 2 && unboundCaption[0].voice.enabled !== true && unboundCaption[1].overlay.enabled === false, "explicitly unbound tracks were paired");
+assert(captionSegmentsPatch(unboundCaption).overlayItems?.[0].syncVoiceId === "", "explicit unbound state was not persisted");
+const textOnlyPatch = captionSegmentsPatch(captionSegmentsFromData({
+  overlayItems: [{ id: "overlay_text_only", text: "仅显示文字", startSeconds: 0, endSeconds: 2, position: "upper" }],
+}));
+assert(textOnlyPatch.voiceItems?.length === 0, "text-only placeholder voice should not be persisted");
+assert(overlayItemsFromData({ overlayItems: [{ id: "overlay_for_voice_old", text: "历史占位", startSeconds: 0, endSeconds: 2, position: "upper" }] })[0].placeholder === true, "legacy overlay placeholder was not recognized");
+assert(overlayItemsFromData({ overlayItems: [{ id: "overlay_stale_binding", text: "失效绑定", syncVoiceId: "voice_for_overlay_old", startSeconds: 0, endSeconds: 2, position: "upper" }] })[0].syncVoiceId === "", "stale generated binding was not cleared");
+assert(voiceItemsFromData({ voiceItems: [{ id: "voice_for_overlay_old", text: "历史占位", voiceId: "none", startSeconds: 0, endSeconds: 2 }] })[0].placeholder === true, "legacy voice placeholder was not recognized");
+const explicitlyBoundCaption = captionSegmentsFromData({
+  overlayItems: [{ id: "overlay_bound", text: "绑定第二段", syncVoiceId: "voice_b", startSeconds: 0, endSeconds: 2, position: "upper" }],
+  voiceItems: [
+    { id: "voice_a", text: "第一段声音", voiceId: "Cherry", startSeconds: 0, endSeconds: 2 },
+    { id: "voice_b", text: "第二段声音", voiceId: "Serena", startSeconds: 2, endSeconds: 4 },
+  ],
+});
+assert(explicitlyBoundCaption[0].voice.id === "voice_b" && captionSegmentsPatch(explicitlyBoundCaption).overlayItems?.[0].syncVoiceId === "voice_b", "explicit voice binding was not applied");
+const duplicateBinding = captionSegmentsFromData({
+  overlayItems: [
+    { id: "overlay_a", text: "同一声音的文字一", syncVoiceId: "voice_b", startSeconds: 0, endSeconds: 2, position: "upper" },
+    { id: "overlay_b", text: "同一声音的文字二", syncVoiceId: "voice_b", startSeconds: 2, endSeconds: 4, position: "upper" },
+  ],
+  voiceItems: [
+    { id: "voice_a", text: "未绑定声音", voiceId: "Cherry", startSeconds: 0, endSeconds: 2 },
+    { id: "voice_b", text: "可复用声音", voiceId: "Serena", startSeconds: 2, endSeconds: 4 },
+  ],
+});
+assert(captionSegmentsPatch(duplicateBinding).voiceItems?.length === 2, "rebinding duplicated voice entities");
 
 const composePool = [
   { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "正餐" as const },

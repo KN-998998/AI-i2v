@@ -113,6 +113,7 @@ h1 { margin-top: 3px; font-size: 18px; }
 .clip-library-count { margin-top: 12px; }
 .clip-library-status { display: grid; gap: 3px; margin-top: 10px; }
 .clip-sync-error { color: #ffc1c1; font-size: 10px; }
+.voice-toggle-hint { color: var(--dim); font-size: 10px; line-height: 1.45; }
 .clip-index, .order-number { color: var(--cyan); font-size: 12px; font-weight: 700; }
 .clip-input-copy { display: grid; gap: 4px; min-width: 0; }
 .clip-input-copy span, .clip-input-copy small, .ordered-clip small { color: var(--muted); font-size: 10px; }
@@ -164,10 +165,21 @@ h1 { margin-top: 3px; font-size: 18px; }
 .legend-bottom { background: #355e62; }
 .overlay-editor-list { display: grid; gap: 10px; margin-top: 10px; }
 .overlay-editor-item { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); }
+.overlay-editor-item.is-collapsed { gap: 0; }
 .overlay-editor-head { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
+.overlay-collapse-icon { display: none; }
+.overlay-editor-head { min-width: 0; cursor: pointer; }
+.overlay-editor-head::before { content: "▾"; width: 14px; flex: 0 0 14px; color: var(--cyan); font-size: 14px; line-height: 1; text-align: center; }
+.overlay-editor-item.is-collapsed .overlay-editor-head::before { content: "▸"; }
+.overlay-editor-head:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .overlay-editor-head > div { display: grid; gap: 3px; }
+.overlay-editor-head > div { min-width: 0; }
 .overlay-editor-head small { color: var(--dim); font-size: 10px; }
+.overlay-editor-head small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .overlay-editor-head .clip-remove { margin-left: auto; }
+.overlay-collapse-summary { display: none; min-width: 0; overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.overlay-editor-item.is-collapsed > :not(.overlay-editor-head) { display: none; }
+.overlay-editor-item.is-collapsed > .overlay-collapse-summary { display: block; order: 2; margin-top: 6px; color: var(--muted); font-size: 11px; }
 .overlay-logic-callout { display: grid; gap: 4px; padding: 9px 10px; border-left: 2px solid var(--amber); color: var(--muted); background: rgba(240,184,102,.08); font-size: 10px; line-height: 1.55; }
 .overlay-logic-callout strong { color: #ffe0a9; font-size: 11px; }
 .empty-state.compact { min-height: auto; padding: 12px; }
@@ -231,6 +243,7 @@ h1 { margin-top: 3px; font-size: 18px; }
 .input { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 8px 9px; outline: 0; color: #f2f4f5; background: var(--panel-2); }
 .input:focus { border-color: var(--cyan); }
 .textarea { min-height: 72px; resize: vertical; }
+.overlay-text-input { min-height: 96px; }
 .range { width: 100%; accent-color: var(--cyan); }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -353,6 +366,10 @@ h1 { margin-top: 3px; font-size: 18px; }
 .storyboard-waveform { position: absolute; inset: 5px 8px; display: flex; align-items: center; gap: 3px; opacity: .55; }
 .storyboard-waveform i { flex: 1; min-width: 2px; border-radius: 2px; background: currentColor; }
 .storyboard-audio-label { position: relative; z-index: 1; max-width: 76%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.storyboard-audio-remove { position: relative; z-index: 2; width: 20px; height: 20px; flex: 0 0 20px; margin-left: auto; padding: 0; border: 0; border-radius: 4px; color: #ffe4b0; background: transparent; font-size: 17px; line-height: 20px; }
+.storyboard-audio-remove:hover, .storyboard-audio-remove:focus-visible { color: #fff1d1; background: rgba(20, 24, 27, .35); outline: 0; }
+.storyboard-track-lane:has(.bgm-track-block) { min-height: 38px; }
+.storyboard-track-lane:has(.bgm-track-block) .storyboard-audio-row { min-height: 28px; padding: 0 7px; }
 .tracks { display: grid; gap: 6px; }
 .track { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 8px; }
 .track-label { color: var(--dim); font-size: 10px; text-transform: uppercase; }

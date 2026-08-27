@@ -25,8 +25,7 @@ def trim_clip(clip_path, out_path, start=0.5, duration=3.0):
         "ffmpeg", "-y",
         "-ss", str(start), "-i", clip_path,
         "-t", str(duration),
-        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}",
-        "-r", str(FINAL_FPS),
+        "-vf", f"setpts=PTS-STARTPTS,scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={FINAL_FPS}",
         "-an",  # 无声
         "-c:v", "libx264", "-preset", "fast", "-crf", "20",
         "-pix_fmt", "yuv420p",

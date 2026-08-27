@@ -2,12 +2,27 @@ import time
 from pathlib import Path
 
 from pipeline.video_render import _typewriter_prefixes
-from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sound_node, _sync_caption_timings
+from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sound_node, _sync_caption_timings, _voice_items
 from web.services import canvas_compose, canvas_quality, canvas_state
 
 
 def test_typewriter_prefixes_keep_unicode_characters():
     assert _typewriter_prefixes("寿司🍣") == ["寿", "寿司", "寿司🍣"]
+
+
+def test_video_timing_diagnostics_detect_vfr_and_freeze(monkeypatch, tmp_path):
+    def fake_check(_path, video_filter=None, level="error"):
+        if video_filter == "vfrdet":
+            return 0, "VFR:0.105263 (20/170)"
+        if video_filter and video_filter.startswith("freezedetect"):
+            return 0, "freeze_duration:0.42"
+        return 0, ""
+
+    monkeypatch.setattr(canvas_quality, "_run_ffmpeg_check", fake_check)
+
+    diagnostics = canvas_quality._timing_and_freeze_checks(tmp_path / "clip.mp4")
+
+    assert diagnostics == {"vfrRatio": 0.1053, "maxFreezeSeconds": 0.42, "decodeOk": True}
 
 
 def test_overlay_can_follow_actual_voice_timing():
@@ -31,7 +46,7 @@ def test_overlay_can_follow_actual_voice_timing():
     assert items[0]["animation"] == "typewriter"
 
 
-def test_actual_tts_duration_syncs_paired_voice_and_caption_text():
+def test_actual_tts_duration_syncs_paired_track_timing_without_overwriting_text():
     draft = {
         "nodes": [{
             "data": {
@@ -47,7 +62,7 @@ def test_actual_tts_duration_syncs_paired_voice_and_caption_text():
     sound = draft["nodes"][0]["data"]
     assert sound["voiceItems"][0]["startSeconds"] == 1.25
     assert sound["voiceItems"][0]["endSeconds"] == 3.75
-    assert sound["overlayItems"][0]["text"] == "语音文案"
+    assert sound["overlayItems"][0]["text"] == "旧文字"
     assert sound["overlayItems"][0]["startSeconds"] == 1.25
     assert sound["overlayItems"][0]["endSeconds"] == 3.75
 
@@ -61,9 +76,19 @@ def test_old_caption_tracks_are_paired_before_rendering():
     _pair_caption_tracks(sound)
 
     assert sound["overlayItems"][0]["syncVoiceId"] == "voice-1"
-    assert sound["overlayItems"][0]["text"] == "语音文案"
-    assert sound["overlayItems"][0]["startSeconds"] == 1
-    assert sound["overlayItems"][0]["endSeconds"] == 4
+    assert sound["overlayItems"][0]["text"] == "旧文字"
+    assert sound["overlayItems"][0]["startSeconds"] == 0
+    assert sound["overlayItems"][0]["endSeconds"] == 2
+
+
+def test_disabled_caption_tracks_are_excluded_from_render_inputs():
+    sound = {
+        "overlayItems": [{"id": "overlay-1", "text": "只保留语音", "enabled": False, "startSeconds": 0, "endSeconds": 2}],
+        "voiceItems": [{"id": "voice-1", "text": "只保留文字", "enabled": False, "startSeconds": 0, "endSeconds": 2, "voiceId": "Cherry"}],
+    }
+
+    assert _overlay_items(sound) == []
+    assert _voice_items(sound) == []
 
 
 def test_workspace_sound_config_has_priority_over_legacy_sound_node():
@@ -73,6 +98,40 @@ def test_workspace_sound_config_has_priority_over_legacy_sound_node():
     }
 
     assert _sound_node(draft, "compose_2")["bgmName"] == "方案 BGM"
+
+
+def test_stale_client_save_does_not_remove_completed_final_job(tmp_path, monkeypatch):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    clip = {"id": "clip-1", "dish": "测试菜品"}
+    sound = {"voiceItems": [{"id": "voice-1", "text": "测试", "startSeconds": 0, "endSeconds": 2}]}
+    base = {"nodes": [], "edges": [], "timeline": [clip]}
+    completed = {
+        "job_id": "f" * 32,
+        "status": "done",
+        "include_sound": True,
+        "updated_at": "2026-08-27T10:00:00+00:00",
+        "timeline": [clip],
+        "sound": sound,
+    }
+    canvas_state.save_draft(
+        "default",
+        {
+            **base,
+            "composeWorkspaces": [{"id": "compose_1", "clips": [clip], "soundConfig": sound, "job": None, "finalJob": completed}],
+            "composeJob": completed,
+        },
+    )
+    canvas_state.save_draft(
+        "default",
+        {
+            **base,
+            "composeWorkspaces": [{"id": "compose_1", "clips": [clip], "soundConfig": sound, "job": None, "finalJob": None}],
+            "composeJob": None,
+        },
+    )
+
+    saved = canvas_state.load_draft("default")
+    assert saved["composeWorkspaces"][0]["finalJob"]["job_id"] == completed["job_id"]
 
 
 def test_preflight_blocks_real_clip_without_trim_confirmation(monkeypatch, tmp_path):
@@ -88,6 +147,25 @@ def test_preflight_blocks_real_clip_without_trim_confirmation(monkeypatch, tmp_p
 
     assert report["ok"] is False
     assert report["errors"][0]["code"] == "TRIM_NOT_CONFIRMED"
+
+
+def test_preflight_blocks_clip_with_decode_error(monkeypatch, tmp_path):
+    clip_path = tmp_path / "clip.mp4"
+    clip_path.write_bytes(b"video")
+    monkeypatch.setattr(
+        canvas_quality,
+        "analyze_video",
+        lambda *_args: {"qualityLabel": "good", "decodeOk": False},
+    )
+
+    report = canvas_quality.preflight_draft(
+        {"timeline": [{"id": "clip", "dish": "测试菜品", "sourcePath": str(clip_path), "timelineDuration": 2.5, "trimConfirmed": True}]},
+        "default",
+        include_sound=False,
+    )
+
+    assert report["ok"] is False
+    assert report["errors"][0]["code"] == "CLIP_DECODE_ERROR"
 
 
 def test_startup_recovery_finishes_persisted_compose_job(monkeypatch, tmp_path):

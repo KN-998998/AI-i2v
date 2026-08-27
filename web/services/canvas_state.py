@@ -52,12 +52,88 @@ def load_draft(draft_id: str) -> dict[str, Any] | None:
     return payload
 
 
+def _stable_json(value: Any, *, drop_timing: bool = False) -> str:
+    def normalize(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {
+                key: normalize(child)
+                for key, child in sorted(item.items())
+                if not (drop_timing and key in {"startSeconds", "endSeconds"})
+            }
+        if isinstance(item, list):
+            return [normalize(child) for child in item]
+        return item
+
+    return json.dumps(normalize(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _compose_job_matches_workspace(workspace: dict[str, Any], job: Any, field: str) -> bool:
+    if not isinstance(job, dict):
+        return False
+    timeline = job.get("timeline")
+    if isinstance(timeline, list) and _stable_json(workspace.get("clips", [])) != _stable_json(timeline):
+        return False
+    if field == "finalJob":
+        saved_sound = job.get("sound")
+        current_sound = workspace.get("soundConfig")
+        if isinstance(saved_sound, dict) and isinstance(current_sound, dict):
+            if _stable_json(saved_sound, drop_timing=True) != _stable_json(current_sound, drop_timing=True):
+                return False
+    return True
+
+
+def _newer_job(current: Any, previous: Any) -> Any:
+    if not isinstance(previous, dict):
+        return current
+    if not isinstance(current, dict):
+        return previous
+    if str(previous.get("updated_at") or "") > str(current.get("updated_at") or ""):
+        return previous
+    return current
+
+
+def _merge_compose_jobs(payload: dict[str, Any], existing: dict[str, Any] | None) -> list[dict[str, Any]]:
+    incoming = payload.get("composeWorkspaces")
+    if not isinstance(incoming, list):
+        incoming = []
+    previous_by_id = {
+        str(item.get("id")): item
+        for item in (existing or {}).get("composeWorkspaces", [])
+        if isinstance(item, dict) and item.get("id")
+    }
+    merged: list[dict[str, Any]] = []
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        workspace = dict(item)
+        previous = previous_by_id.get(str(workspace.get("id")))
+        if isinstance(previous, dict):
+            for field in ("job", "finalJob"):
+                previous_job = previous.get(field)
+                if _compose_job_matches_workspace(workspace, previous_job, field):
+                    workspace[field] = _newer_job(workspace.get(field), previous_job)
+        merged.append(workspace)
+    return merged
+
+
 def save_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload.get("nodes"), list) or not isinstance(payload.get("edges"), list):
         raise ValueError("草稿必须包含 nodes 和 edges 数组")
     if not isinstance(payload.get("timeline"), list):
         raise ValueError("草稿必须包含 timeline 数组")
 
+    existing: dict[str, Any] | None = None
+    try:
+        existing = load_draft(draft_id)
+    except (OSError, ValueError, json.JSONDecodeError):
+        existing = None
+    compose_workspaces = _merge_compose_jobs(payload, existing)
+    compose_job = payload.get("composeJob")
+    for workspace in compose_workspaces:
+        for field in ("job", "finalJob"):
+            candidate = workspace.get(field)
+            if isinstance(candidate, dict):
+                compose_job = _newer_job(candidate, compose_job)
     directory = draft_directory(draft_id)
     directory.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -73,11 +149,11 @@ def save_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         "candidateClips": payload.get("candidateClips", payload["timeline"]),
         "composeBatchCount": payload.get("composeBatchCount", 1),
         "composeClipCount": payload.get("composeClipCount", len(payload["timeline"])),
-        "composeWorkspaces": payload.get("composeWorkspaces", [{"id": "compose_1", "title": "成片 1", "clips": payload["timeline"], "job": payload.get("composeJob")}]),
+        "composeWorkspaces": compose_workspaces or [{"id": "compose_1", "title": "成片 1", "clips": payload["timeline"], "job": payload.get("composeJob")}],
         "activeComposeWorkspaceId": payload.get("activeComposeWorkspaceId"),
         "bgmName": payload.get("bgmName", "默认 BGM"),
         "bgmUrl": payload.get("bgmUrl", ""),
-        "composeJob": payload.get("composeJob"),
+        "composeJob": compose_job,
     }
     temporary = directory / f"draft.{uuid.uuid4().hex}.tmp"
     try:

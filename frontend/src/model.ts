@@ -27,6 +27,9 @@ export type OverlayStyle = {
 export type OverlayItem = {
   id: string;
   text: string;
+  enabled?: boolean;
+  /** Runtime-only marker for the counterpart generated when a track is independent. */
+  placeholder?: boolean;
   startSeconds: number;
   endSeconds: number;
   position: OverlayPosition;
@@ -41,6 +44,9 @@ export type OverlayItem = {
 export type VoiceItem = {
   id: string;
   text: string;
+  enabled?: boolean;
+  /** Runtime-only marker for the counterpart generated when a track is independent. */
+  placeholder?: boolean;
   startSeconds: number;
   endSeconds: number;
   provider?: string;
@@ -357,17 +363,19 @@ export function overlayCoordinatesFromItem(item: Pick<OverlayItem, "position" | 
 
 export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd">): OverlayItem[] {
   if (data.overlayItems) {
-    return data.overlayItems.map(item => ({
+    return uniqueById(data.overlayItems.map(item => ({
       id: item.id,
       text: item.text,
+      enabled: item.enabled !== false,
+      placeholder: item.placeholder === true || item.id.startsWith("overlay_for_"),
       startSeconds: Math.max(0, Number(item.startSeconds) || 0),
       endSeconds: Math.max(0.1, Number(item.endSeconds) || 0.1),
       position: item.position ?? "upper",
       ...overlayCoordinatesFromItem({ position: item.position ?? "upper", x: item.x, y: item.y }),
       animation: item.animation === "typewriter" ? "typewriter" : "static",
-      syncVoiceId: item.syncVoiceId,
+      syncVoiceId: item.syncVoiceId?.startsWith("voice_for_") ? "" : item.syncVoiceId,
       style: overlayStyleFromItem(item),
-    }));
+    })));
   }
   const mainText = data.overlayMain?.trim() || "";
   const ctaText = data.overlayCta?.trim() || "";
@@ -384,40 +392,48 @@ export function voiceItemsFromData(data: Pick<WorkflowData, "voiceItems" | "voic
   const defaultVoice = data.voiceName?.trim() || "无";
   const defaultVolume = clampNumber(Number(data.voiceVolume), 0, 100, 85);
   if (data.voiceItems) {
-    return data.voiceItems.map((item, index) => {
+    return uniqueById(data.voiceItems.map((item, index) => {
       const start = Math.max(0, Number(item.startSeconds) || 0);
       const end = Math.max(start + 0.1, Number(item.endSeconds) || start + 2);
+      const voiceId = item.voiceId || legacyVoiceId(item.voiceName || defaultVoice);
       return {
         id: item.id || `voice_${index + 1}`,
         text: item.text || "",
+        enabled: item.enabled !== false && voiceId !== "none",
+        placeholder: item.placeholder === true || item.id.startsWith("voice_for_"),
         startSeconds: start,
         endSeconds: end,
         provider: item.provider || "qwen",
         model: item.model || "",
-        voiceId: item.voiceId || legacyVoiceId(item.voiceName || defaultVoice),
+        voiceId,
         voiceName: item.voiceName || defaultVoice,
         volume: clampNumber(Number(item.volume), 0, 100, defaultVolume),
       };
-    });
+    }));
   }
   const text = data.voiceText?.trim() || "";
-  return text ? [{ id: "voice_main", text, startSeconds: 0, endSeconds: 4, provider: "qwen", model: "", voiceId: legacyVoiceId(defaultVoice), voiceName: defaultVoice, volume: defaultVolume }] : [];
+  const voiceId = legacyVoiceId(defaultVoice);
+  return text ? [{ id: "voice_main", text, enabled: voiceId !== "none", startSeconds: 0, endSeconds: 4, provider: "qwen", model: "", voiceId, voiceName: defaultVoice, volume: defaultVolume }] : [];
 }
 
 /** Build one-to-one caption segments while preserving old separate-track drafts. */
 export function captionSegmentsFromData(data: Pick<WorkflowData, "overlayItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd" | "voiceItems" | "voiceText" | "voiceName" | "voiceVolume">): CaptionSegment[] {
-  const overlays = overlayItemsFromData(data);
-  const voices = voiceItemsFromData(data);
+  const overlays = overlayItemsFromData(data).filter(item => !item.placeholder);
+  const voices = voiceItemsFromData(data).filter(item => !item.placeholder);
   const claimedVoiceIds = new Set<string>();
   const segments: CaptionSegment[] = [];
 
   overlays.forEach((overlay, index) => {
-    const matchedVoice = (overlay.syncVoiceId ? voices.find(voice => voice.id === overlay.syncVoiceId) : undefined)
-      ?? voices.find(voice => !claimedVoiceIds.has(voice.id) && voices.indexOf(voice) === index)
-      ?? voices.find(voice => !claimedVoiceIds.has(voice.id));
+    const hasExplicitBinding = overlay.syncVoiceId !== undefined;
+    const matchedVoice = hasExplicitBinding
+      ? voices.find(voice => voice.id === overlay.syncVoiceId)
+      : voices.find(voice => !claimedVoiceIds.has(voice.id) && voices.indexOf(voice) === index)
+        ?? voices.find(voice => !claimedVoiceIds.has(voice.id));
     const voice = matchedVoice ? { ...matchedVoice } : {
       id: `voice_for_${overlay.id}`,
       text: overlay.text,
+      enabled: false,
+      placeholder: true,
       startSeconds: overlay.startSeconds,
       endSeconds: overlay.endSeconds,
       provider: "qwen",
@@ -427,13 +443,10 @@ export function captionSegmentsFromData(data: Pick<WorkflowData, "overlayItems" 
       volume: 85,
     };
     claimedVoiceIds.add(voice.id);
-    const text = voice.text.trim() || overlay.text;
-    const startSeconds = matchedVoice ? voice.startSeconds : overlay.startSeconds;
-    const endSeconds = matchedVoice ? voice.endSeconds : overlay.endSeconds;
     segments.push({
       id: voice.id,
-      overlay: { ...overlay, text, startSeconds, endSeconds, syncVoiceId: voice.id },
-      voice: { ...voice, text, startSeconds, endSeconds },
+      overlay: { ...overlay },
+      voice: { ...voice },
     });
   });
 
@@ -443,6 +456,8 @@ export function captionSegmentsFromData(data: Pick<WorkflowData, "overlayItems" 
       overlay: {
         id: `overlay_for_${voice.id}`,
         text: voice.text,
+        enabled: false,
+        placeholder: true,
         startSeconds: voice.startSeconds,
         endSeconds: voice.endSeconds,
         position: "custom",
@@ -458,21 +473,33 @@ export function captionSegmentsFromData(data: Pick<WorkflowData, "overlayItems" 
 }
 
 export function captionSegmentsPatch(segments: CaptionSegment[]): Partial<WorkflowData> {
-  const overlayItems = segments.map(segment => ({ ...segment.overlay, text: segment.voice.text, startSeconds: segment.voice.startSeconds, endSeconds: segment.voice.endSeconds, syncVoiceId: segment.voice.id }));
-  const voiceItems = segments.map(segment => ({ ...segment.voice }));
-  const first = segments[0];
-  const last = segments.at(-1);
+  const overlayItems = uniqueById(segments.filter(segment => !segment.overlay.placeholder).map(segment => ({ ...segment.overlay })));
+  const voiceItems = uniqueById(segments.filter(segment => !segment.voice.placeholder).map(segment => ({ ...segment.voice })));
+  const visibleOverlays = overlayItems.filter(item => item.enabled !== false);
+  const enabledVoices = voiceItems.filter(item => item.enabled !== false);
+  const firstOverlay = visibleOverlays[0];
+  const lastOverlay = visibleOverlays.at(-1);
+  const firstVoice = enabledVoices[0];
   return {
     overlayItems,
     voiceItems,
-    overlayMain: first?.voice.text ?? "",
-    overlayCta: last?.voice.text ?? "",
-    overlayStart: first ? `${first.voice.startSeconds}s` : "0s",
-    overlayEnd: first ? `${first.voice.endSeconds}s` : "2.5s",
-    voiceText: first?.voice.text ?? "",
-    voiceName: first?.voice.voiceName ?? "none",
-    voiceVolume: String(first?.voice.volume ?? 85),
+    overlayMain: firstOverlay?.text ?? "",
+    overlayCta: lastOverlay?.text ?? "",
+    overlayStart: firstOverlay ? `${firstOverlay.startSeconds}s` : "0s",
+    overlayEnd: firstOverlay ? `${firstOverlay.endSeconds}s` : "2.5s",
+    voiceText: firstVoice?.text ?? "",
+    voiceName: firstVoice?.voiceName ?? "none",
+    voiceVolume: String(firstVoice?.volume ?? 85),
   };
+}
+
+function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 export function captionSegmentsWithTimings(segments: CaptionSegment[], timings: Record<string, CaptionTiming>): CaptionSegment[] {
@@ -483,7 +510,9 @@ export function captionSegmentsWithTimings(segments: CaptionSegment[], timings: 
     const endSeconds = Math.max(startSeconds + 0.1, Number(timing.endSeconds) || startSeconds + 0.1);
     return {
       ...segment,
-      overlay: { ...segment.overlay, text: segment.voice.text, startSeconds, endSeconds, syncVoiceId: segment.voice.id },
+      overlay: segment.overlay.enabled === false || (segment.overlay.syncVoiceId !== undefined && segment.overlay.syncVoiceId !== segment.voice.id)
+        ? segment.overlay
+        : { ...segment.overlay, startSeconds, endSeconds, ...(segment.overlay.syncVoiceId === undefined ? {} : { syncVoiceId: segment.voice.id }) },
       voice: { ...segment.voice, startSeconds, endSeconds },
     };
   });

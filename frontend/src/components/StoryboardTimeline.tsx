@@ -19,9 +19,10 @@ type StoryboardTimelineProps = {
   onUpdateVoice?: (voiceId: string, patch: Partial<VoiceItem>) => void;
   onRemoveVoice?: (voiceId: string) => void;
   bgmName?: string;
+  onRemoveBgm?: () => void;
 };
 
-export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOverlayFocus, onUpdateOverlay, onRemoveOverlay, onUpdateClip, voiceItems = [], voiceText, onVoiceFocus, onUpdateVoice, onRemoveVoice, bgmName }: StoryboardTimelineProps) {
+export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOverlayFocus, onUpdateOverlay, onRemoveOverlay, onUpdateClip, voiceItems = [], voiceText, onVoiceFocus, onUpdateVoice, onRemoveVoice, bgmName, onRemoveBgm }: StoryboardTimelineProps) {
   const showSoundTracks = mode === "sound";
   const resolvedVoiceItems = voiceItems.length > 0 ? voiceItems : voiceText?.trim() ? [{ id: "voice_main", text: voiceText, startSeconds: 0, endSeconds: 4, volume: 85 }] : [];
   const total = clips.reduce((sum, clip) => sum + Math.max(0.1, clip.timelineDuration), 0);
@@ -194,7 +195,7 @@ export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOver
       {selectedClip && onUpdateClip && <StoryboardTrack label="裁剪"><ClipTrimEditor item={selectedClip} onUpdateClip={onUpdateClip} onPreviewSource={sourceTime => previewSourceFrame(selectedClip, sourceTime)} /></StoryboardTrack>}
       {showSoundTracks && <StoryboardTrack label="文字" style={{ minHeight: rangeTrackHeight(overlayLanes.length) }}><div className="storyboard-range-lane-stack">{overlayLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"overlay-lane-" + laneIndex}>{lane.map(renderOverlayItem)}</div>)}</div></StoryboardTrack>}
       {showSoundTracks && <StoryboardTrack label="人声" style={{ minHeight: rangeTrackHeight(voiceLanes.length) }}><div className="storyboard-range-lane-stack">{voiceLanes.length > 0 ? voiceLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"voice-lane-" + laneIndex}>{lane.map(renderVoiceItem)}</div>) : <span className="storyboard-audio-empty">未配置人声</span>}</div></StoryboardTrack>}
-      {showSoundTracks && <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={bgmName?.trim() ? `BGM · ${bgmName}` : "未上传 BGM"} tone="bgm" total={total} /></StoryboardTrack>}
+      {showSoundTracks && <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={bgmName?.trim() ? `BGM · ${bgmName}` : "未上传 BGM"} tone="bgm" total={total} onRemove={bgmName?.trim() ? onRemoveBgm : undefined} /></StoryboardTrack>}
       <div className="storyboard-playhead" style={{ left: playheadLeft }} aria-hidden="true" />
     </div></div>
     <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.05" value={playhead} onChange={event => movePlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>
@@ -280,8 +281,8 @@ function TimelineRangeBlock({ className, label, tone, total: _total, locked = fa
   </div>;
 }
 
-function AudioTrackBlock({ className, label, tone, total, style, onClick }: { className: string; label: string; tone: "voice" | "bgm"; total: number; style?: CSSProperties; onClick?: () => void }) {
-  const content = <><div className="storyboard-waveform" aria-hidden="true">{Array.from({ length: 48 }, (_, index) => <i key={index} style={{ height: `${20 + ((index * 17 + (tone === "voice" ? 7 : 13)) % 64)}%` }} />)}</div><span className="storyboard-audio-label">{label}</span></>;
+function AudioTrackBlock({ className, label, tone, total, style, onClick, onRemove }: { className: string; label: string; tone: "voice" | "bgm"; total: number; style?: CSSProperties; onClick?: () => void; onRemove?: () => void }) {
+  const content = <><div className="storyboard-waveform" aria-hidden="true">{Array.from({ length: 48 }, (_, index) => <i key={index} style={{ height: `${20 + ((index * 17 + (tone === "voice" ? 7 : 13)) % 64)}%` }} />)}</div><span className="storyboard-audio-label">{label}</span>{onRemove && <button type="button" className="storyboard-audio-remove" aria-label="移除 BGM" title="移除 BGM" onClick={event => { event.preventDefault(); event.stopPropagation(); onRemove(); }}>×</button>}</>;
   return onClick ? <button type="button" className={`storyboard-audio-row ${className}`} style={{ width: `${Math.max(100, total > 0 ? 100 : 0)}%`, ...style }} onClick={onClick}>{content}</button> : <div className={`storyboard-audio-row ${className}`} style={{ width: `${Math.max(100, total > 0 ? 100 : 0)}%`, ...style }}>{content}</div>;
 }
 

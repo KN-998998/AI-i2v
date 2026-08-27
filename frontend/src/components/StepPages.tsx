@@ -75,6 +75,7 @@ function LegacyNodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: 
 }
 
 function NodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (message: string) => void }) {
+  if (kind === "output") return null;
   return kind === "generator"
     ? <GeneratorNodeManager onToast={onToast} />
     : <LegacyNodeManager kind={kind} onToast={onToast} />;
@@ -168,21 +169,21 @@ function SoundTextPreview() {
   const bgmName = activeWorkspace?.soundConfig?.bgmName ?? legacyBgmName;
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
+  const clearBgm = useWorkflowStore(state => state.clearBgm);
   const captionSegments = captionSegmentsFromData(sound ?? {});
-  const overlayItems = captionSegments.map(segment => segment.overlay);
-  const voiceItems = captionSegments.map(segment => segment.voice);
+  const allOverlayItems = captionSegments.map(segment => segment.overlay);
+  const allVoiceItems = captionSegments.map(segment => segment.voice);
+  const overlayItems = allOverlayItems.filter(item => item.enabled !== false);
+  const voiceItems = allVoiceItems.filter(item => item.enabled !== false);
   const updateOverlayTimeline = (id: string, patch: Partial<(typeof overlayItems)[number]>) => {
     if (!soundNode) return;
-    const next = overlayItems.map(item => item.id === id ? { ...item, ...patch } : item);
-    const changed = next.find(item => item.id === id);
-    const syncedVoices = changed
-      ? voiceItems.map(item => item.id === changed.syncVoiceId ? { ...item, text: changed.text, startSeconds: changed.startSeconds, endSeconds: changed.endSeconds } : item)
-      : voiceItems;
-    const first = next[0];
-    const cta = next.find(item => item.id === "overlay_cta") ?? next[next.length - 1];
+    const next = allOverlayItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const visible = next.filter(item => item.enabled !== false);
+    const first = visible[0];
+    const cta = visible.find(item => item.id === "overlay_cta") ?? visible.at(-1);
     updateNodeData(soundNode.id, {
       overlayItems: next,
-      voiceItems: syncedVoices,
+      voiceItems: allVoiceItems,
       overlayMain: first?.text ?? "",
       overlayCta: cta?.text ?? "",
       overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
@@ -192,15 +193,12 @@ function SoundTextPreview() {
   };
   const updateVoiceTimeline = (id: string, patch: Partial<(typeof voiceItems)[number]>) => {
     if (!soundNode) return;
-    const next = voiceItems.map(item => item.id === id ? { ...item, ...patch } : item);
-    const changed = next.find(item => item.id === id);
-    const syncedOverlays = changed
-      ? overlayItems.map(item => item.syncVoiceId === changed.id ? { ...item, text: changed.text, startSeconds: changed.startSeconds, endSeconds: changed.endSeconds } : item)
-      : overlayItems;
-    const first = next[0];
+    const next = allVoiceItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const enabled = next.filter(item => item.enabled !== false);
+    const first = enabled[0];
     updateNodeData(soundNode.id, {
       voiceItems: next,
-      overlayItems: syncedOverlays,
+      overlayItems: allOverlayItems,
       voiceText: first?.text ?? "",
       voiceName: first?.voiceName ?? "女声 · 温暖自然",
       voiceVolume: String(first?.volume ?? 85),
@@ -208,14 +206,13 @@ function SoundTextPreview() {
   };
   const removeOverlayTimeline = (id: string) => {
     if (!soundNode) return;
-    const removed = overlayItems.find(item => item.id === id);
-    const next = overlayItems.filter(item => item.id !== id);
-    const syncedVoices = voiceItems.filter(item => item.id !== removed?.syncVoiceId);
-    const first = next[0];
-    const cta = next.find(item => item.id === "overlay_cta") ?? next[next.length - 1];
+    const next = allOverlayItems.filter(item => item.id !== id);
+    const visible = next.filter(item => item.enabled !== false);
+    const first = visible[0];
+    const cta = visible.find(item => item.id === "overlay_cta") ?? visible.at(-1);
     updateNodeData(soundNode.id, {
       overlayItems: next,
-      voiceItems: syncedVoices,
+      voiceItems: allVoiceItems,
       overlayMain: first?.text ?? "",
       overlayCta: cta?.text ?? "",
       overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
@@ -225,12 +222,12 @@ function SoundTextPreview() {
   };
   const removeVoiceTimeline = (id: string) => {
     if (!soundNode) return;
-    const next = voiceItems.filter(item => item.id !== id);
-    const syncedOverlays = overlayItems.filter(item => item.syncVoiceId !== id);
-    const first = next[0];
+    const next = allVoiceItems.filter(item => item.id !== id);
+    const enabled = next.filter(item => item.enabled !== false);
+    const first = enabled[0];
     updateNodeData(soundNode.id, {
       voiceItems: next,
-      overlayItems: syncedOverlays,
+      overlayItems: allOverlayItems,
       voiceText: first?.text ?? "",
       voiceName: first?.voiceName ?? "女声 · 温暖自然",
       voiceVolume: String(first?.volume ?? 85),
@@ -247,7 +244,7 @@ function SoundTextPreview() {
       <p>每条文字单独设置文案、开始秒数、结束秒数和画面位置；它只会在自己的时间段出现，不会新增流程节点。拖动下方播放指针，查看它对应哪一个视频片段。</p>
       <div className="sound-text-legend"><span><i className="legend-dot legend-top" />上方品牌区</span><span><i className="legend-dot legend-upper" />中上钩子区</span><span><i className="legend-dot legend-center" />画面中央</span><span><i className="legend-dot legend-bottom" />底部安全区</span></div>
     </div>
-    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceItems={voiceItems} bgmName={bgmName} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} onVoiceFocus={() => setActivePanel("voice")} onOverlayFocus={() => setActivePanel("overlay")} />
+    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceItems={voiceItems} bgmName={bgmName} onRemoveBgm={clearBgm} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} onVoiceFocus={() => setActivePanel("voice")} onOverlayFocus={() => setActivePanel("overlay")} />
   </>;
 }
 
@@ -329,7 +326,14 @@ export function GeneratorPage({ onToast }: StepPageProps) {
 }
 
 export function OutputPage({ onToast }: StepPageProps) {
-  const workspaces = useWorkflowStore(state => state.composeWorkspaces);
+  const storedWorkspaces = useWorkflowStore(state => state.composeWorkspaces);
+  const composeJob = useWorkflowStore(state => state.composeJob);
+  const workspaces = storedWorkspaces.map(workspace => ({
+    ...workspace,
+    finalJob: workspace.finalJob ?? (
+      composeJob?.include_sound && composeJob.workspace_id === workspace.id ? composeJob : null
+    ),
+  }));
   const setActiveWorkspace = useWorkflowStore(state => state.setActiveComposeWorkspace);
   return <StepFrame route="/workflow/output" title="成片结果" description="查看每个成片方案的无声与有声结果，并继续完成声音与文字配置。" onToast={onToast}><div className="step-page-grid"><div className="step-page-main"><NodeManager kind="output" onToast={onToast} /><div className="output-workspace-list">{workspaces.map(workspace => <section className="step-panel output-workspace" key={workspace.id}><div className="panel-section-head"><div><span className="panel-label">{workspace.id.toUpperCase()}</span><h2>{workspace.title}</h2><p className="muted">{workspace.clips.length} 个片段 · 无声：{workspace.job?.status === "done" ? "已生成" : workspace.job?.status === "error" ? "失败" : "未生成"} · 有声：{workspace.finalJob?.status === "done" ? "已生成" : workspace.finalJob?.status === "error" ? "失败" : "未生成"}</p></div><button type="button" className="btn" onClick={() => { setActiveWorkspace(workspace.id); navigate("/workflow/sound"); }}>配置声音文字</button></div>{workspace.job?.output_url && <div className="result-version"><span>无声成片</span><video controls preload="metadata" src={workspace.job.output_url} /></div>}{workspace.finalJob?.output_url && <div className="result-version"><span>最终有声成片</span><video controls preload="metadata" src={workspace.finalJob.output_url} /></div>}{!workspace.job?.output_url && !workspace.finalJob?.output_url && <p className="muted">尚未生成该方案的视频结果。</p>}</section>)}</div></div><Inspector onToast={onToast} /></div></StepFrame>;
 }

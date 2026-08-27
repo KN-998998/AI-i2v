@@ -132,20 +132,25 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   }, []);
   const data = node.data.kind === "sound" ? { ...node.data, ...(activeWorkspace?.soundConfig ?? {}) } : node.data;
   const captionSegments = captionSegmentsFromData(data);
-  const overlayItems = captionSegments.map(segment => segment.overlay);
-  const voiceItems = captionSegments.map(segment => segment.voice);
+  const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>(() => Object.fromEntries(captionSegments.flatMap((segment, index) => [[segment.overlay.id, index > 0], [segment.voice.id, index > 0]])));
+  useEffect(() => {
+    setCollapsedCards(current => {
+      const next = { ...current };
+      captionSegments.forEach((segment, index) => {
+        if (!(segment.overlay.id in next)) next[segment.overlay.id] = index > 0;
+        if (!(segment.voice.id in next)) next[segment.voice.id] = index > 0;
+      });
+      return next;
+    });
+  }, [node.id, captionSegments.length]);
+  const overlayItems = captionSegments.map(segment => segment.overlay).filter(item => !item.placeholder);
+  const voiceItems = captionSegments.map(segment => segment.voice).filter(item => !item.placeholder);
   const positionLabel = (value: OverlayItem["position"]) => OVERLAY_POSITION_OPTIONS.find(item => item.value === value)?.label ?? OVERLAY_POSITION_OPTIONS[1].label;
   const commitSegments = (segments: CaptionSegment[]) => updateNodeData(node.id, captionSegmentsPatch(segments));
   const updateOverlay = (id: string, patch: Partial<OverlayItem>) => commitSegments(captionSegments.map(segment => {
     if (segment.overlay.id !== id) return segment;
-    const overlay = { ...segment.overlay, ...patch, syncVoiceId: segment.voice.id };
-    const voice = {
-      ...segment.voice,
-      ...(patch.text === undefined ? {} : { text: patch.text }),
-      ...(patch.startSeconds === undefined ? {} : { startSeconds: patch.startSeconds }),
-      ...(patch.endSeconds === undefined ? {} : { endSeconds: patch.endSeconds }),
-    };
-    return { ...segment, overlay, voice };
+     const overlay = { ...segment.overlay, ...patch };
+    return { ...segment, overlay };
   }));
   const updateOverlayStyle = (id: string, patch: Partial<OverlayStyle>) => {
     const item = overlayItems.find(candidate => candidate.id === id);
@@ -159,33 +164,28 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
     commitSegments([...captionSegments, {
       id: voiceId,
       overlay: { id: `overlay_${Date.now()}`, text: "", startSeconds: lastEnd, endSeconds: lastEnd + 2, position: "custom", x: 0.5, y: 0.5, syncVoiceId: voiceId },
-      voice: { id: voiceId, text: "", startSeconds: lastEnd, endSeconds: lastEnd + 2, provider: "qwen", model: "", voiceId: "none", voiceName: "无", volume: 85 },
+      voice: { id: voiceId, text: "", enabled: false, startSeconds: lastEnd, endSeconds: lastEnd + 2, provider: "qwen", model: "", voiceId: "none", voiceName: "无", volume: 85 },
     }]);
   };
   const updateVoice = (id: string, patch: Partial<(typeof voiceItems)[number]>) => commitSegments(captionSegments.map(segment => {
     if (segment.voice.id !== id) return segment;
     const voice = { ...segment.voice, ...patch };
-    const overlay = {
-      ...segment.overlay,
-      syncVoiceId: voice.id,
-      ...(patch.text === undefined ? {} : { text: patch.text }),
-      ...(patch.startSeconds === undefined ? {} : { startSeconds: patch.startSeconds }),
-      ...(patch.endSeconds === undefined ? {} : { endSeconds: patch.endSeconds }),
-    };
-    return { ...segment, overlay, voice };
+    return { ...segment, voice };
   }));
   const removeVoice = (id: string) => commitSegments(captionSegments.filter(segment => segment.voice.id !== id));
   const addVoice = addOverlay;
+  const toggleCard = (id: string) => setCollapsedCards(current => ({ ...current, [id]: !current[id] }));
   return <>
     <div className="tabs"><button type="button" className={`tab ${activePanel === "voice" ? "active" : ""}`} onClick={() => setActivePanel("voice")}>声音</button><button type="button" className={`tab ${activePanel === "overlay" ? "active" : ""}`} onClick={() => setActivePanel("overlay")}>文字</button></div>
     {activePanel === "overlay" ? <>
       <div className="panel-section-head"><SectionTitle>文案段</SectionTitle><button type="button" className="btn" onClick={addOverlay}>＋ 添加文案段</button></div>
-      <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面。</span></div>
-      <div className="overlay-editor-list">{overlayItems.map((item, index) => { const style = overlayStyleFromItem(item); return <div className="overlay-editor-item" key={item.id}>
-        <div className="overlay-editor-head"><div><strong>文案段 {index + 1}</strong><small>{positionLabel(item.position)} · {item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s（最终按音频实测时长同步）</small></div><button type="button" className="clip-remove" aria-label={`删除文案段 ${index + 1}`} onClick={() => removeOverlay(item.id)}>×</button></div>
-        <input className="input" value={item.text} placeholder="输入画面文案" onChange={event => updateOverlay(item.id, { text: event.target.value })} />
+      <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面；绑定人声可选择自动匹配、不绑定或指定某一段人声。</span></div>
+      <div className="overlay-editor-list" onClick={event => { const target = event.target as HTMLElement; if (target.closest(".clip-remove")) return; const header = target.closest(".overlay-editor-head"); if (!header) return; const index = Array.from(event.currentTarget.querySelectorAll(".overlay-editor-head")).indexOf(header); const item = overlayItems[index]; if (item) toggleCard(item.id); }}>{overlayItems.map((item, index) => { const style = overlayStyleFromItem(item); const collapsed = Boolean(collapsedCards[item.id]); return <div className={`overlay-editor-item ${collapsed ? "is-collapsed" : ""}`} key={item.id}>
+        <div className="overlay-editor-head" role="button" tabIndex={0} aria-expanded={!collapsed} onClick={event => { event.stopPropagation(); toggleCard(item.id); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCard(item.id); } }}><span className="overlay-collapse-icon" aria-hidden="true">{collapsed ? "▸" : "▾"}</span><div><strong>文案段 {index + 1}</strong><small>{positionLabel(item.position)} · {item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s · {item.text.trim() || "未填写文案"}</small></div><button type="button" className="clip-remove" aria-label={`删除文案段 ${index + 1}`} onClick={event => { event.stopPropagation(); removeOverlay(item.id); }}>×</button></div>
+         <textarea className="input textarea overlay-text-input" rows={3} value={item.text} placeholder="输入画面文案" onChange={event => updateOverlay(item.id, { text: event.target.value })} />
+        <label className={`check ${item.enabled !== false ? "checked" : ""}`}><input type="checkbox" checked={item.enabled !== false} onChange={event => updateOverlay(item.id, { enabled: event.target.checked })} />显示文字</label>
         <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateOverlay(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateOverlay(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
-        <div className="field-grid"><Field label="文字效果"><Select value={item.animation === "typewriter" ? "打字机" : "静态"} options={["静态", "打字机"]} onChange={value => updateOverlay(item.id, { animation: value === "打字机" ? "typewriter" : "static" })} /></Field><label className="field"><span>绑定人声</span><select className="input" disabled value={item.syncVoiceId || "none"}><option value={item.syncVoiceId || "none"}>人声 {index + 1} · {voiceItems[index]?.text || "未填写"}</option></select></label></div>
+         <div className="field-grid"><Field label="文字效果"><Select value={item.animation === "typewriter" ? "打字机" : "静态"} options={["静态", "打字机"]} onChange={value => updateOverlay(item.id, { animation: value === "打字机" ? "typewriter" : "static" })} /></Field><label className="field"><span>绑定人声</span><select className="input" value={item.syncVoiceId === undefined ? "auto" : item.syncVoiceId || "none"} onChange={event => { const value = event.target.value; updateOverlay(item.id, { syncVoiceId: value === "auto" ? undefined : value === "none" ? "" : value }); }}><option value="auto">自动匹配同序人声</option><option value="none">不绑定人声</option>{voiceItems.filter(voice => !voice.placeholder).map((voice, voiceIndex) => <option key={voice.id} value={voice.id}>人声 {voiceIndex + 1} · {voice.text.trim() || "未填写"}{voice.enabled === false ? "（未启用）" : ""}</option>)}</select></label></div>
         <Field label="初始/快捷位置"><Select value={positionLabel(item.position)} options={OVERLAY_POSITION_OPTIONS.map(option => option.label)} onChange={value => { const position = OVERLAY_POSITION_OPTIONS.find(option => option.label === value)!.value; updateOverlay(item.id, { position, ...overlayPositionCoordinates(position) }); }} /></Field>
         <div className="style-editor"><span className="style-editor-label">文字样式</span><Field label="样式模板"><Select value={stylePresetValue(style)} options={["自定义", ...OVERLAY_STYLE_PRESETS.map(preset => preset.label)]} onChange={value => { const preset = OVERLAY_STYLE_PRESETS.find(item => item.label === value); if (preset) updateOverlayStyle(item.id, preset.style); }} /></Field><div className="field-grid"><Field label="字体"><Select value={style.fontFamily} options={[...OVERLAY_FONT_OPTIONS]} onChange={value => updateOverlayStyle(item.id, { fontFamily: value as OverlayStyle["fontFamily"] })} /></Field><Field label="字号"><input className="input" type="number" min="12" max="120" step="1" value={style.fontSize} onChange={event => updateOverlayStyle(item.id, { fontSize: Math.min(120, Math.max(12, Number(event.target.value) || 42)) })} /></Field></div><div className="field-grid"><Field label="文本框宽度 (%)"><input className="input" type="number" min="30" max="95" step="5" value={Math.round(style.textBoxWidth * 100)} onChange={event => updateOverlayStyle(item.id, { textBoxWidth: Math.min(0.95, Math.max(0.3, (Number(event.target.value) || 84) / 100)) })} /></Field><label className={`check ${style.singleLine ? "checked" : ""}`}><input type="checkbox" checked={style.singleLine} onChange={event => updateOverlayStyle(item.id, { singleLine: event.target.checked })} />单行显示</label></div><div className="field-grid"><label className="field"><span>文字颜色</span><input className="color-input" type="color" value={style.color} onChange={event => updateOverlayStyle(item.id, { color: event.target.value.toUpperCase() })} /></label><Field label="字重"><Select value={style.fontWeight === "bold" ? "粗体" : "常规"} options={["常规", "粗体"]} onChange={value => updateOverlayStyle(item.id, { fontWeight: value === "粗体" ? "bold" : "normal" })} /></Field></div><div className="field-grid"><label className="field"><span>描边颜色</span><input className="color-input" type="color" value={style.strokeColor} onChange={event => updateOverlayStyle(item.id, { strokeColor: event.target.value.toUpperCase() })} /></label><Field label="描边宽度"><input className="input" type="number" min="0" max="12" step="1" value={style.strokeWidth} onChange={event => updateOverlayStyle(item.id, { strokeWidth: Math.min(12, Math.max(0, Number(event.target.value) || 0)) })} /></Field></div><label className={`check ${style.backgroundEnabled ? "checked" : ""}`}><input type="checkbox" checked={style.backgroundEnabled} onChange={event => updateOverlayStyle(item.id, { backgroundEnabled: event.target.checked })} />显示文字背景框</label>{style.backgroundEnabled && <div className="field-grid"><label className="field"><span>背景颜色</span><input className="color-input" type="color" value={style.backgroundColor} onChange={event => updateOverlayStyle(item.id, { backgroundColor: event.target.value.toUpperCase() })} /></label><Field label="背景透明度"><input className="input" type="number" min="0" max="100" step="5" value={Math.round(style.backgroundOpacity * 100)} onChange={event => updateOverlayStyle(item.id, { backgroundOpacity: Math.min(1, Math.max(0, (Number(event.target.value) || 0) / 100)) })} /></Field></div>}</div>
       </div>; })}</div>
@@ -193,14 +193,17 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
     </> : <>
       <div className="panel-section-head"><SectionTitle>文案段人声配置</SectionTitle><button type="button" className="btn" onClick={addVoice}>＋ 添加文案段</button></div>
       <div className="overlay-logic-callout"><strong>人声和文字一样按时间段播放</strong><span>每段人声独立设置文案、开始时间、结束时间、音色和音量；例如第一段 0-4 秒，第二段 10-15 秒。</span></div>
-      <div className="overlay-editor-list">{voiceItems.map((item, index) => <div className="overlay-editor-item voice-editor-item" key={item.id}>
-        <div className="overlay-editor-head"><div><strong>文案段人声 {index + 1}</strong><small>{item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s（同步文字 {index + 1}）</small></div><button type="button" className="clip-remove" aria-label={`删除文案段 ${index + 1}`} onClick={() => removeVoice(item.id)}>×</button></div>
+      <div className="overlay-editor-list" onClick={event => { const target = event.target as HTMLElement; if (target.closest(".clip-remove")) return; const header = target.closest(".overlay-editor-head"); if (!header) return; const index = Array.from(event.currentTarget.querySelectorAll(".overlay-editor-head")).indexOf(header); const item = voiceItems[index]; if (item) toggleCard(item.id); }}>{voiceItems.map((item, index) => { const collapsed = Boolean(collapsedCards[item.id]); const pairedOverlay = overlayItems[index]; const bindingLabel = pairedOverlay?.enabled === false ? "不显示文字" : pairedOverlay?.syncVoiceId === "" ? "未绑定文字" : pairedOverlay?.syncVoiceId ? `绑定文字 ${overlayItems.findIndex(overlay => overlay.id === pairedOverlay.id) + 1}` : "自动匹配文字"; return <div className={`overlay-editor-item voice-editor-item ${collapsed ? "is-collapsed" : ""}`} key={item.id}>
+        <div className="overlay-collapse-summary">{item.text.trim() || "未填写人声文案"}</div>
+         <div className="overlay-editor-head"><div><strong>文案段人声 {index + 1}</strong><small>{item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s · {bindingLabel}</small></div><button type="button" className="clip-remove" aria-label={`删除文案段 ${index + 1}`} onClick={() => removeVoice(item.id)}>×</button></div>
         <textarea className="input textarea" value={item.text} placeholder="输入这一段人声文案" onChange={event => updateVoice(item.id, { text: event.target.value })} />
+         <label className={`check ${item.enabled !== false && item.voiceId !== "none" ? "checked" : ""}`}><input type="checkbox" checked={item.enabled !== false && item.voiceId !== "none"} onChange={event => { if (event.target.checked && item.voiceId === "none") { onToast("请先选择具体音色，再启用人声"); return; } updateVoice(item.id, { enabled: event.target.checked }); }} />启用人声</label>
+         <small className="voice-toggle-hint">{item.voiceId === "none" ? "当前为“无”，不会生成 TTS；选择音色后即可启用。" : item.enabled === false ? "当前已关闭，仅保留这段文字。" : "当前已启用，将生成这段 TTS。"}</small>
         <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateVoice(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateVoice(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
-        <label className="field"><span>音色</span><select className="input" value={item.voiceId === "none" ? "none" : ttsOptions.find(option => option.voice_id === item.voiceId && (!item.model || option.model === item.model)) ? `${item.model || ttsOptions.find(option => option.voice_id === item.voiceId)?.model}:${item.voiceId}` : "none"} onChange={event => { const value = event.target.value; const [model, voiceId] = value.split(":"); const option = ttsOptions.find(candidate => candidate.model === model && candidate.voice_id === voiceId); updateVoice(item.id, { voiceId: value === "none" ? "none" : voiceId, voiceName: option?.label || "无", provider: option?.provider || "qwen", model: option?.model || "" }); }}><option value="none">无（默认，不生成 TTS）</option>{ttsOptions.map(option => <option key={`${option.model}:${option.voice_id}`} value={`${option.model}:${option.voice_id}`}>{option.label} · {option.model}</option>)}</select></label>
+        <label className="field"><span>音色</span><select className="input" value={item.voiceId === "none" ? "none" : ttsOptions.find(option => option.voice_id === item.voiceId && (!item.model || option.model === item.model)) ? `${item.model || ttsOptions.find(option => option.voice_id === item.voiceId)?.model}:${item.voiceId}` : "none"} onChange={event => { const value = event.target.value; const [model, voiceId] = value.split(":"); const option = ttsOptions.find(candidate => candidate.model === model && candidate.voice_id === voiceId); updateVoice(item.id, { enabled: value !== "none", voiceId: value === "none" ? "none" : voiceId, voiceName: option?.label || "无", provider: option?.provider || "qwen", model: option?.model || "" }); }}><option value="none">无（默认，不生成 TTS）</option>{ttsOptions.map(option => <option key={`${option.model}:${option.voice_id}`} value={`${option.model}:${option.voice_id}`}>{option.label} · {option.model}</option>)}</select></label>
         {ttsOptions.length === 0 && <small className="clip-sync-error">未检测到 Qwen TTS 配置，当前只能选择“无”。</small>}
         <Field label="音量"><input className="range" type="range" min="0" max="100" value={item.volume ?? 85} onChange={event => updateVoice(item.id, { volume: Number(event.target.value) })} /></Field>
-      </div>)}</div>
+      </div>; })}</div>
       {voiceItems.length === 0 && <div className="empty-state compact">还没有人声，点击“添加人声”创建第一段。</div>}
       <Field label="BGM 音量"><input className="range" type="range" min="0" max="100" value={formatNodeValue(data.bgmVolume, "30")} onChange={event => updateNodeData(node.id, { bgmVolume: event.target.value })} /></Field>
       <Field label="BGM"><div className="upload-row"><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /><span>{bgmName || "未上传"}</span>{bgmUrl && <button type="button" className="clip-remove" aria-label="移除 BGM" onClick={() => { setBgm("", ""); onToast("BGM 已移除"); }}>×</button>}</div></Field>

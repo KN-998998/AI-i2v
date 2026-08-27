@@ -9,9 +9,13 @@ import urllib.request
 from pathlib import Path
 from pipeline.config import (
     QWEN_API_KEY, QWEN_TTS_BASE_URL, QWEN_TTS_MODEL, QWEN_TTS_MODELS,
-    QWEN_TTS_CLONE_MODEL, QWEN_TTS_CLONED_VOICES,
+    QWEN_TTS_NATIVE_BASE_URL, QWEN_TTS_CLONE_MODEL, QWEN_TTS_CLONED_VOICES,
     TTS_VOICE,
 )
+
+
+class QwenTTSRequestError(RuntimeError):
+    """Raised when DashScope rejects a Qwen TTS request."""
 
 
 def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
@@ -106,9 +110,11 @@ def _qwen_voice_id(voice: str | None) -> str | None:
 
 def _qwen_tts_model(voice_id: str, requested_model: str | None = None) -> str:
     """Keep cloned voices on the DashScope VC model they require."""
+    if requested_model == QWEN_TTS_CLONE_MODEL:
+        return QWEN_TTS_CLONE_MODEL
     if voice_id in _configured_qwen_cloned_voice_ids():
         return QWEN_TTS_CLONE_MODEL
-    if requested_model and requested_model != QWEN_TTS_CLONE_MODEL:
+    if requested_model:
         return requested_model
     return QWEN_TTS_MODEL
 
@@ -139,9 +145,84 @@ def _generate_qwen_tts(text: str, out_path: str, voice: str | None = None, model
         return None
 
 
+def _qwen_error_detail(raw: bytes | str) -> str:
+    """Extract a short provider error without echoing request credentials."""
+    text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+    text = text.strip()
+    if not text:
+        return "provider returned an empty error response"
+    try:
+        body = json.loads(text)
+    except json.JSONDecodeError:
+        return text[-500:]
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict):
+            for key in ("message", "detail", "code"):
+                value = str(error.get(key) or "").strip()
+                if value:
+                    return value[-500:]
+        for key in ("message", "detail", "code"):
+            value = str(body.get(key) or "").strip()
+            if value:
+                return value[-500:]
+    return text[-500:]
+
+
+def _generate_qwen_tts_strict(text: str, out_path: str, voice: str | None = None, model: str | None = None) -> str | None:
+    """Generate audio and preserve provider diagnostics for composition jobs."""
+    if not QWEN_API_KEY:
+        return None
+    raw_voice = (voice or "").strip()
+    voice_id = _qwen_voice_id(raw_voice) or _qwen_voice_id(TTS_VOICE)
+    # An explicitly selected VC model may carry a manually entered voice id.
+    if not voice_id and model == QWEN_TTS_CLONE_MODEL and raw_voice and raw_voice != "none":
+        voice_id = raw_voice.removeprefix("qwen:").strip() or None
+    if not voice_id:
+        return None
+    model_id = _qwen_tts_model(voice_id, model)
+    if model_id.startswith("qwen3-tts") and voice_id.lower().startswith("cosyvoice-"):
+        raise QwenTTSRequestError(
+            "voice id belongs to CosyVoice, but the selected model is Qwen3-TTS VC; "
+            "configure a Qwen3-TTS cloned voice id or select the matching CosyVoice model"
+        )
+    payload = json.dumps({
+        "model": model_id,
+        "input": {"text": text, "voice": voice_id},
+        "parameters": {"format": "mp3"},
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        QWEN_TTS_NATIVE_BASE_URL,
+        data=payload,
+        headers={"Authorization": f"Bearer {QWEN_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            response_body = response.read()
+        body = json.loads(response_body.decode("utf-8"))
+        audio_info = (body.get("output") or {}).get("audio") if isinstance(body, dict) else None
+        audio_url = audio_info.get("url") if isinstance(audio_info, dict) else None
+        if not audio_url:
+            raise QwenTTSRequestError(f"DashScope returned no audio URL: {_qwen_error_detail(response_body)}")
+        with urllib.request.urlopen(str(audio_url), timeout=90) as audio_response:
+            audio = audio_response.read()
+        if not audio:
+            raise QwenTTSRequestError("DashScope returned an empty audio file")
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(out_path).write_bytes(audio)
+        return out_path if Path(out_path).is_file() and Path(out_path).stat().st_size > 0 else None
+    except urllib.error.HTTPError as exc:
+        raise QwenTTSRequestError(f"DashScope HTTP {exc.code}: {_qwen_error_detail(exc.read())}") from exc
+    except urllib.error.URLError as exc:
+        raise QwenTTSRequestError(f"DashScope network error: {exc.reason}") from exc
+    except OSError as exc:
+        raise QwenTTSRequestError(f"Qwen audio file error: {exc}") from exc
+
+
 def generate_tts(text: str, out_path: str, voice: str | None = None, model: str | None = None) -> str | None:
     """Generate one Qwen TTS segment for a canvas voice item."""
-    return _generate_qwen_tts(text, out_path, voice=voice, model=model)
+    return _generate_qwen_tts_strict(text, out_path, voice=voice, model=model)
 
 
 def mix_voice_segments(voice_segments, bgm_path, out_path, bgm_volume=0.3, video_duration=12):

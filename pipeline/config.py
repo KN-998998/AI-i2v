@@ -62,6 +62,7 @@ KLING_MODEL    = os.environ.get("KLING_MODEL", "kling-3.0-omni")
 TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "qwen").strip().lower() or "qwen"
 QWEN_API_KEY = os.environ.get("QWEN_API_KEY", "") or os.environ.get("DASHSCOPE_API_KEY", "")
 QWEN_TTS_BASE_URL = os.environ.get("QWEN_TTS_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech")
+QWEN_TTS_NATIVE_BASE_URL = os.environ.get("QWEN_TTS_NATIVE_BASE_URL", "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation")
 QWEN_TTS_MODEL = os.environ.get("QWEN_TTS_MODEL", "qwen3-tts-flash")
 QWEN_TTS_MODELS = os.environ.get("QWEN_TTS_MODELS", "")
 QWEN_TTS_CLONE_MODEL = os.environ.get("QWEN_TTS_CLONE_MODEL", "qwen3-tts-vc-2026-01-22").strip()
