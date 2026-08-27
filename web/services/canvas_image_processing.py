@@ -24,7 +24,7 @@ from pipeline.config import (
     TENCENTCLOUD_SECRET_KEY,
 )
 from web.services.canvas_quality import analyze_image
-from web.services.canvas_state import background_file, draft_directory, generated_file_path, load_draft, uploaded_file
+from web.services.canvas_state import background_file, draft_directory, generated_file_path, load_draft, save_draft, uploaded_file
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _JOB_LOCK = threading.RLock()
@@ -52,6 +52,21 @@ def _update_job(draft_id: str, job: dict[str, Any], **changes: Any) -> None:
     job.update(changes, updated_at=_now())
     with _JOB_LOCK:
         _save_job(draft_id, job)
+
+
+_RECOVERY_LOCK = threading.RLock()
+_RECOVERED_JOB_KEYS: set[str] = set()
+
+
+def _persist_node_status(draft_id: str, node_id: str, status: str, **patch: Any) -> None:
+    draft = load_draft(draft_id)
+    if draft is None:
+        return
+    for node in draft.get("nodes", []):
+        if node.get("id") == node_id and node.get("data", {}).get("kind") == "image_process":
+            node["data"].update(status=status, **patch)
+            save_draft(draft_id, draft)
+            return
 
 
 def get_image_processing_job(draft_id: str, job_id: str) -> dict[str, Any] | None:
@@ -271,6 +286,7 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
     def worker() -> None:
         try:
             data = process_node.get("data", {})
+            _persist_node_status(draft_id, node_id, "处理中", imageProcessingJobId=job_id)
             _update_job(draft_id, job, status="running", stage="上传图片并调用 GoodsMatting")
             cutout_path = generated_file_path(draft_id, ".png")
             _goods_matting(source_image, cutout_path, draft_id)
@@ -291,8 +307,87 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
                 cutout_name=cutout_path.name,
                 analysis=analysis,
             )
+            _persist_node_status(
+                draft_id,
+                node_id,
+                "已处理",
+                imageProcessingJobId=job_id,
+                processedImagePreview=result_url,
+                processedImageName=result_path.name,
+                processedImageAnalysis=analysis,
+            )
         except Exception as exc:
             _update_job(draft_id, job, status="error", stage="图片处理失败", error=str(exc))
+            _persist_node_status(draft_id, node_id, "处理失败", imageProcessingJobId=job_id)
 
     threading.Thread(target=worker, name=f"canvas-image-process-{job_id}", daemon=True).start()
     return job
+
+
+def _iter_image_processing_jobs() -> list[tuple[str, dict[str, Any]]]:
+    root = draft_directory("_").parent
+    if not root.is_dir():
+        return []
+    jobs: list[tuple[str, dict[str, Any]]] = []
+    for path in root.glob("*/image-process-*.json"):
+        job_id = path.stem.removeprefix("image-process-")
+        if not _JOB_ID_RE.fullmatch(job_id):
+            continue
+        try:
+            with _JOB_LOCK:
+                with path.open("r", encoding="utf-8") as stream:
+                    job = json.load(stream)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(job, dict):
+            jobs.append((path.parent.name, job))
+    return jobs
+
+
+def _recover_image_processing_job(draft_id: str, job: dict[str, Any]) -> None:
+    node_id = str(job.get("node_id") or "")
+    try:
+        draft = load_draft(draft_id)
+        if draft is None:
+            raise ValueError("草稿不存在，无法恢复图片处理任务")
+        process_node = _node_by_id(draft, node_id)
+        if not process_node or process_node.get("data", {}).get("kind") != "image_process":
+            raise ValueError("图片处理节点不存在，无法恢复任务")
+        input_node = _upstream_node(draft, node_id, "input", allow_legacy_fallback=False)
+        input_data = input_node.get("data", {}) if input_node else {}
+        source_image = _draft_image(draft_id, input_data.get("imagePreview"))
+        if source_image is None or not source_image.is_file():
+            raise ValueError("恢复任务找不到菜品原图，请重新上传素材")
+        data = process_node.get("data", {})
+        _update_job(draft_id, job, status="running", stage="恢复图片处理任务")
+        _persist_node_status(draft_id, node_id, "处理中", imageProcessingJobId=job["job_id"])
+        cutout_path = generated_file_path(draft_id, ".png")
+        _goods_matting(source_image, cutout_path, draft_id)
+        _update_job(draft_id, job, stage="合成背景首帧")
+        template_name = str(data.get("backgroundTemplateId") or "")
+        template_path = background_file(template_name) if template_name else None
+        result_path = generated_file_path(draft_id, ".jpg")
+        _compose_image(cutout_path, template_path, result_path, data)
+        analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
+        result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
+        _update_job(draft_id, job, status="done", stage="图片处理完成", result_url=result_url, result_name=result_path.name, cutout_name=cutout_path.name, analysis=analysis)
+        _persist_node_status(draft_id, node_id, "已处理", imageProcessingJobId=job["job_id"], processedImagePreview=result_url, processedImageName=result_path.name, processedImageAnalysis=analysis)
+    except Exception as exc:
+        _update_job(draft_id, job, status="error", stage="图片处理恢复失败", error=str(exc))
+        _persist_node_status(draft_id, node_id, "处理失败", imageProcessingJobId=job.get("job_id"))
+
+
+def recover_image_processing_jobs() -> int:
+    """Resume queued/running image processing jobs once per backend process."""
+    scheduled = 0
+    for draft_id, job in _iter_image_processing_jobs():
+        if job.get("status") not in {"queued", "running"}:
+            continue
+        key = f"{draft_id}:{job.get('job_id')}"
+        with _RECOVERY_LOCK:
+            if key in _RECOVERED_JOB_KEYS:
+                continue
+            _RECOVERED_JOB_KEYS.add(key)
+        threading.Thread(target=_recover_image_processing_job, args=(draft_id, job), name=f"canvas-image-recover-{job.get('job_id')}", daemon=True).start()
+        scheduled += 1
+    return scheduled

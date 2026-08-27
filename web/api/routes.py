@@ -34,6 +34,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
+from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
@@ -266,6 +267,26 @@ def get_canvas_file(draft_id: str, stored_name: str) -> FileResponse:
 @router.get("/api/canvas/backgrounds")
 def list_canvas_backgrounds() -> list[dict[str, Any]]:
     return [{"id": path.name, "name": path.name, "url": f"/api/canvas/backgrounds/{path.name}", "source": "local"} for path in list_background_files()]
+
+
+@router.post("/api/canvas/asset-library/plan")
+def create_asset_library_plan(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    request = payload or {}
+    counts = request.get("category_counts") or {}
+    if not isinstance(counts, dict):
+        raise _json_error("分类数量必须是对象")
+    unknown = set(counts) - set(ASSET_CATEGORIES)
+    if unknown:
+        raise _json_error(f"不支持的素材分类：{', '.join(sorted(unknown))}")
+    try:
+        return build_asset_plan(
+            draft_id,
+            str(request.get("asset_root") or ""),
+            str(request.get("background_root") or ""),
+            counts,
+        )
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
 
 
 @router.post("/api/canvas/backgrounds")

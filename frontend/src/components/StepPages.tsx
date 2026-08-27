@@ -5,6 +5,7 @@ import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
 import { StoryboardTimeline } from "./StoryboardTimeline";
+import { AssetLibraryBatchPanel } from "./AssetLibraryBatchPanel";
 
 type StepPageProps = { onToast: (message: string) => void };
 type ManagedNodeKind = Extract<NodeKind, "input" | "prompt" | "generator" | "output" | "sound">;
@@ -25,7 +26,7 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
   }, [nodeId, panel, setActivePanel, setSelection]);
 
   return <StepFrame route={route} title={title} description={description} onToast={onToast}>
-    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/sound" && <><SoundTextPreview /><SoundComposePanel onToast={onToast} /></>}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div><Inspector onToast={onToast} /></div>
+    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}{route === "/workflow/sound" && <><SoundTextPreview /><SoundComposePanel onToast={onToast} /></>}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div><Inspector onToast={onToast} /></div>
   </StepFrame>;
 }
 

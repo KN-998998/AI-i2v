@@ -1,6 +1,9 @@
+import time
+from pathlib import Path
+
 from pipeline.video_render import _typewriter_prefixes
 from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sound_node, _sync_caption_timings
-from web.services import canvas_quality
+from web.services import canvas_compose, canvas_quality, canvas_state
 
 
 def test_typewriter_prefixes_keep_unicode_characters():
@@ -85,3 +88,38 @@ def test_preflight_blocks_real_clip_without_trim_confirmation(monkeypatch, tmp_p
 
     assert report["ok"] is False
     assert report["errors"][0]["code"] == "TRIM_NOT_CONFIRMED"
+
+
+def test_startup_recovery_finishes_persisted_compose_job(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    canvas_state.save_draft("default", {"nodes": [], "edges": [], "timeline": []})
+    clip = {"id": "clip-1", "dish": "Recovery dish", "timelineDuration": 2.0}
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    monkeypatch.setattr(canvas_compose, "_prepare_sources", lambda _draft_id, timeline: [(timeline[0], source)])
+
+    from pipeline import video_render
+
+    monkeypatch.setattr(video_render, "trim_clip", lambda _source, destination, start, duration: Path(destination).write_bytes(b"trimmed"))
+    monkeypatch.setattr(video_render, "concat_clips", lambda _sources, destination, subtitles, brand_info: Path(destination).write_bytes(b"composed"))
+    job = {
+        "job_id": "e" * 32,
+        "draft_id": "default",
+        "status": "running",
+        "workspace_id": None,
+        "include_sound": False,
+        "timeline": [clip],
+        "sound": {},
+    }
+    canvas_compose._save_job("default", job)
+
+    assert canvas_compose.recover_compose_jobs() == 1
+    for _ in range(40):
+        current = canvas_compose.get_compose_job("default", job["job_id"])
+        if current and current["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+
+    assert current["status"] == "done", current.get("error")
+    output = canvas_compose.compose_output_path("default", job["job_id"])
+    assert output is not None and output.is_file()

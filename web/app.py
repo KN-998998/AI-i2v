@@ -18,7 +18,9 @@ from fastapi.staticfiles import StaticFiles
 from web.api.routes import router
 from web.core.logging import configure_logging, get_logger, log_request
 from web.core.settings import APP_HOST, APP_PORT, APP_RELOAD, STATIC_DIR
+from web.services.canvas_compose import recover_compose_jobs
 from web.services.canvas_generation import recover_generation_jobs
+from web.services.canvas_image_processing import recover_image_processing_jobs
 
 configure_logging()
 logger = get_logger(__name__)
@@ -27,9 +29,17 @@ logger = get_logger(__name__)
 def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        recovered = recover_generation_jobs()
+        recovered_generation = recover_generation_jobs()
+        recovered_image = recover_image_processing_jobs()
+        recovered_compose = recover_compose_jobs()
+        recovered = recovered_generation + recovered_image + recovered_compose
         if recovered:
-            logger.info("Recovered %s unfinished Kling generation job(s)", recovered)
+            logger.info(
+                "Recovered unfinished jobs: kling=%s image=%s compose=%s",
+                recovered_generation,
+                recovered_image,
+                recovered_compose,
+            )
         yield
 
     app = FastAPI(title="引流视频生产平台", version="0.2.0", lifespan=lifespan)

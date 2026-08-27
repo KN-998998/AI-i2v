@@ -16,6 +16,8 @@ from web.services.canvas_quality import preflight_draft
 
 _JOB_ID_RE = r"^[0-9a-f]{32}$"
 _JOB_LOCK = threading.RLock()
+_RECOVERY_LOCK = threading.RLock()
+_RECOVERED_JOB_KEYS: set[str] = set()
 
 
 def _now() -> str:
@@ -33,6 +35,26 @@ def _save_job(draft_id: str, job: dict[str, Any]) -> None:
     with temporary.open("w", encoding="utf-8") as stream:
         json.dump(job, stream, ensure_ascii=False, indent=2)
     temporary.replace(path)
+
+
+def _update_job(draft_id: str, job: dict[str, Any], **changes: Any) -> None:
+    job.update(changes, updated_at=_now())
+    with _JOB_LOCK:
+        _save_job(draft_id, job)
+
+
+def _persist_workspace_job(draft_id: str, job: dict[str, Any]) -> None:
+    draft = load_draft(draft_id)
+    if draft is None:
+        return
+    workspace_id = job.get("workspace_id")
+    field = "finalJob" if job.get("include_sound") else "job"
+    for workspace in draft.get("composeWorkspaces", []):
+        if workspace.get("id") == workspace_id:
+            workspace[field] = dict(job)
+            break
+    draft["composeJob"] = dict(job)
+    save_draft(draft_id, draft)
 
 
 def get_compose_job(draft_id: str, job_id: str) -> dict[str, Any] | None:
@@ -260,9 +282,12 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
         "workspace_id": workspace_id,
         "include_sound": include_sound,
         "preflight": preflight,
+        "timeline": [dict(clip) for clip, _source in prepared],
+        "sound": dict(_sound_node(draft, workspace_id)),
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)
+    _persist_workspace_job(draft_id, job)
 
     def worker() -> None:
         output_dir = draft_directory(draft_id) / "compositions" / job_id
@@ -339,6 +364,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
             job.update({"status": "error", "updated_at": _now(), "error": str(exc)})
         with _JOB_LOCK:
             _save_job(draft_id, job)
+        _persist_workspace_job(draft_id, job)
 
     threading.Thread(target=worker, name=f"canvas-compose-{job_id}", daemon=True).start()
     return job
@@ -354,3 +380,124 @@ def compose_output_path(draft_id: str, job_id: str) -> Path | None:
         if path.exists() and path.is_file():
             return path
     return None
+
+
+def _iter_compose_jobs() -> list[tuple[str, dict[str, Any]]]:
+    root = draft_directory("_").parent
+    if not root.is_dir():
+        return []
+    jobs: list[tuple[str, dict[str, Any]]] = []
+    for path in root.glob("*/compose-*.json"):
+        job_id = path.stem.removeprefix("compose-")
+        if not re.fullmatch(_JOB_ID_RE, job_id):
+            continue
+        try:
+            with _JOB_LOCK:
+                with path.open("r", encoding="utf-8") as stream:
+                    job = json.load(stream)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(job, dict):
+            jobs.append((path.parent.name, job))
+    return jobs
+
+
+def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
+    temporary_paths: list[str] = []
+    try:
+        draft = load_draft(draft_id)
+        if draft is None:
+            raise ValueError("草稿不存在，无法恢复合成任务")
+        workspace_id = job.get("workspace_id")
+        timeline = job.get("timeline")
+        if not isinstance(timeline, list):
+            workspace = next((item for item in draft.get("composeWorkspaces", []) if item.get("id") == workspace_id), None)
+            timeline = (workspace or {}).get("clips") if workspace is not None else draft.get("timeline") or []
+        prepared = _prepare_sources(draft_id, timeline)
+        output_dir = draft_directory(draft_id) / "compositions" / str(job["job_id"])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / ("canvas_final.mp4" if job.get("include_sound") else "canvas_composed.mp4")
+        if output_path.is_file():
+            job.update({"status": "done", "updated_at": _now(), "output_url": f"/api/canvas/drafts/{draft_id}/compose/{job['job_id']}/file"})
+            with _JOB_LOCK:
+                _save_job(draft_id, job)
+            _persist_workspace_job(draft_id, job)
+            return
+        _update_job(draft_id, job, status="running", stage="恢复成片合成任务")
+        from pipeline.video_render import concat_clips, trim_clip
+
+        trimmed_paths: list[str] = []
+        for index, (clip, source) in enumerate(prepared):
+            start, end = _clip_trim_range(clip)
+            duration = max(0.1, min(end - start, 60.0))
+            trimmed_path = output_dir / f"segment_{index:03d}.mp4"
+            trim_clip(str(source), str(trimmed_path), start=start, duration=duration)
+            trimmed_paths.append(str(trimmed_path))
+            temporary_paths.append(str(trimmed_path))
+
+        sound = job.get("sound") if isinstance(job.get("sound"), dict) else _sound_node(draft, workspace_id)
+        voice_timings: dict[str, tuple[float, float]] = {}
+        if not job.get("include_sound"):
+            concat_clips(trimmed_paths, str(output_path), subtitles=[], brand_info=None)
+        else:
+            from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
+
+            video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
+            bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
+            audio_path = output_dir / "mixed_audio.m4a"
+            bgm_file = _uploaded_audio_path(draft_id, sound.get("bgmUrl"))
+            voice_segments = []
+            for voice_index, item in enumerate(_voice_items(sound)):
+                if item["voice"] in {"", "none", "无"} and not item.get("voice_id"):
+                    continue
+                segment_path = output_dir / f"voice_{voice_index:03d}.mp3"
+                generated = generate_tts(item["text"], str(segment_path), voice=item.get("voice_id") or item["voice"], model=item.get("model") or None)
+                if not generated:
+                    raise RuntimeError("TTS 人声生成失败，请检查 API Key 和音色配置")
+                actual_duration = get_audio_duration(generated)
+                if actual_duration <= 0:
+                    raise RuntimeError("无法读取 TTS 音频时长，请确认 ffprobe 可用")
+                temporary_paths.append(str(segment_path))
+                effective_end = min(video_duration, item["start"] + actual_duration)
+                voice_segments.append((generated, item["start"], effective_end, item["volume"]))
+                if item.get("id"):
+                    voice_timings[item["id"]] = (item["start"], effective_end)
+            concat_clips(trimmed_paths, str(output_path), subtitles=_overlay_items(sound, voice_timings), brand_info=None)
+            if voice_segments or (bgm_file and bgm_file.exists() and bgm_volume > 0):
+                mix_voice_segments(voice_segments, str(bgm_file) if bgm_file and bgm_file.exists() and bgm_volume > 0 else None, str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)
+                temporary_paths.append(str(audio_path))
+                merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), video_duration=video_duration)
+                output_path.unlink(missing_ok=True)
+                output_path.with_suffix(".with-audio.mp4").replace(output_path)
+
+        for path in temporary_paths:
+            Path(path).unlink(missing_ok=True)
+        job.update({
+            "status": "done",
+            "updated_at": _now(),
+            "output_url": f"/api/canvas/drafts/{draft_id}/compose/{job['job_id']}/file",
+            "voice_timings": {voice_id: {"startSeconds": round(start, 3), "endSeconds": round(end, 3)} for voice_id, (start, end) in voice_timings.items()},
+        })
+    except Exception as exc:
+        for path in temporary_paths:
+            Path(path).unlink(missing_ok=True)
+        job.update({"status": "error", "updated_at": _now(), "error": str(exc)})
+    with _JOB_LOCK:
+        _save_job(draft_id, job)
+    _persist_workspace_job(draft_id, job)
+
+
+def recover_compose_jobs() -> int:
+    """Resume queued/running composition jobs once per backend process."""
+    scheduled = 0
+    for draft_id, job in _iter_compose_jobs():
+        if job.get("status") not in {"queued", "running"}:
+            continue
+        key = f"{draft_id}:{job.get('job_id')}"
+        with _RECOVERY_LOCK:
+            if key in _RECOVERED_JOB_KEYS:
+                continue
+            _RECOVERED_JOB_KEYS.add(key)
+        threading.Thread(target=_recover_compose_job, args=(draft_id, job), name=f"canvas-compose-recover-{job.get('job_id')}", daemon=True).start()
+        scheduled += 1
+    return scheduled

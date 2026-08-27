@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from io import BytesIO
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -96,3 +97,34 @@ def test_image_processing_composites_and_persists_result(monkeypatch, tmp_path):
     assert result.status_code == 200
     with Image.open(BytesIO(result.content)) as image:
         assert image.size == (1080, 1920)
+
+
+def test_startup_recovery_finishes_persisted_image_job(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    monkeypatch.setattr(canvas_image_processing, "_goods_matting", lambda source, destination, _draft_id: destination.write_bytes(Path(source).read_bytes()))
+    source = canvas_state.draft_directory("default") / "files" / "source.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(_png_bytes((40, 120, 200, 255)))
+    canvas_state.save_draft(
+        "default",
+        {
+            "nodes": [
+                {"id": "assets", "data": {"kind": "input", "imagePreview": "/api/canvas/drafts/default/files/source.png", "dishName": "Recovery dish"}},
+                {"id": "image_process", "data": {"kind": "image_process"}},
+            ],
+            "edges": [{"source": "assets", "target": "image_process"}],
+            "timeline": [],
+        },
+    )
+    job = {"job_id": "d" * 32, "node_id": "image_process", "status": "running"}
+    canvas_image_processing._save_job("default", job)
+
+    assert canvas_image_processing.recover_image_processing_jobs() == 1
+    for _ in range(40):
+        current = canvas_image_processing.get_image_processing_job("default", job["job_id"])
+        if current and current["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+
+    assert current["status"] == "done", current.get("error")
+    assert canvas_state.load_draft("default")["nodes"][1]["data"]["status"] == "已处理"

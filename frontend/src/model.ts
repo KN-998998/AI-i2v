@@ -88,6 +88,8 @@ export type WorkflowData = {
   dishName?: string;
   foodType?: string;
   dishCategory?: DishCategory;
+  sourceLibraryCategory?: string;
+  sourceLibraryPath?: string;
   assetMode?: string;
   imageName?: string;
   imagePreview?: string;

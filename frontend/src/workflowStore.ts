@@ -2,7 +2,8 @@ import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type E
 import { create } from "zustand";
 import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
-import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
+import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing, type AssetLibraryPlanItem } from "./api";
+import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
 
 type WorkflowState = {
   nodes: WorkflowNode[];
@@ -40,6 +41,8 @@ type WorkflowState = {
   generateNode: (nodeId: string) => Promise<GenerationJob>;
   processImageNode: (nodeId: string) => Promise<ImageProcessingJob>;
   addNode: (kind: NodeKind) => void;
+  createBatchWorkflows: (items: AssetLibraryPlanItem[]) => string[];
+  runBatchGeneration: (generatorIds: string[]) => Promise<void>;
   deleteNode: (nodeId: string) => void;
   duplicateNode: (nodeId: string) => void;
   deleteSelected: () => void;
@@ -347,6 +350,58 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       revision: state.revision + 1,
     };
   }),
+  createBatchWorkflows: items => {
+    const createdIds: string[] = [];
+    set(state => {
+      const nodes = [...state.nodes];
+      const edges = [...state.edges];
+      let nextNodeNumber = state.nextNodeNumber;
+      items.forEach((item, index) => {
+        const base = nextNodeNumber;
+        nextNodeNumber += 4;
+        const y = 520 + index * 250;
+        const inputId = `node_input_${base}`;
+        const processId = `node_image_process_${base + 1}`;
+        const promptId = `node_prompt_${base + 2}`;
+        const generatorId = `node_generator_${base + 3}`;
+        const cold = item.foodType === "冷食";
+        const promptConfig = {
+          ...DEFAULT_PROMPT_CONFIG,
+          elements: [cold ? "dish_cold" : "dish_hot", "tableware", "surface", "backdrop"],
+          l1_subject: cold ? "dish_cold" : "dish_hot",
+          l2_dynamics: [{ type: "specular", target: "菜品" }],
+        } as typeof DEFAULT_PROMPT_CONFIG;
+        const input = createWorkflowNode("input", inputId, { x: 24, y });
+        input.data = { ...input.data, title: item.dishName, dishName: item.dishName, sourceLibraryCategory: item.sourceCategory, sourceLibraryPath: item.sourcePath, dishCategory: item.dishCategory as typeof input.data.dishCategory, foodType: item.foodType, imageName: item.imageName, imagePreview: item.imagePreview, status: "已就绪" };
+        const process = createWorkflowNode("image_process", processId, { x: 286, y });
+        process.data = { ...process.data, backgroundTemplateId: item.background.id, backgroundTemplateName: item.background.name, backgroundPreview: item.background.url, status: "待处理" };
+        const prompt = createWorkflowNode("prompt", promptId, { x: 548, y });
+        prompt.data = { ...prompt.data, title: `${item.dishName} 提示词`, promptConfig, ...promptLegacyPatch(promptConfig) };
+        const generator = createWorkflowNode("generator", generatorId, { x: 810, y });
+        generator.data = { ...generator.data, title: `${item.dishName} 视频片段`, status: "待生成", duration: "3s", resolution: "1080p" };
+        nodes.push(input, process, prompt, generator);
+        edges.push(
+          { id: `${inputId}-${processId}`, source: inputId, target: processId, type: "smoothstep" },
+          { id: `${processId}-${promptId}`, source: processId, target: promptId, type: "smoothstep" },
+          { id: `${promptId}-${generatorId}`, source: promptId, target: generatorId, type: "smoothstep" },
+          { id: `${generatorId}-output`, source: generatorId, target: "output", type: "smoothstep" },
+        );
+        createdIds.push(generatorId);
+      });
+      return { nodes, edges, nextNodeNumber, selectedNodeId: createdIds.at(-1) ?? state.selectedNodeId, selectedEdgeId: null, revision: state.revision + 1 };
+    });
+    return createdIds;
+  },
+  runBatchGeneration: async generatorIds => {
+    for (const generatorId of generatorIds) {
+      const state = get();
+      const promptEdge = state.edges.find(edge => edge.target === generatorId);
+      const processEdge = promptEdge && state.edges.find(edge => edge.target === promptEdge.source);
+      if (!processEdge) throw new Error(`生成节点 ${generatorId} 缺少图片处理节点连接`);
+      await get().processImageNode(processEdge.source);
+      await get().generateNode(generatorId);
+    }
+  },
   deleteNode: nodeId => set(state => {
     if (protectedNodeIds.has(nodeId)) return {};
     const next = removeNodeAndEdges(state.nodes, state.edges, nodeId);

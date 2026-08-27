@@ -78,6 +78,35 @@ export async function uploadBackgroundTemplate(file: File): Promise<BackgroundTe
   return parseResponse<BackgroundTemplate>(response);
 }
 
+export type AssetLibraryPlanItem = {
+  dishName: string;
+  sourceCategory: string;
+  dishCategory: string;
+  foodType: string;
+  imageName: string;
+  imagePreview: string;
+  sourcePath: string;
+  storedName: string;
+  background: BackgroundTemplate;
+};
+
+export type AssetLibraryPlan = {
+  assetRoot: string;
+  backgroundRoot: string;
+  selected: AssetLibraryPlanItem[];
+  warnings: string[];
+  categoryCounts: Record<string, number>;
+};
+
+export async function createAssetLibraryPlan(draftId: string, assetRoot: string, backgroundRoot: string, categoryCounts: Record<string, number>): Promise<AssetLibraryPlan> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/plan?draft_id=${encodeURIComponent(draftId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ asset_root: assetRoot, background_root: backgroundRoot, category_counts: categoryCounts }),
+  });
+  return parseResponse<AssetLibraryPlan>(response);
+}
+
 export async function startCanvasImageProcessing(draftId: string, nodeId: string): Promise<ImageProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/image-processing`, {
     method: "POST",
