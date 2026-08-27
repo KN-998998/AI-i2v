@@ -50,6 +50,22 @@ export type VoiceItem = {
   volume?: number;
 };
 
+export type SoundConfig = {
+  voiceText?: string;
+  voiceName?: string;
+  voiceVolume?: string;
+  voiceItems?: VoiceItem[];
+  overlayMain?: string;
+  overlayCta?: string;
+  overlayPosition?: string;
+  overlayStart?: string;
+  overlayEnd?: string;
+  overlayItems?: OverlayItem[];
+  bgmName: string;
+  bgmUrl: string;
+  bgmVolume?: string;
+};
+
 export type CaptionSegment = {
   id: string;
   overlay: OverlayItem;
@@ -125,6 +141,26 @@ export type WorkflowData = {
   bgmVolume?: string;
 };
 
+export function soundConfigFromData(
+  data: Pick<WorkflowData, "voiceText" | "voiceName" | "voiceVolume" | "voiceItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd" | "overlayItems" | "bgmVolume">,
+  bgmName = "",
+  bgmUrl = "",
+): SoundConfig {
+  const config: SoundConfig = { bgmName, bgmUrl };
+  if (data.voiceText !== undefined) config.voiceText = data.voiceText;
+  if (data.voiceName !== undefined) config.voiceName = data.voiceName;
+  if (data.voiceVolume !== undefined) config.voiceVolume = data.voiceVolume;
+  if (data.voiceItems !== undefined) config.voiceItems = data.voiceItems.map(item => ({ ...item }));
+  if (data.overlayMain !== undefined) config.overlayMain = data.overlayMain;
+  if (data.overlayCta !== undefined) config.overlayCta = data.overlayCta;
+  if (data.overlayPosition !== undefined) config.overlayPosition = data.overlayPosition;
+  if (data.overlayStart !== undefined) config.overlayStart = data.overlayStart;
+  if (data.overlayEnd !== undefined) config.overlayEnd = data.overlayEnd;
+  if (data.overlayItems !== undefined) config.overlayItems = data.overlayItems.map(item => ({ ...item, style: item.style ? { ...item.style } : undefined }));
+  if (data.bgmVolume !== undefined) config.bgmVolume = data.bgmVolume;
+  return config;
+}
+
 export type DraftPayload = {
   activePanel: string;
   nextNodeNumber: number;
@@ -135,6 +171,7 @@ export type DraftPayload = {
   composeBatchCount?: number;
   composeClipCount?: number;
   composeWorkspaces?: ComposeWorkspace[];
+  activeComposeWorkspaceId?: string | null;
   bgmName: string;
   bgmUrl: string;
   composeJob?: ComposeJob | null;
@@ -148,6 +185,7 @@ export type ComposeJob = {
   output_url: string | null;
   error: string | null;
   workspace_id?: string;
+  include_sound?: boolean;
   voice_timings?: Record<string, CaptionTiming>;
 };
 
@@ -155,7 +193,12 @@ export type ComposeWorkspace = {
   id: string;
   title: string;
   clips: TimelineClip[];
+  /** The silent assembly generated in step 5. */
   job: ComposeJob | null;
+  /** The sound-and-caption render generated for this specific workspace. */
+  finalJob?: ComposeJob | null;
+  /** Sound, captions, and BGM are configured independently per composition. */
+  soundConfig?: SoundConfig;
 };
 
 export type WorkflowNode = Node<WorkflowData, "workflow">;

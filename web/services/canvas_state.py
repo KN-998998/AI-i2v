@@ -71,6 +71,7 @@ def save_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         "composeBatchCount": payload.get("composeBatchCount", 1),
         "composeClipCount": payload.get("composeClipCount", len(payload["timeline"])),
         "composeWorkspaces": payload.get("composeWorkspaces", [{"id": "compose_1", "title": "成片 1", "clips": payload["timeline"], "job": payload.get("composeJob")}]),
+        "activeComposeWorkspaceId": payload.get("activeComposeWorkspaceId"),
         "bgmName": payload.get("bgmName", "默认 BGM"),
         "bgmUrl": payload.get("bgmUrl", ""),
         "composeJob": payload.get("composeJob"),

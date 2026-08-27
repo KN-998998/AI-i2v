@@ -119,15 +119,18 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const activePanel = useWorkflowStore(state => state.activePanel);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
-  const bgmName = useWorkflowStore(state => state.bgmName);
-  const bgmUrl = useWorkflowStore(state => state.bgmUrl);
+  const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(item => item.id === state.activeComposeWorkspaceId));
+  const legacyBgmName = useWorkflowStore(state => state.bgmName);
+  const legacyBgmUrl = useWorkflowStore(state => state.bgmUrl);
+  const bgmName = activeWorkspace?.soundConfig?.bgmName ?? legacyBgmName;
+  const bgmUrl = activeWorkspace?.soundConfig?.bgmUrl ?? legacyBgmUrl;
   const draftId = useWorkflowStore(state => state.draftId);
   const setBgm = useWorkflowStore(state => state.setBgm);
   const [ttsOptions, setTtsOptions] = useState<TTSVoiceOption[]>([]);
   useEffect(() => {
     fetchTTSOptions().then(result => setTtsOptions(result.voices)).catch(() => setTtsOptions([]));
   }, []);
-  const data = node.data;
+  const data = node.data.kind === "sound" ? { ...node.data, ...(activeWorkspace?.soundConfig ?? {}) } : node.data;
   const captionSegments = captionSegmentsFromData(data);
   const overlayItems = captionSegments.map(segment => segment.overlay);
   const voiceItems = captionSegments.map(segment => segment.voice);

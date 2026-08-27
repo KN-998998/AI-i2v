@@ -96,7 +96,11 @@ def _prepare_sources(draft_id: str, timeline: list[dict[str, Any]]) -> list[tupl
     return prepared
 
 
-def _sound_node(draft: dict[str, Any]) -> dict[str, Any]:
+def _sound_node(draft: dict[str, Any], workspace_id: str | None = None) -> dict[str, Any]:
+    if workspace_id:
+        workspace = next((item for item in draft.get("composeWorkspaces", []) if item.get("id") == workspace_id), None)
+        if isinstance(workspace, dict) and isinstance(workspace.get("soundConfig"), dict):
+            return workspace["soundConfig"]
     for node in draft.get("nodes", []):
         data = node.get("data", {}) if isinstance(node, dict) else {}
         if data.get("kind") == "sound":
@@ -199,11 +203,11 @@ def _pair_caption_tracks(sound: dict[str, Any]) -> None:
         overlay["endSeconds"] = voice.get("endSeconds", overlay.get("endSeconds", 2.5))
 
 
-def _sync_caption_timings(draft: dict[str, Any], voice_timings: dict[str, tuple[float, float]]) -> None:
+def _sync_caption_timings(draft: dict[str, Any], voice_timings: dict[str, tuple[float, float]], workspace_id: str | None = None) -> None:
     """Persist actual TTS ranges to their paired voice and overlay tracks."""
     if not voice_timings:
         return
-    sound = _sound_node(draft)
+    sound = _sound_node(draft, workspace_id)
     _pair_caption_tracks(sound)
     voices = sound.get("voiceItems")
     overlays = sound.get("overlayItems")
@@ -276,7 +280,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                 temporary_paths.append(str(trimmed_path))
 
             output_path = output_dir / ("canvas_final.mp4" if include_sound else "canvas_composed.mp4")
-            sound = _sound_node(draft)
+            sound = _sound_node(draft, workspace_id)
             _pair_caption_tracks(sound)
             voice_timings: dict[str, tuple[float, float]] = {}
             if not include_sound:
@@ -287,7 +291,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                 video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
                 bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
                 audio_path = output_dir / "mixed_audio.m4a"
-                bgm_file = _uploaded_audio_path(draft_id, draft.get("bgmUrl"))
+                bgm_file = _uploaded_audio_path(draft_id, sound.get("bgmUrl"))
                 voice_segments = []
                 for voice_index, item in enumerate(_voice_items(sound)):
                     if item["voice"] in {"", "none", "无"} and not item.get("voice_id"):
@@ -315,7 +319,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                 if voice_timings:
                     latest_draft = load_draft(draft_id)
                     if latest_draft is not None:
-                        _sync_caption_timings(latest_draft, voice_timings)
+                        _sync_caption_timings(latest_draft, voice_timings, workspace_id)
                         save_draft(draft_id, latest_draft)
             for path in temporary_paths:
                 Path(path).unlink(missing_ok=True)

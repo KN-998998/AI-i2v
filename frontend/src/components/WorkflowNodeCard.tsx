@@ -11,13 +11,15 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const generateNode = useWorkflowStore(state => state.generateNode);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
-  const bgmName = useWorkflowStore(state => state.bgmName);
+  const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
+  const legacyBgmName = useWorkflowStore(state => state.bgmName);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const kind = data.kind;
   const promptResult = kind === "prompt" ? assemblePrompt(promptConfigFromData(data)) : null;
   const promptConfig = kind === "prompt" ? promptConfigFromData(data) : null;
   const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
+  const soundConfig = activeWorkspace?.soundConfig;
 
   const action = (nextPanel?: Panel) => {
     setSelection(id);
@@ -72,8 +74,8 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <Footer><ActionButton primary onClick={() => { setSelection(id); navigate("/workflow/compose"); }}>进入合成</ActionButton></Footer>
     </>,
     sound: <>
-      <Row label="BGM" value={bgmName} />
-      <Row label="人声 / 文字" value={`${formatNodeValue(data.voiceName, "edge-tts")} / ${formatNodeValue(data.overlayMain, "CTA")}`} />
+      <Row label="BGM" value={soundConfig?.bgmName ?? legacyBgmName ?? "未上传"} />
+      <Row label="人声 / 文字" value={`${formatNodeValue(soundConfig?.voiceName ?? data.voiceName, "无")} / ${formatNodeValue(soundConfig?.overlayMain ?? data.overlayMain, "未设置")}`} />
       <Footer><ActionButton onClick={() => action("voice")}>编辑声音</ActionButton><ActionButton onClick={() => action("overlay")}>编辑文字</ActionButton></Footer>
     </>,
     custom: <><Row label="类型" value={data.title} /><Row label="状态" value="草稿" /><p className="node-description">{data.description}</p><Footer><ActionButton onClick={() => action()}>编辑属性</ActionButton></Footer></>,

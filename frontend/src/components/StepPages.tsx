@@ -47,7 +47,9 @@ function resolveStepNodeId(kind: ManagedNodeKind | null, nodes: WorkflowNode[], 
 function LegacyNodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (message: string) => void }) {
   const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === kind);
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
-  const bgmName = useWorkflowStore(state => state.bgmName);
+  const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
+  const legacyBgmName = useWorkflowStore(state => state.bgmName);
+  const bgmName = activeWorkspace?.soundConfig?.bgmName ?? legacyBgmName;
   const setSelection = useWorkflowStore(state => state.setSelection);
   const addNode = useWorkflowStore(state => state.addNode);
   const deleteNode = useWorkflowStore(state => state.deleteNode);
@@ -154,10 +156,15 @@ function StepNext({ route }: { route: WorkflowRoute }) {
 }
 
 function SoundTextPreview() {
-  const timeline = useWorkflowStore(state => state.timeline);
+  const workspaces = useWorkflowStore(state => state.composeWorkspaces);
+  const activeWorkspaceId = useWorkflowStore(state => state.activeComposeWorkspaceId);
+  const setActiveWorkspace = useWorkflowStore(state => state.setActiveComposeWorkspace);
+  const timeline = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId)?.clips ?? state.timeline);
   const soundNode = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound"));
-  const sound = soundNode?.data;
-  const bgmName = useWorkflowStore(state => state.bgmName);
+  const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
+  const legacyBgmName = useWorkflowStore(state => state.bgmName);
+  const sound = soundNode ? { ...soundNode.data, ...(activeWorkspace?.soundConfig ?? {}) } : undefined;
+  const bgmName = activeWorkspace?.soundConfig?.bgmName ?? legacyBgmName;
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const captionSegments = captionSegmentsFromData(sound ?? {});
@@ -230,6 +237,10 @@ function SoundTextPreview() {
   };
 
   return <>
+    <div className="workspace-picker" role="group" aria-label="选择要配置声音与文字的成片">
+      <span className="panel-label">TARGET COMPOSITION</span>
+      <div className="workspace-picker-list">{workspaces.map(workspace => <button type="button" key={workspace.id} className={`workspace-chip ${workspace.id === activeWorkspaceId ? "active" : ""}`} onClick={() => setActiveWorkspace(workspace.id)}>{workspace.title}<small>{workspace.clips.length} 段 · {workspace.finalJob?.status === "done" ? "有声完成" : workspace.job?.status === "done" ? "无声完成" : "未合成"}</small></button>)}</div>
+    </div>
     <div className="sound-text-explainer">
       <div><span className="panel-label">TEXT OVERLAY LOGIC</span><strong>文字 1、文字 2 是同一个声音与文字节点里的多条文字轨道</strong></div>
       <p>每条文字单独设置文案、开始秒数、结束秒数和画面位置；它只会在自己的时间段出现，不会新增流程节点。拖动下方播放指针，查看它对应哪一个视频片段。</p>
@@ -241,10 +252,12 @@ function SoundTextPreview() {
 
 function SoundComposePanel({ onToast }: StepPageProps) {
   const draftId = useWorkflowStore(state => state.draftId);
-  const composeJob = useWorkflowStore(state => state.composeJob);
+  const activeWorkspaceId = useWorkflowStore(state => state.activeComposeWorkspaceId);
+  const workspace = useWorkflowStore(state => state.composeWorkspaces.find(item => item.id === state.activeComposeWorkspaceId));
+  const composeJob = workspace?.finalJob ?? null;
   const soundNode = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound"));
   const saveDraft = useWorkflowStore(state => state.saveDraft);
-  const setComposeJob = useWorkflowStore(state => state.setComposeJob);
+  const setWorkspaceJob = useWorkflowStore(state => state.setWorkspaceJob);
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const [busy, setBusy] = useState(false);
   const [preflight, setPreflight] = useState<PreflightReport | null>(null);
@@ -253,15 +266,15 @@ function SoundComposePanel({ onToast }: StepPageProps) {
     setBusy(true);
     try {
       await saveDraft();
-      const report = await runCanvasPreflight(draftId, undefined, true);
+      const report = await runCanvasPreflight(draftId, activeWorkspaceId ?? undefined, true);
       setPreflight(report);
       if (!report.ok) throw new Error(report.errors.map(item => item.message).join("；"));
-      let job = await startCanvasCompose(draftId, undefined, true);
-      setComposeJob(job);
+      let job = await startCanvasCompose(draftId, activeWorkspaceId ?? undefined, true);
+      setWorkspaceJob(activeWorkspaceId ?? "compose_1", job);
       while (job.status === "running") {
         await new Promise(resolve => window.setTimeout(resolve, 800));
         job = await getCanvasComposeStatus(draftId, job.job_id);
-        setComposeJob(job);
+        setWorkspaceJob(activeWorkspaceId ?? "compose_1", job);
       }
       if (job.status === "error") throw new Error(job.error || "合成失败");
       if (soundNode && job.voice_timings) {
@@ -276,7 +289,7 @@ function SoundComposePanel({ onToast }: StepPageProps) {
       setBusy(false);
     }
   };
-  return <section className="step-panel sound-compose-panel"><div className="panel-section-head"><div><span className="panel-label">FINAL RENDER</span><h2>应用声音与文字</h2><p className="muted">文字按各自时间段叠加到视频上方；人声和 BGM 会在这里混音并生成最终成片。</p></div><button type="button" className="btn btn-primary" disabled={busy} onClick={compose}>{busy ? "生成最终成片中..." : "生成最终有声成片"}</button></div>{preflight && <div className={`step-callout ${preflight.ok ? "" : "error-panel"}`}><strong>{preflight.ok ? "成片预检通过" : "成片预检未通过"}</strong><span>{preflight.ok ? `片段 ${preflight.summary.clipCount} 个 · 预计 ${preflight.summary.totalDurationSeconds.toFixed(1)}s · 文字 ${preflight.summary.overlayCount} 段 · 人声 ${preflight.summary.voiceCount} 段` : preflight.errors.map(item => item.message).join("；")}</span>{preflight.warnings.map(item => <small key={item.code}>提示：{item.message}</small>)}</div>}{composeJob?.status === "running" && <div className="step-callout"><strong>正在合成</strong><span>后台正在执行文字渲染、TTS 和音频混音，请稍候。</span></div>}{composeJob?.status === "error" && <div className="step-callout error-panel"><strong>上次生成失败</strong><span>{composeJob.error}</span></div>}{composeJob?.status === "done" && composeJob.output_url && <div className="compose-result"><div><strong>最终有声成片</strong><span>已应用当前人声、BGM 和多段画面文字</span></div><video controls preload="metadata" src={composeJob.output_url} /></div>}</section>;
+  return <section className="step-panel sound-compose-panel"><div className="panel-section-head"><div><span className="panel-label">FINAL RENDER</span><h2>应用声音与文字</h2><p className="muted">当前配置将应用到所选成片方案：{workspace?.title ?? "未选择方案"}。</p></div><button type="button" className="btn btn-primary" disabled={busy || workspace?.job?.status !== "done"} onClick={compose}>{busy ? "生成最终成片中..." : "生成最终有声成片"}</button></div>{workspace?.job?.status !== "done" && <div className="step-callout"><strong>请先完成无声成片</strong><span>在第 5 步合成当前方案后，才能生成最终有声成片。</span></div>}{preflight && <div className={`step-callout ${preflight.ok ? "" : "error-panel"}`}><strong>{preflight.ok ? "成片预检通过" : "成片预检未通过"}</strong><span>{preflight.ok ? `片段 ${preflight.summary.clipCount} 个 · 预计 ${preflight.summary.totalDurationSeconds.toFixed(1)}s · 文字 ${preflight.summary.overlayCount} 段 · 人声 ${preflight.summary.voiceCount} 段` : preflight.errors.map(item => item.message).join("；")}</span>{preflight.warnings.map(item => <small key={item.code}>提示：{item.message}</small>)}</div>}{composeJob?.status === "running" && <div className="step-callout"><strong>正在合成</strong><span>后台正在执行文字渲染、TTS 和音频混音，请稍候。</span></div>}{composeJob?.status === "error" && <div className="step-callout error-panel"><strong>上次生成失败</strong><span>{composeJob.error}</span></div>}{composeJob?.status === "done" && composeJob.output_url && <div className="compose-result"><div><strong>最终有声成片</strong><span>已应用当前人声、BGM 和多段画面文字</span></div><video controls preload="metadata" src={composeJob.output_url} /></div>}</section>;
 }
 
 export function GeneratorPage({ onToast }: StepPageProps) {
@@ -315,15 +328,9 @@ export function GeneratorPage({ onToast }: StepPageProps) {
 }
 
 export function OutputPage({ onToast }: StepPageProps) {
-  const composeJob = useWorkflowStore(state => state.composeJob);
-  return <StepFrame route="/workflow/output" title="成片结果" description="查看当前草稿最近一次合成结果，并继续进入声音与文字配置。" onToast={onToast}><div className="step-page-grid"><div className="step-page-main"><NodeManager kind="output" onToast={onToast} /><ComposeResult job={composeJob} /></div><Inspector onToast={onToast} /></div></StepFrame>;
-}
-
-function ComposeResult({ job }: { job: ComposeJob | null }) {
-  if (!job) return <div className="step-panel empty-panel"><span className="panel-label">OUTPUT</span><h2>尚未开始合成</h2><p>合成完成后，这里会显示视频预览，并流向声音与文字页面。</p></div>;
-  if (job.status === "running") return <div className="step-panel empty-panel"><span className="panel-label">OUTPUT</span><h2>合成中</h2><p>后台正在执行 ffmpeg，请稍候。</p></div>;
-  if (job.status === "error") return <div className="step-panel empty-panel error-panel"><span className="panel-label">OUTPUT ERROR</span><h2>合成失败</h2><p>{job.error}</p></div>;
-  return <div className="step-panel result-panel"><span className="panel-label">OUTPUT READY</span><h2>无声成片已生成</h2><video controls preload="metadata" src={job.output_url || undefined} /><button type="button" className="btn btn-primary" onClick={() => navigate("/workflow/sound")}>进入声音与文字</button></div>;
+  const workspaces = useWorkflowStore(state => state.composeWorkspaces);
+  const setActiveWorkspace = useWorkflowStore(state => state.setActiveComposeWorkspace);
+  return <StepFrame route="/workflow/output" title="成片结果" description="查看每个成片方案的无声与有声结果，并继续完成声音与文字配置。" onToast={onToast}><div className="step-page-grid"><div className="step-page-main"><NodeManager kind="output" onToast={onToast} /><div className="output-workspace-list">{workspaces.map(workspace => <section className="step-panel output-workspace" key={workspace.id}><div className="panel-section-head"><div><span className="panel-label">{workspace.id.toUpperCase()}</span><h2>{workspace.title}</h2><p className="muted">{workspace.clips.length} 个片段 · 无声：{workspace.job?.status === "done" ? "已生成" : workspace.job?.status === "error" ? "失败" : "未生成"} · 有声：{workspace.finalJob?.status === "done" ? "已生成" : workspace.finalJob?.status === "error" ? "失败" : "未生成"}</p></div><button type="button" className="btn" onClick={() => { setActiveWorkspace(workspace.id); navigate("/workflow/sound"); }}>配置声音文字</button></div>{workspace.job?.output_url && <div className="result-version"><span>无声成片</span><video controls preload="metadata" src={workspace.job.output_url} /></div>}{workspace.finalJob?.output_url && <div className="result-version"><span>最终有声成片</span><video controls preload="metadata" src={workspace.finalJob.output_url} /></div>}{!workspace.job?.output_url && !workspace.finalJob?.output_url && <p className="muted">尚未生成该方案的视频结果。</p>}</section>)}</div></div><Inspector onToast={onToast} /></div></StepFrame>;
 }
 
 function StepFrame({ route, title, description, children }: StepPageProps & { route: WorkflowRoute; title: string; description: string; children: ReactNode }) {

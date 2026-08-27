@@ -230,6 +230,8 @@ def preflight_draft(
         if not source.is_file():
             errors.append({"code": "MISSING_CLIP", "message": f"第 {index} 个片段没有关联本地视频文件"})
             continue
+        if clip.get("trimConfirmed") is not True:
+            errors.append({"code": "TRIM_NOT_CONFIRMED", "message": f"第 {index} 个片段尚未确认裁剪区间，请先在第 5 步点击“确定所选片段”"})
         quality = analyze_video(source, str(clip.get("dish") or ""), str(clip.get("dishCategory") or ""))
         if quality.get("qualityLabel") == "reject":
             warnings.append({"code": "LOW_CLIP_QUALITY", "message": f"片段“{clip.get('dish') or clip.get('id')}”技术质量评分较低"})
@@ -237,7 +239,8 @@ def preflight_draft(
     if total < FINAL_DURATION_RANGE[0] or total > FINAL_DURATION_RANGE[1]:
         warnings.append({"code": "DURATION_RANGE", "message": f"当前成片预计 {total:.1f}s，建议控制在 {FINAL_DURATION_RANGE[0]}-{FINAL_DURATION_RANGE[1]}s"})
 
-    sound = next((node.get("data", {}) for node in draft.get("nodes", []) if node.get("data", {}).get("kind") == "sound"), {})
+    workspace_sound = (workspace or {}).get("soundConfig") if workspace is not None else None
+    sound = workspace_sound if isinstance(workspace_sound, dict) else next((node.get("data", {}) for node in draft.get("nodes", []) if node.get("data", {}).get("kind") == "sound"), {})
     if not include_sound:
         sound = {}
     overlays = _timeline_items(sound, "overlayItems", [])
@@ -275,7 +278,7 @@ def preflight_draft(
         if str(item.get("id") or "") not in overlay_voice_ids:
             warnings.append({"code": "UNPAIRED_VOICE", "message": f"人声轨道 {index} 没有对应画面文字，无法保证文案同步"})
 
-    bgm_url = draft.get("bgmUrl")
+    bgm_url = sound.get("bgmUrl")
     if bgm_url and _uploaded_path(draft_id, str(bgm_url)) is None:
         warnings.append({"code": "MISSING_BGM", "message": "草稿记录了 BGM，但本地音频文件不存在"})
 

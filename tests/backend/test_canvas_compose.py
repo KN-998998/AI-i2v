@@ -1,5 +1,6 @@
 from pipeline.video_render import _typewriter_prefixes
-from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sync_caption_timings
+from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sound_node, _sync_caption_timings
+from web.services import canvas_quality
 
 
 def test_typewriter_prefixes_keep_unicode_characters():
@@ -60,3 +61,27 @@ def test_old_caption_tracks_are_paired_before_rendering():
     assert sound["overlayItems"][0]["text"] == "语音文案"
     assert sound["overlayItems"][0]["startSeconds"] == 1
     assert sound["overlayItems"][0]["endSeconds"] == 4
+
+
+def test_workspace_sound_config_has_priority_over_legacy_sound_node():
+    draft = {
+        "nodes": [{"data": {"kind": "sound", "bgmName": "旧 BGM"}}],
+        "composeWorkspaces": [{"id": "compose_2", "soundConfig": {"bgmName": "方案 BGM", "bgmUrl": "/方案.mp3"}}],
+    }
+
+    assert _sound_node(draft, "compose_2")["bgmName"] == "方案 BGM"
+
+
+def test_preflight_blocks_real_clip_without_trim_confirmation(monkeypatch, tmp_path):
+    clip_path = tmp_path / "clip.mp4"
+    clip_path.write_bytes(b"video")
+    monkeypatch.setattr(canvas_quality, "analyze_video", lambda *args: {"qualityLabel": "good"})
+
+    report = canvas_quality.preflight_draft(
+        {"timeline": [{"id": "clip", "dish": "测试菜", "sourcePath": str(clip_path), "timelineDuration": 2.5}]},
+        "default",
+        include_sound=False,
+    )
+
+    assert report["ok"] is False
+    assert report["errors"][0]["code"] == "TRIM_NOT_CONFIRMED"

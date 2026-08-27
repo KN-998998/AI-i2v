@@ -61,8 +61,11 @@ def get_image_processing_job(draft_id: str, job_id: str) -> dict[str, Any] | Non
     if not path.exists():
         return None
     try:
-        with path.open("r", encoding="utf-8") as stream:
-            return json.load(stream)
+        # Coordinate reads with atomic replaces on Windows, where replacing a
+        # file that is being opened by the polling request can raise WinError 5.
+        with _JOB_LOCK:
+            with path.open("r", encoding="utf-8") as stream:
+                return json.load(stream)
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -71,11 +74,12 @@ def _node_by_id(draft: dict[str, Any], node_id: str) -> dict[str, Any] | None:
     return next((node for node in draft.get("nodes", []) if node.get("id") == node_id), None)
 
 
-def _upstream_node(draft: dict[str, Any], start_id: str, kind: str, allow_legacy_fallback: bool = True) -> dict[str, Any] | None:
-    """Find the closest upstream node of a given kind in an acyclic canvas graph."""
+def _upstream_node(draft: dict[str, Any], start_id: str, kind: str, allow_legacy_fallback: bool = False) -> dict[str, Any] | None:
+    """Resolve one connected upstream node without guessing from another branch."""
     edges = draft.get("edges", [])
     pending = [start_id]
     seen: set[str] = set()
+    matches: list[dict[str, Any]] = []
     while pending:
         target = pending.pop(0)
         if target in seen:
@@ -85,11 +89,16 @@ def _upstream_node(draft: dict[str, Any], start_id: str, kind: str, allow_legacy
         for source_id in sources:
             node = _node_by_id(draft, source_id)
             if node and node.get("data", {}).get("kind") == kind:
-                return node
+                matches.append(node)
+                continue
             pending.append(source_id)
+    if len(matches) > 1:
+        raise ValueError(f"图片处理节点 {start_id} 的上游存在多个 {kind} 节点，请保留唯一连接")
+    if matches:
+        return matches[0]
     if allow_legacy_fallback:
         return next((node for node in draft.get("nodes", []) if node.get("data", {}).get("kind") == kind), None)
-    return None
+    raise ValueError(f"图片处理节点 {start_id} 没有连接到 {kind} 节点，请先连接完整流程")
 
 
 def _draft_image(draft_id: str, url: str | None) -> Path | None:

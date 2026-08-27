@@ -66,11 +66,12 @@ def _uploaded_image(draft_id: str, url: str | None) -> Path | None:
     return uploaded_file(draft_id, Path(str(url).split("?", 1)[0]).name)
 
 
-def _upstream_data(draft: dict[str, Any], start_id: str, kind: str, allow_legacy_fallback: bool = True) -> dict[str, Any]:
-    """Return the nearest upstream node data, retaining legacy first-node fallback."""
+def _upstream_data(draft: dict[str, Any], start_id: str, kind: str, allow_legacy_fallback: bool = False) -> dict[str, Any]:
+    """Resolve one connected upstream node; normal generation never guesses a branch."""
     pending = [start_id]
     seen: set[str] = set()
     nodes = {str(item.get("id")): item for item in draft.get("nodes", [])}
+    matches: list[dict[str, Any]] = []
     while pending:
         target = pending.pop(0)
         if target in seen:
@@ -82,11 +83,16 @@ def _upstream_data(draft: dict[str, Any], start_id: str, kind: str, allow_legacy
             source_id = str(edge.get("source"))
             source = nodes.get(source_id)
             if source and source.get("data", {}).get("kind") == kind:
-                return source.get("data", {})
+                matches.append(source.get("data", {}))
+                continue
             pending.append(source_id)
+    if len(matches) > 1:
+        raise ValueError(f"生成节点 {start_id} 的上游存在多个 {kind} 节点，请保留唯一连接")
+    if matches:
+        return matches[0]
     if allow_legacy_fallback:
         return next((item.get("data", {}) for item in draft.get("nodes", []) if item.get("data", {}).get("kind") == kind), {})
-    return {}
+    raise ValueError(f"生成节点 {start_id} 没有连接到 {kind} 节点，请先连接完整流程")
 
 
 def _prompt_from_node(data: dict[str, Any]) -> tuple[str, str, bool]:

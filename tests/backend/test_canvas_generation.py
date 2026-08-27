@@ -1,6 +1,44 @@
 from web.services import canvas_generation, canvas_state
 
 
+def test_generation_upstream_requires_a_real_connection():
+    draft = {
+        "nodes": [
+            {"id": "prompt", "data": {"kind": "prompt"}},
+            {"id": "clips", "data": {"kind": "generator"}},
+        ],
+        "edges": [],
+    }
+
+    try:
+        canvas_generation._upstream_data(draft, "clips", "prompt")
+    except ValueError as error:
+        assert "没有连接" in str(error)
+    else:
+        raise AssertionError("unlinked generation node unexpectedly used a legacy fallback")
+
+
+def test_generation_upstream_rejects_multiple_connected_branches():
+    draft = {
+        "nodes": [
+            {"id": "prompt_a", "data": {"kind": "prompt", "title": "A"}},
+            {"id": "prompt_b", "data": {"kind": "prompt", "title": "B"}},
+            {"id": "clips", "data": {"kind": "generator"}},
+        ],
+        "edges": [
+            {"source": "prompt_a", "target": "clips"},
+            {"source": "prompt_b", "target": "clips"},
+        ],
+    }
+
+    try:
+        canvas_generation._upstream_data(draft, "clips", "prompt")
+    except ValueError as error:
+        assert "多个" in str(error)
+    else:
+        raise AssertionError("multiple prompt branches were silently accepted")
+
+
 def test_completed_generation_persists_clip_and_node_status(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
     draft_id = "default"

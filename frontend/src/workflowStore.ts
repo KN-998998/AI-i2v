@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 
@@ -15,6 +15,7 @@ type WorkflowState = {
   composeBatchCount: number;
   composeClipCount: number;
   composeWorkspaces: ComposeWorkspace[];
+  activeComposeWorkspaceId: string | null;
   availableClips: ClipLibraryItem[];
   clipsLoaded: boolean;
   clipsLastLoadedAt: string | null;
@@ -52,9 +53,11 @@ type WorkflowState = {
   setBgmName: (name: string) => void;
   setBgm: (name: string, url: string) => void;
   clearBgm: () => void;
+  updateWorkspaceSoundConfig: (workspaceId: string, patch: Partial<SoundConfig>) => void;
   setComposeJob: (job: ComposeJob | null) => void;
   setComposeBatchCount: (count: number) => void;
   setComposeClipCount: (count: number) => void;
+  setActiveComposeWorkspace: (workspaceId: string | null) => void;
   randomizeComposeWorkspaces: () => void;
   recommendComposeWorkspaces: () => void;
   reorderWorkspace: (workspaceId: string, sourceId: string, targetId: string) => void;
@@ -153,7 +156,11 @@ function syncGeneratorNodeStatuses(nodes: WorkflowNode[], candidateClips: Timeli
 }
 
 function syncPrimaryWorkspace(workspaces: ComposeWorkspace[], timeline: TimelineClip[]): ComposeWorkspace[] {
-  return workspaces.map((workspace, index) => index === 0 ? { ...workspace, clips: timeline, job: null } : workspace);
+  return workspaces.map((workspace, index) => index === 0 ? { ...workspace, clips: timeline, job: null, finalJob: null } : workspace);
+}
+
+function patchWorkspaceSoundConfig(workspace: ComposeWorkspace, patch: Partial<SoundConfig>, fallback: SoundConfig): ComposeWorkspace {
+  return { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), ...patch }, finalJob: null };
 }
 
 function removeNodeArtifacts(state: Pick<WorkflowState, "candidateClips" | "composeWorkspaces" | "timeline">, nodeIds: Set<string>) {
@@ -177,6 +184,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   composeBatchCount: workflowSeed.composeBatchCount,
   composeClipCount: workflowSeed.composeClipCount,
   composeWorkspaces: workflowSeed.composeWorkspaces,
+  activeComposeWorkspaceId: workflowSeed.composeWorkspaces[0]?.id ?? null,
   availableClips: [],
   clipsLoaded: false,
   clipsLastLoadedAt: null,
@@ -223,7 +231,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       && primaryInput?.id === nodeId
       && ("dishName" in patch || "dishCategory" in patch);
     if (!shouldSyncClipMetadata || !data) {
-      return { nodes: state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, ...patch } } : item), revision: state.revision + 1 };
+      const nodes = state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, ...patch } } : item);
+      if (node?.data.kind !== "sound") return { nodes, revision: state.revision + 1 };
+      const activeWorkspace = state.composeWorkspaces.find(item => item.id === state.activeComposeWorkspaceId);
+      const fallback = soundConfigFromData({ ...node.data, ...patch }, state.bgmName, state.bgmUrl);
+      const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === activeWorkspace?.id
+        ? patchWorkspaceSoundConfig(workspace, patch as Partial<SoundConfig>, fallback)
+        : workspace);
+      return { nodes, composeWorkspaces, revision: state.revision + 1 };
     }
     const dish = data.dishName || "待配置菜品";
     const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(dish) : "正餐");
@@ -394,7 +409,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       : clip;
     const composeWorkspaces = state.composeWorkspaces.map(workspace => {
       const includesClip = workspace.clips.some(clip => clip.id === clipId);
-      return includesClip ? { ...workspace, clips: workspace.clips.map(update), job: null } : workspace;
+      return includesClip ? { ...workspace, clips: workspace.clips.map(update), job: null, finalJob: null } : workspace;
     });
     return {
       candidateClips: state.candidateClips.map(update),
@@ -448,20 +463,63 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       throw error;
     }
   },
-  setBgmName: bgmName => set(state => ({ bgmName, revision: state.revision + 1 })),
-  setBgm: (bgmName, bgmUrl) => set(state => ({ bgmName, bgmUrl, revision: state.revision + 1 })),
-  clearBgm: () => set(state => ({ bgmName: "", bgmUrl: "", revision: state.revision + 1 })),
+  setBgmName: bgmName => set(state => {
+    const workspaceId = state.activeComposeWorkspaceId;
+    const soundNode = state.nodes.find(node => node.data.kind === "sound");
+    const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
+      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName }, finalJob: null }
+      : workspace);
+    return { bgmName, composeWorkspaces, revision: state.revision + 1 };
+  }),
+  setBgm: (bgmName, bgmUrl) => set(state => {
+    const workspaceId = state.activeComposeWorkspaceId;
+    const soundNode = state.nodes.find(node => node.data.kind === "sound");
+    const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
+      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName, bgmUrl }, finalJob: null }
+      : workspace);
+    return { bgmName, bgmUrl, composeWorkspaces, revision: state.revision + 1 };
+  }),
+  clearBgm: () => set(state => {
+    const workspaceId = state.activeComposeWorkspaceId;
+    const soundNode = state.nodes.find(node => node.data.kind === "sound");
+    const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
+      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName: "", bgmUrl: "" }, finalJob: null }
+      : workspace);
+    return { bgmName: "", bgmUrl: "", composeWorkspaces, revision: state.revision + 1 };
+  }),
+  updateWorkspaceSoundConfig: (workspaceId, patch) => set(state => {
+    const soundNode = state.nodes.find(node => node.data.kind === "sound");
+    const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId ? patchWorkspaceSoundConfig(workspace, patch, fallback) : workspace);
+    const mirror = workspaceId === state.activeComposeWorkspaceId ? composeWorkspaces.find(workspace => workspace.id === workspaceId)?.soundConfig : undefined;
+    return mirror ? { composeWorkspaces, bgmName: mirror.bgmName, bgmUrl: mirror.bgmUrl, revision: state.revision + 1 } : { composeWorkspaces, revision: state.revision + 1 };
+  }),
   setComposeJob: composeJob => set(state => ({ composeJob, revision: state.revision + 1 })),
   setComposeBatchCount: count => set(state => {
     const nextCount = Math.max(1, Math.min(20, Math.round(count)));
-    const workspaces = Array.from({ length: nextCount }, (_, index) => state.composeWorkspaces[index] ?? { id: `compose_${index + 1}`, title: `成片 ${index + 1}`, clips: [], job: null });
-    return { composeBatchCount: nextCount, composeWorkspaces: workspaces, revision: state.revision + 1 };
+    const soundNode = state.nodes.find(node => node.data.kind === "sound");
+    const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
+    const workspaces = Array.from({ length: nextCount }, (_, index) => state.composeWorkspaces[index] ?? { id: `compose_${index + 1}`, title: `成片 ${index + 1}`, clips: [], job: null, finalJob: null, soundConfig: fallback });
+    const activeComposeWorkspaceId = workspaces.some(workspace => workspace.id === state.activeComposeWorkspaceId) ? state.activeComposeWorkspaceId : workspaces[0]?.id ?? null;
+    return { composeBatchCount: nextCount, composeWorkspaces: workspaces, activeComposeWorkspaceId, revision: state.revision + 1 };
   }),
   setComposeClipCount: count => set(state => ({ composeClipCount: Math.max(1, Math.min(20, Math.round(count))), revision: state.revision + 1 })),
+  setActiveComposeWorkspace: activeComposeWorkspaceId => set(state => {
+    const workspace = state.composeWorkspaces.find(item => item.id === activeComposeWorkspaceId);
+    return {
+      activeComposeWorkspaceId,
+      bgmName: workspace?.soundConfig?.bgmName ?? state.bgmName,
+      bgmUrl: workspace?.soundConfig?.bgmUrl ?? state.bgmUrl,
+      revision: state.revision + 1,
+    };
+  }),
   randomizeComposeWorkspaces: () => set(state => {
     const pool = state.candidateClips.filter(clip => clip.sourcePath);
     const workspaces = state.composeWorkspaces.map(workspace => {
-      return { ...workspace, clips: randomizeClipSelection(pool, state.composeClipCount), job: null };
+      return { ...workspace, clips: randomizeClipSelection(pool, state.composeClipCount), job: null, finalJob: null };
     });
     return { composeWorkspaces: workspaces, timeline: workspaces[0]?.clips ?? [], revision: state.revision + 1 };
   }),
@@ -471,24 +529,31 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       ...workspace,
       clips: recommendClipSelection(pool, state.composeClipCount),
       job: null,
+      finalJob: null,
     }));
     return { composeWorkspaces: workspaces, timeline: workspaces[0]?.clips ?? [], revision: state.revision + 1 };
   }),
   reorderWorkspace: (workspaceId, sourceId, targetId) => set(state => {
-    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId ? { ...workspace, clips: reorderById(workspace.clips, sourceId, targetId), job: null } : workspace);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId ? { ...workspace, clips: reorderById(workspace.clips, sourceId, targetId), job: null, finalJob: null } : workspace);
     return { composeWorkspaces, timeline: composeWorkspaces[0]?.clips ?? state.timeline, revision: state.revision + 1 };
   }),
   removeWorkspaceClip: (workspaceId, clipId) => set(state => {
-    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId ? { ...workspace, clips: workspace.clips.filter(clip => clip.id !== clipId), job: null } : workspace);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId ? { ...workspace, clips: workspace.clips.filter(clip => clip.id !== clipId), job: null, finalJob: null } : workspace);
     return { composeWorkspaces, timeline: composeWorkspaces[0]?.clips ?? state.timeline, revision: state.revision + 1 };
   }),
   addWorkspaceClip: (workspaceId, clipId) => set(state => {
     const clip = state.candidateClips.find(item => item.id === clipId);
     if (!clip) return {};
-    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId && !workspace.clips.some(item => item.id === clipId) ? { ...workspace, clips: [...workspace.clips, clip], job: null } : workspace);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId && !workspace.clips.some(item => item.id === clipId) ? { ...workspace, clips: [...workspace.clips, clip], job: null, finalJob: null } : workspace);
     return { composeWorkspaces, timeline: composeWorkspaces[0]?.clips ?? state.timeline, revision: state.revision + 1 };
   }),
-  setWorkspaceJob: (workspaceId, job) => set(state => ({ composeWorkspaces: state.composeWorkspaces.map(workspace => workspace.id === workspaceId ? { ...workspace, job } : workspace), revision: state.revision + 1 })),
+  setWorkspaceJob: (workspaceId, job) => set(state => ({
+    composeWorkspaces: state.composeWorkspaces.map(workspace => workspace.id === workspaceId
+      ? { ...workspace, ...(job?.include_sound ? { finalJob: job } : { job }) }
+      : workspace),
+    composeJob: job,
+    revision: state.revision + 1,
+  })),
   loadDraft: async () => {
     const state = get();
     if (state.hydrated) return;
@@ -511,8 +576,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       candidateClips: normalizedCandidates,
       composeBatchCount: draft.composeBatchCount ?? 1,
       composeClipCount: draft.composeClipCount ?? draft.timeline.length,
-      composeWorkspaces: (draft.composeWorkspaces ?? [{ id: "compose_1", title: "成片 1", clips: draft.timeline, job: draft.composeJob ?? null }]).map(workspace => ({ ...workspace, clips: workspace.clips.map(normalizeTimelineClip) })),
-      bgmName: draft.bgmName,
+       composeWorkspaces: (draft.composeWorkspaces ?? [{ id: "compose_1", title: "成片 1", clips: draft.timeline, job: draft.composeJob ?? null }]).map(workspace => ({ ...workspace, clips: workspace.clips.map(normalizeTimelineClip), finalJob: workspace.finalJob ?? null, soundConfig: workspace.soundConfig ?? soundConfigFromData(normalizedNodes.find(node => node.data.kind === "sound")?.data ?? {}, draft.bgmName ?? "", draft.bgmUrl ?? "") })),
+      activeComposeWorkspaceId: draft.activeComposeWorkspaceId ?? draft.composeWorkspaces?.[0]?.id ?? "compose_1",
+       bgmName: draft.bgmName ?? "",
       bgmUrl: draft.bgmUrl ?? "",
       composeJob: draft.composeJob ?? null,
       activePanel: draft.activePanel as Panel,
@@ -536,6 +602,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         composeBatchCount: state.composeBatchCount,
         composeClipCount: state.composeClipCount,
         composeWorkspaces: state.composeWorkspaces,
+        activeComposeWorkspaceId: state.activeComposeWorkspaceId,
         bgmName: state.bgmName,
         bgmUrl: state.bgmUrl,
         composeJob: state.composeJob,
