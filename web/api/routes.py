@@ -289,6 +289,26 @@ def create_asset_library_plan(draft_id: str, payload: dict[str, Any] | None = No
         raise _json_error(str(exc), 400) from exc
 
 
+@router.post("/api/canvas/asset-library/pick-folder")
+def pick_asset_library_folder(payload: dict[str, Any] | None = None) -> dict[str, str]:
+    """Open a local folder picker for the desktop-only local workflow."""
+    title = str((payload or {}).get("title") or "选择素材库文件夹")
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        try:
+            selected = filedialog.askdirectory(title=title, mustexist=True)
+        finally:
+            root.destroy()
+    except Exception as exc:
+        raise _json_error("本机文件夹选择器不可用，请手动填写路径", 400) from exc
+    return {"path": str(selected or "")}
+
+
 @router.post("/api/canvas/backgrounds")
 async def upload_canvas_background(file: UploadFile = File(...)) -> dict[str, Any]:
     try:

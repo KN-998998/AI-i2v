@@ -127,4 +127,5 @@ def test_startup_recovery_finishes_persisted_image_job(monkeypatch, tmp_path):
         time.sleep(0.05)
 
     assert current["status"] == "done", current.get("error")
-    assert canvas_state.load_draft("default")["nodes"][1]["data"]["status"] == "已处理"
+    persisted_data = canvas_state.load_draft("default")["nodes"][1]["data"]
+    assert persisted_data.get("processedImagePreview")

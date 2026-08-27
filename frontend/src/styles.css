@@ -406,6 +406,7 @@ h1 { margin-top: 3px; font-size: 18px; }
 .toast { position: fixed; right: 20px; bottom: 20px; z-index: 50; padding: 10px 13px; border: 1px solid var(--cyan); border-radius: 5px; color: #f2f4f5; background: #17282a; box-shadow: var(--shadow); font-size: 11px; }
 .asset-library-batch-panel { border-color: rgba(114,185,178,.42); }
 .asset-library-paths { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.asset-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .asset-category-grid { display: grid; grid-template-columns: repeat(6, minmax(72px, 1fr)); gap: 8px; margin-top: 12px; }
 .asset-library-plan { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .asset-plan-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
@@ -468,4 +469,5 @@ h1 { margin-top: 3px; font-size: 18px; }
   .image-process-grid { grid-template-columns: 1fr; }
   .background-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .asset-library-paths, .asset-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .asset-path-control { grid-template-columns: 1fr; }
 }

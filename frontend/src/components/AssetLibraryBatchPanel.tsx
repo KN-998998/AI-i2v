@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { createAssetLibraryPlan, type AssetLibraryPlan } from "../api";
+import { createAssetLibraryPlan, pickAssetLibraryFolder, type AssetLibraryPlan } from "../api";
 import { useWorkflowStore } from "../workflowStore";
 
-const CATEGORIES = ["寿司", "刺身", "甜品", "主食", "水果", "其他"] as const;
+const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
 
 export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string) => void }) {
   const draftId = useWorkflowStore(state => state.draftId);
@@ -15,8 +15,24 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const [plan, setPlan] = useState<AssetLibraryPlan | null>(null);
   const [createdGeneratorIds, setCreatedGeneratorIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
 
   const updateCount = (category: string, value: number) => setCounts(current => ({ ...current, [category]: Math.max(0, Math.min(50, Number.isFinite(value) ? Math.round(value) : 0)) }));
+
+  const chooseFolder = async (kind: "asset" | "background") => {
+    setFolderBusy(kind);
+    try {
+      const path = await pickAssetLibraryFolder(kind === "asset" ? "选择菜品素材库文件夹" : "选择背景素材库文件夹");
+      if (path) {
+        if (kind === "asset") setAssetRoot(path);
+        else setBackgroundRoot(path);
+      }
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "文件夹选择失败");
+    } finally {
+      setFolderBusy(null);
+    }
+  };
 
   const buildPlan = async () => {
     if (!assetRoot.trim() || !backgroundRoot.trim()) return onToast("请填写菜品素材库和背景素材库路径");
@@ -57,7 +73,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
 
   return <section className="step-panel asset-library-batch-panel">
     <div className="panel-section-head"><div><span className="panel-label">ASSET LIBRARY AUTOMATION</span><h2>素材库批量建稿</h2><p className="muted">按“菜品文件夹名”识别菜品，随机抽图和背景，先生成待确认流程，再决定是否调用抠图与 Kling。</p></div></div>
-    <div className="field-grid asset-library-paths"><label className="field"><span>菜品素材库路径</span><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="例如：F:\\...\\鮨政exp" /></label><label className="field"><span>背景素材库路径</span><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="例如：F:\\...\\背景模板" /></label></div>
+    <div className="field-grid asset-library-paths"><label className="field"><span>菜品素材库路径</span><div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="例如：F:\\...\\鮨政exp" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("asset")}>{folderBusy === "asset" ? "选择中..." : "选择文件夹"}</button></div></label><label className="field"><span>背景素材库路径</span><div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="例如：F:\\...\\背景模板" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("background")}>{folderBusy === "background" ? "选择中..." : "选择文件夹"}</button></div></label></div>
     <div className="asset-category-grid">{CATEGORIES.map(category => <label className="field" key={category}><span>{category}数量</span><input className="input" type="number" min="0" max="50" value={counts[category]} onChange={event => updateCount(category, Number(event.target.value))} /></label>)}</div>
     <div className="compose-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void buildPlan()}>{busy ? "处理中..." : "随机抽取并生成待确认方案"}</button><button type="button" className="btn" disabled={!plan || busy} onClick={() => void applyPlan()}>应用到画布</button><button type="button" className="btn btn-danger" disabled={!createdGeneratorIds.length || busy} onClick={() => void execute()}>确认并执行抠图 + 生成</button></div>
     {plan && <div className="asset-library-plan"><strong>待确认方案：{plan.selected.length} 个</strong>{plan.warnings.map(warning => <small className="source-pending" key={warning}>{warning}</small>)}<div className="asset-plan-list">{plan.selected.map(item => <div className="asset-plan-item" key={item.storedName}><img src={item.imagePreview} alt={item.dishName} /><span><strong>{item.dishName}</strong><small>{item.sourceCategory} · {item.foodType} · 背景：{item.background.name}</small></span></div>)}</div></div>}

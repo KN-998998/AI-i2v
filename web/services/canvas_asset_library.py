@@ -10,14 +10,18 @@ from typing import Any, Mapping
 from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-ASSET_CATEGORIES = ("寿司", "刺身", "甜品", "主食", "水果", "其他")
+ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他")
 
 _CATEGORY_KEYWORDS = {
     "寿司": ("寿司", "卷寿司", "手卷", "握寿司", "军舰"),
     "刺身": ("刺身", "生鱼片"),
+    "前菜/小菜": ("前菜", "小菜", "开胃菜", "沙拉", "毛豆", "玉子烧", "玉子", "冷菜"),
+    "主菜": ("主菜", "烧鸟", "烤鱼", "牛排", "天妇罗", "炸物", "煮物", "锅物", "鳗鱼"),
+    "汤品": ("汤品", "汤", "味噌", "清汤", "浓汤"),
     "甜品": ("甜品", "甜点", "蛋糕", "布丁", "冰淇淋", "慕斯", "奶油"),
     "主食": ("主食", "米饭", "炒饭", "拉面", "乌冬", "面", "丼", "饭"),
     "水果": ("水果", "草莓", "西瓜", "芒果", "葡萄", "苹果", "柠檬"),
+    "饮品": ("饮品", "饮料", "清酒", "啤酒", "威士忌", "茶", "咖啡", "果汁"),
 }
 
 
@@ -30,9 +34,9 @@ def infer_library_category(dish_name: str) -> str:
 
 
 def infer_food_type(dish_name: str, category: str) -> str:
-    if category in {"刺身", "水果"} or any(word in dish_name for word in ("刺身", "生鱼", "冷", "沙拉")):
+    if category in {"刺身", "前菜/小菜", "甜品", "水果", "饮品"} or any(word in dish_name for word in ("刺身", "生鱼", "冷", "沙拉")):
         return "冷食"
-    if category in {"寿司", "甜品"}:
+    if category == "寿司":
         return "冷食"
     return "热食"
 

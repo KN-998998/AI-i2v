@@ -107,6 +107,16 @@ export async function createAssetLibraryPlan(draftId: string, assetRoot: string,
   return parseResponse<AssetLibraryPlan>(response);
 }
 
+export async function pickAssetLibraryFolder(title: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/pick-folder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  const payload = await parseResponse<{ path: string }>(response);
+  return payload.path;
+}
+
 export async function startCanvasImageProcessing(draftId: string, nodeId: string): Promise<ImageProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/image-processing`, {
     method: "POST",
