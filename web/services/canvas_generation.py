@@ -11,12 +11,15 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.config import CANVAS_CLIP_ROOT, KLING_ACCESS_KEY, KLING_API_KEY, KLING_SECRET_KEY, VIDEO_DURATION
+from web.services import canvas_state
 from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import analyze_video, infer_category
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _JOB_LOCK = threading.RLock()
 _MANIFEST_LOCK = threading.RLock()
+_RECOVERY_LOCK = threading.RLock()
+_RECOVERED_JOB_KEYS: set[str] = set()
 
 
 def _now() -> str:
@@ -43,8 +46,9 @@ def get_generation_job(draft_id: str, job_id: str) -> dict[str, Any] | None:
     if not path.exists():
         return None
     try:
-        with path.open("r", encoding="utf-8") as stream:
-            return json.load(stream)
+        with _JOB_LOCK:
+            with path.open("r", encoding="utf-8") as stream:
+                return json.load(stream)
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -169,6 +173,153 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
     }
 
 
+def _job_context(draft_id: str, job: dict[str, Any]) -> tuple[str, str, int, str]:
+    """Recover metadata from the job first, then the current connected graph."""
+    dish = str(job.get("dish") or "").strip()
+    category = str(job.get("dish_category") or "").strip()
+    prompt = str(job.get("prompt") or "")
+    duration_match = re.search(r"(\d+)", str(job.get("duration") or ""))
+    duration = int(duration_match.group(1)) if duration_match else VIDEO_DURATION
+
+    if not dish or not category:
+        draft = load_draft(draft_id)
+        if draft is not None:
+            related_clip = next(
+                (
+                    item
+                    for item in [*(draft.get("candidateClips") or []), *(draft.get("timeline") or [])]
+                    if isinstance(item, dict)
+                    and (
+                        item.get("generationJobId") == job.get("job_id")
+                        or item.get("generatorNodeId") == job.get("node_id")
+                    )
+                ),
+                {},
+            )
+            dish = dish or str(related_clip.get("dish") or "").strip()
+            category = category or str(related_clip.get("dishCategory") or "").strip()
+            try:
+                input_data = _upstream_data(draft, str(job.get("node_id") or ""), "input")
+            except ValueError:
+                input_data = {}
+            dish = dish or str(input_data.get("dishName") or "").strip()
+            category = category or infer_category(dish, input_data.get("dishCategory"))
+
+    if not prompt:
+        draft = load_draft(draft_id)
+        if draft is not None:
+            try:
+                prompt_data = _upstream_data(draft, str(job.get("node_id") or ""), "prompt")
+            except ValueError:
+                prompt_data = {}
+            if prompt_data:
+                prompt, _negative_prompt, _keyframe_mode = _prompt_from_node(prompt_data)
+
+    if not dish:
+        raise ValueError("恢复 Kling 任务缺少菜品信息，无法写入片段库")
+    if not category:
+        category = infer_category(dish, None)
+    if duration < 3 or duration > 15:
+        duration = VIDEO_DURATION
+    return dish, category, duration, prompt
+
+
+def _job_output_path(job: dict[str, Any], dish: str, duration: int) -> Path:
+    filename = str(job.get("output_filename") or "").strip()
+    if not filename:
+        filename = f"{_safe_name(dish)}_{_safe_name(str(job.get('node_id') or 'generator'))}_{str(job['job_id'])[:8]}_{duration}s.mp4"
+        job["output_filename"] = filename
+    if Path(filename).name != filename or Path(filename).suffix.lower() != ".mp4":
+        raise ValueError("恢复任务的输出文件名无效")
+    return CANVAS_CLIP_ROOT / filename
+
+
+def _complete_generation_job(
+    draft_id: str,
+    job: dict[str, Any],
+    video_url: str | None,
+    session: Any,
+    dish: str,
+    category: str,
+    duration: int,
+    prompt: str,
+) -> None:
+    output_path = _job_output_path(job, dish, duration)
+    if not output_path.is_file():
+        if not video_url:
+            raise RuntimeError("Kling 任务完成但未返回视频地址")
+        from pipeline.kling import download_video
+
+        download_video(session, video_url, str(output_path))
+    clip = _build_clip(job, output_path, dish, category)
+    _append_manifest({**clip, "videoTaskId": job.get("task_id"), "prompt": prompt})
+    _update_job(draft_id, job, status="done", stage="已下载到本地片段库", clip=clip, output_filename=output_path.name)
+    _persist_generated_clip(draft_id, str(job.get("node_id") or ""), clip)
+
+
+def _run_generation_job(draft_id: str, job: dict[str, Any]) -> None:
+    """Poll one persisted Kling task and finish it idempotently after restart."""
+    try:
+        from pipeline.kling import session_with_retry, wait_for_video
+
+        dish, category, duration, prompt = _job_context(draft_id, job)
+        _update_job(draft_id, job, status="running", stage="恢复 Kling 任务轮询", dish=dish, dish_category=category, duration=duration, prompt=prompt)
+        output_path = _job_output_path(job, dish, duration)
+        session = session_with_retry()
+        if output_path.is_file():
+            video_url = None
+        else:
+            video_url, info = wait_for_video(session, str(job.get("task_id") or ""))
+            if not video_url:
+                raise RuntimeError(str(info.get("error") or "Kling 生成失败"))
+        _complete_generation_job(draft_id, job, video_url, session, dish, category, duration, prompt)
+    except Exception as exc:
+        _update_job(draft_id, job, status="error", stage="恢复任务失败", error=str(exc))
+        _persist_generator_status(draft_id, str(job.get("node_id") or ""), "生成失败")
+
+
+def _iter_generation_jobs() -> list[tuple[str, dict[str, Any]]]:
+    root = canvas_state.CANVAS_DRAFT_ROOT
+    if not root.is_dir():
+        return []
+    jobs: list[tuple[str, dict[str, Any]]] = []
+    for path in root.glob("*/generate-*.json"):
+        draft_id = path.parent.name
+        job_id = path.stem.removeprefix("generate-")
+        if not _JOB_ID_RE.fullmatch(job_id):
+            continue
+        try:
+            with _JOB_LOCK:
+                with path.open("r", encoding="utf-8") as stream:
+                    job = json.load(stream)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(job, dict):
+            jobs.append((draft_id, job))
+    return jobs
+
+
+def recover_generation_jobs() -> int:
+    """Schedule unfinished Kling tasks once during each backend process lifetime."""
+    scheduled = 0
+    for draft_id, job in _iter_generation_jobs():
+        if job.get("status") not in {"queued", "running"}:
+            continue
+        job_id = str(job.get("job_id") or "")
+        key = f"{draft_id}:{job_id}"
+        with _RECOVERY_LOCK:
+            if key in _RECOVERED_JOB_KEYS:
+                continue
+            _RECOVERED_JOB_KEYS.add(key)
+        if not str(job.get("task_id") or "").strip():
+            _update_job(draft_id, job, status="error", stage="服务重启后无法恢复", error="任务尚未保存 Kling task_id，无法安全恢复，请重新生成")
+            _persist_generator_status(draft_id, str(job.get("node_id") or ""), "生成失败")
+            continue
+        threading.Thread(target=_run_generation_job, args=(draft_id, job), name=f"canvas-recover-{job_id}", daemon=True).start()
+        scheduled += 1
+    return scheduled
+
+
 def _persist_generator_status(draft_id: str, node_id: str, status: str) -> None:
     """Keep the persisted canvas node in sync when the browser is no longer open."""
     draft = load_draft(draft_id)
@@ -249,7 +400,11 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
     if duration < 3 or duration > 15:
         raise ValueError("Kling 生成时长必须在 3-15 秒之间")
 
+    input_dish = str(input_data.get("dishName") or "待配置菜品")
+    category = infer_category(input_dish, input_data.get("dishCategory"))
+
     job_id = uuid.uuid4().hex
+    output_filename = f"{_safe_name(input_dish)}_{_safe_name(node_id)}_{job_id[:8]}_{duration}s.mp4"
     job = {
         "job_id": job_id,
         "draft_id": draft_id,
@@ -261,6 +416,11 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
         "clip": None,
         "error": None,
         "force": force,
+        "dish": input_dish,
+        "dish_category": category,
+        "duration": duration,
+        "prompt": prompt,
+        "output_filename": output_filename,
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)
@@ -279,16 +439,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
             video_url, info = wait_for_video(session, task_id)
             if not video_url:
                 raise RuntimeError(str(info.get("error") or "Kling 生成失败"))
-
-            input_dish = str(input_data.get("dishName") or "待配置菜品")
-            category = infer_category(input_dish, input_data.get("dishCategory"))
-            filename = f"{_safe_name(input_dish)}_{_safe_name(node_id)}_{job_id[:8]}_{duration}s.mp4"
-            output_path = CANVAS_CLIP_ROOT / filename
-            download_video(session, video_url, str(output_path))
-            clip = _build_clip(job, output_path, input_dish, category)
-            _append_manifest({**clip, "videoTaskId": task_id, "prompt": prompt})
-            _update_job(draft_id, job, status="done", stage="已下载到本地片段库", clip=clip)
-            _persist_generated_clip(draft_id, node_id, clip)
+            _complete_generation_job(draft_id, job, video_url, session, input_dish, category, duration, prompt)
         except Exception as exc:
             _update_job(draft_id, job, status="error", stage="生成失败", error=str(exc))
             _persist_generator_status(draft_id, node_id, "生成失败")

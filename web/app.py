@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """FastAPI entrypoint for the video production workbench."""
 import sys
+from contextlib import asynccontextmanager
 from time import perf_counter
 from pathlib import Path
 from uuid import uuid4
@@ -17,13 +18,21 @@ from fastapi.staticfiles import StaticFiles
 from web.api.routes import router
 from web.core.logging import configure_logging, get_logger, log_request
 from web.core.settings import APP_HOST, APP_PORT, APP_RELOAD, STATIC_DIR
+from web.services.canvas_generation import recover_generation_jobs
 
 configure_logging()
 logger = get_logger(__name__)
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="引流视频生产平台", version="0.2.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        recovered = recover_generation_jobs()
+        if recovered:
+            logger.info("Recovered %s unfinished Kling generation job(s)", recovered)
+        yield
+
+    app = FastAPI(title="引流视频生产平台", version="0.2.0", lifespan=lifespan)
     app.include_router(router)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR), check_dir=False), name="static")
 
