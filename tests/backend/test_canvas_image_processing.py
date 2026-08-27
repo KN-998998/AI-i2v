@@ -33,6 +33,25 @@ def test_background_template_upload_and_list(monkeypatch, tmp_path):
     assert client.get("/api/canvas/backgrounds").json()[0]["id"] == item["id"]
 
 
+def test_image_processing_requires_a_connected_input_node(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    canvas_state.save_draft(
+        "default",
+        {
+            "nodes": [{"id": "image_process", "data": {"kind": "image_process"}}, {"id": "assets", "data": {"kind": "input"}}],
+            "edges": [],
+            "timeline": [],
+        },
+    )
+
+    try:
+        canvas_image_processing.start_image_processing("default", "image_process")
+    except ValueError as error:
+        assert "没有连接" in str(error)
+    else:
+        raise AssertionError("unlinked image processing node unexpectedly used a fallback input")
+
+
 def test_image_processing_composites_and_persists_result(monkeypatch, tmp_path):
     draft_root = tmp_path / "drafts"
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", draft_root)

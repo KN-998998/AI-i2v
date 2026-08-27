@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,7 @@ from web.core.settings import CANVAS_BACKGROUND_ROOT, CANVAS_DRAFT_ROOT, MAX_UPL
 DRAFT_VERSION = 1
 _DRAFT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _CHUNK_SIZE = 1024 * 1024
+_DRAFT_LOCK = threading.RLock()
 _ALLOWED_EXTENSIONS = {
     "image": {".jpg", ".jpeg", ".png", ".webp", ".gif"},
     "audio": {".mp3", ".wav", ".m4a", ".aac", ".ogg"},
@@ -42,8 +44,9 @@ def load_draft(draft_id: str) -> dict[str, Any] | None:
     if not path.exists():
         return None
     # Windows editors may write the persisted draft with a UTF-8 BOM.
-    with path.open("r", encoding="utf-8-sig") as stream:
-        payload = json.load(stream)
+    with _DRAFT_LOCK:
+        with path.open("r", encoding="utf-8-sig") as stream:
+            payload = json.load(stream)
     if not isinstance(payload, dict) or payload.get("version") != DRAFT_VERSION:
         raise ValueError("草稿版本不受支持")
     return payload
@@ -78,9 +81,10 @@ def save_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     }
     temporary = directory / f"draft.{uuid.uuid4().hex}.tmp"
     try:
-        with temporary.open("w", encoding="utf-8") as stream:
-            json.dump(persisted, stream, ensure_ascii=False, indent=2)
-        temporary.replace(draft_file(draft_id))
+        with _DRAFT_LOCK:
+            with temporary.open("w", encoding="utf-8") as stream:
+                json.dump(persisted, stream, ensure_ascii=False, indent=2)
+            temporary.replace(draft_file(draft_id))
     finally:
         temporary.unlink(missing_ok=True)
     return persisted

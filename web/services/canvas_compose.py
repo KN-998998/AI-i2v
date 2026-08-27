@@ -42,8 +42,9 @@ def get_compose_job(draft_id: str, job_id: str) -> dict[str, Any] | None:
     if not path.exists():
         return None
     try:
-        with path.open("r", encoding="utf-8") as stream:
-            return json.load(stream)
+        with _JOB_LOCK:
+            with path.open("r", encoding="utf-8") as stream:
+                return json.load(stream)
     except (OSError, json.JSONDecodeError):
         return None
 
