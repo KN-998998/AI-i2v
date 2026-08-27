@@ -88,6 +88,10 @@ export type AssetLibraryPlanItem = {
   sourcePath: string;
   storedName: string;
   background: BackgroundTemplate;
+  reviewRequired?: boolean;
+  classificationReason?: string;
+  categoryCandidates?: string[];
+  suggestedCategory?: string;
 };
 
 export type AssetLibraryPlan = {
@@ -96,6 +100,15 @@ export type AssetLibraryPlan = {
   selected: AssetLibraryPlanItem[];
   warnings: string[];
   categoryCounts: Record<string, number>;
+  reviewItems?: AssetLibraryReviewItem[];
+};
+
+export type AssetLibraryReviewItem = {
+  dishName: string;
+  sourceCategory: string;
+  classificationReason: string;
+  categoryCandidates: string[];
+  suggestedCategory: string;
 };
 
 export async function createAssetLibraryPlan(draftId: string, assetRoot: string, backgroundRoot: string, categoryCounts: Record<string, number>): Promise<AssetLibraryPlan> {
@@ -115,6 +128,15 @@ export async function pickAssetLibraryFolder(title: string): Promise<string> {
   });
   const payload = await parseResponse<{ path: string }>(response);
   return payload.path;
+}
+
+export async function saveAssetLibraryRule(dishName: string, category: string): Promise<{ dishName: string; category: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dish_name: dishName, category }),
+  });
+  return parseResponse<{ dishName: string; category: string }>(response);
 }
 
 export async function startCanvasImageProcessing(draftId: string, nodeId: string): Promise<ImageProcessingJob> {

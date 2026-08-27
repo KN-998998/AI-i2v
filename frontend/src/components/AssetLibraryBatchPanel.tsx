@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createAssetLibraryPlan, pickAssetLibraryFolder, type AssetLibraryPlan } from "../api";
+import { createAssetLibraryPlan, pickAssetLibraryFolder, saveAssetLibraryRule, type AssetLibraryPlan, type AssetLibraryReviewItem } from "../api";
 import { useWorkflowStore } from "../workflowStore";
 
 const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
@@ -16,6 +16,9 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const [createdGeneratorIds, setCreatedGeneratorIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
+  const [reviewCategories, setReviewCategories] = useState<Record<string, string>>({});
+  const [savingRule, setSavingRule] = useState<string | null>(null);
+  const [rulesChanged, setRulesChanged] = useState(false);
 
   const updateCount = (category: string, value: number) => setCounts(current => ({ ...current, [category]: Math.max(0, Math.min(50, Number.isFinite(value) ? Math.round(value) : 0)) }));
 
@@ -41,6 +44,8 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     try {
       const next = await createAssetLibraryPlan(draftId, assetRoot.trim(), backgroundRoot.trim(), counts);
       setPlan(next);
+      setReviewCategories(Object.fromEntries((next.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
+      setRulesChanged(false);
       setCreatedGeneratorIds([]);
       onToast(`已抽取 ${next.selected.length} 个待确认方案`);
     } catch (error) {
@@ -50,8 +55,33 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     }
   };
 
+  const confirmCategory = async (item: AssetLibraryReviewItem) => {
+    const category = reviewCategories[item.dishName] ?? item.sourceCategory;
+    setSavingRule(item.dishName);
+    try {
+      await saveAssetLibraryRule(item.dishName, category);
+      setPlan(current => current ? {
+        ...current,
+        selected: current.selected.map(selected => selected.dishName === item.dishName
+          ? { ...selected, sourceCategory: category, suggestedCategory: category, reviewRequired: false, classificationReason: "已使用人工确认规则", categoryCandidates: [category] }
+          : selected),
+        reviewItems: (current.reviewItems ?? []).filter(review => review.dishName !== item.dishName),
+      } : current);
+      setRulesChanged(true);
+      onToast(`已保存“${item.dishName}”的分类规则`);
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "分类规则保存失败");
+    } finally {
+      setSavingRule(null);
+    }
+  };
+
   const applyPlan = async () => {
     if (!plan) return;
+    if ((plan.reviewItems ?? []).length > 0) {
+      onToast("请先完成所有菜品分类确认，再应用到画布");
+      return;
+    }
     const ids = createBatchWorkflows(plan.selected);
     setCreatedGeneratorIds(ids);
     await saveDraft();
@@ -75,7 +105,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     <div className="panel-section-head"><div><span className="panel-label">ASSET LIBRARY AUTOMATION</span><h2>素材库批量建稿</h2><p className="muted">按“菜品文件夹名”识别菜品，随机抽图和背景，先生成待确认流程，再决定是否调用抠图与 Kling。</p></div></div>
     <div className="field-grid asset-library-paths"><label className="field"><span>菜品素材库路径</span><div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="例如：F:\\...\\鮨政exp" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("asset")}>{folderBusy === "asset" ? "选择中..." : "选择文件夹"}</button></div></label><label className="field"><span>背景素材库路径</span><div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="例如：F:\\...\\背景模板" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("background")}>{folderBusy === "background" ? "选择中..." : "选择文件夹"}</button></div></label></div>
     <div className="asset-category-grid">{CATEGORIES.map(category => <label className="field" key={category}><span>{category}数量</span><input className="input" type="number" min="0" max="50" value={counts[category]} onChange={event => updateCount(category, Number(event.target.value))} /></label>)}</div>
-    <div className="compose-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void buildPlan()}>{busy ? "处理中..." : "随机抽取并生成待确认方案"}</button><button type="button" className="btn" disabled={!plan || busy} onClick={() => void applyPlan()}>应用到画布</button><button type="button" className="btn btn-danger" disabled={!createdGeneratorIds.length || busy} onClick={() => void execute()}>确认并执行抠图 + 生成</button></div>
-    {plan && <div className="asset-library-plan"><strong>待确认方案：{plan.selected.length} 个</strong>{plan.warnings.map(warning => <small className="source-pending" key={warning}>{warning}</small>)}<div className="asset-plan-list">{plan.selected.map(item => <div className="asset-plan-item" key={item.storedName}><img src={item.imagePreview} alt={item.dishName} /><span><strong>{item.dishName}</strong><small>{item.sourceCategory} · {item.foodType} · 背景：{item.background.name}</small></span></div>)}</div></div>}
+    <div className="compose-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void buildPlan()}>{busy ? "处理中..." : rulesChanged ? "按最新规则重新抽取" : "扫描并生成待确认方案"}</button><button type="button" className="btn" disabled={!plan || busy || (plan.reviewItems ?? []).length > 0} onClick={() => void applyPlan()}>应用到画布</button><button type="button" className="btn btn-danger" disabled={!createdGeneratorIds.length || busy} onClick={() => void execute()}>确认并执行抠图 + 生成</button></div>
+    {plan && <div className="asset-library-plan"><strong>扫描结果：已抽取 {plan.selected.length} 个方案 · {plan.reviewItems?.length ?? 0} 个待确认</strong>{plan.warnings.map(warning => <small className="source-pending" key={warning}>{warning}</small>)}{(plan.reviewItems ?? []).length > 0 && <div className="asset-library-review"><div><strong>分类确认页面</strong><small>这里列出素材库中所有无法可靠判断的菜品。选择真实分类并保存后，会写入本地规则；点击上方“按最新规则重新抽取”后，新规则会参与分类数量抽取。</small></div>{(plan.reviewItems ?? []).map(item => <div className="asset-review-item" key={item.dishName}><span><strong>{item.dishName}</strong><small>{item.classificationReason} · 候选：{item.categoryCandidates?.join("、") || "无"}</small></span><select className="input" value={reviewCategories[item.dishName] ?? item.sourceCategory} onChange={event => setReviewCategories(current => ({ ...current, [item.dishName]: event.target.value }))}>{CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select><button type="button" className="btn" disabled={savingRule !== null} onClick={() => void confirmCategory(item)}>{savingRule === item.dishName ? "保存中..." : "保存规则"}</button></div>)}</div>}{rulesChanged && (plan.reviewItems ?? []).length === 0 && <small className="source-ready">分类规则已保存。建议重新抽取，使本次方案按最新分类数量重新分配。</small>}<div className="asset-plan-list">{plan.selected.map(item => <div className="asset-plan-item" key={item.storedName}><img src={item.imagePreview} alt={item.dishName} /><span><strong>{item.dishName}</strong><small>{item.sourceCategory} · {item.foodType} · 背景：{item.background.name}</small></span></div>)}</div></div>}
   </section>;
 }

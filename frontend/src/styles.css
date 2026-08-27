@@ -409,6 +409,12 @@ h1 { margin-top: 3px; font-size: 18px; }
 .asset-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .asset-category-grid { display: grid; grid-template-columns: repeat(6, minmax(72px, 1fr)); gap: 8px; margin-top: 12px; }
 .asset-library-plan { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.asset-library-review { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(238,184,104,.42); background: rgba(77,58,34,.22); }
+.asset-library-review > div:first-child { display: grid; gap: 3px; }
+.asset-library-review small { color: var(--muted); font-size: 10px; }
+.asset-review-item { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px; align-items: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.asset-review-item > span { display: grid; gap: 3px; min-width: 0; }
+.asset-review-item strong, .asset-review-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-plan-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
 .asset-plan-item { display: flex; gap: 8px; align-items: center; min-width: 0; padding: 7px; border: 1px solid var(--line); background: #11191b; }
 .asset-plan-item img { width: 42px; height: 56px; flex: 0 0 auto; object-fit: cover; background: #050708; }

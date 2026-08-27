@@ -10,6 +10,23 @@ def _write_image(path: Path, color: str) -> None:
     Image.new("RGB", (80, 120), color).save(path, "PNG")
 
 
+def test_classification_surfaces_compound_names_for_review_and_remembers_rules(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+
+    staple = canvas_asset_library.classify_library_name("天妇罗乌冬")
+    assert staple["category"] == "主食"
+    assert staple["reviewRequired"] is False
+
+    combination = canvas_asset_library.classify_library_name("刺身定食")
+    assert combination["reviewRequired"] is True
+    assert combination["category"] == "刺身"
+
+    canvas_asset_library.save_category_rule("刺身定食", "主菜")
+    remembered = canvas_asset_library.classify_library_name("刺身定食")
+    assert remembered["category"] == "主菜"
+    assert remembered["reviewRequired"] is False
+
+
 def test_infer_library_category_supports_common_multilingual_names():
     cases = {
         "サーモン刺身": "刺身",
@@ -33,6 +50,7 @@ def test_asset_library_selects_by_category_and_copies_files(monkeypatch, tmp_pat
     background_root = tmp_path / "backgrounds-source"
     _write_image(asset_root / "寿司-三文鱼" / "dish.png", "#d97979")
     _write_image(asset_root / "甜品-布丁" / "dish.png", "#e3c36f")
+    _write_image(asset_root / "季节限定" / "dish.png", "#7aa879")
     _write_image(background_root / "wood.png", "#806040")
 
     plan = canvas_asset_library.build_asset_plan(
@@ -43,6 +61,7 @@ def test_asset_library_selects_by_category_and_copies_files(monkeypatch, tmp_pat
     )
 
     assert {item["sourceCategory"] for item in plan["selected"]} == {"寿司", "甜品"}
+    assert {item["dishName"] for item in plan["reviewItems"]} == {"季节限定"}
     assert plan["categoryCounts"]["刺身"] == 0
     for item in plan["selected"]:
         assert (canvas_state.draft_directory("default") / "files" / item["storedName"]).is_file()

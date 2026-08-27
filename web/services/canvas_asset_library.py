@@ -1,9 +1,11 @@
 """Build reviewable canvas workflows from a folder-based dish library."""
 from __future__ import annotations
 
+import json
 import random
 import re
 import shutil
+import threading
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
@@ -12,6 +14,8 @@ from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他")
+_RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
+_RULES_LOCK = threading.RLock()
 
 _CATEGORY_KEYWORDS = {
     "寿司": ("寿司", "卷寿司", "手卷", "握寿司", "军舰", "卷物", "巻き寿司", "握り", "にぎり", "軍艦", "手巻き", "ちらし寿司", "押し寿司", "稲荷寿司", "すし", "sushi"),
@@ -31,12 +35,71 @@ def _searchable_name(value: str) -> str:
     return re.sub(r"[\s_\-—–/\\·・]+", "", value.casefold())
 
 
-def infer_library_category(dish_name: str) -> str:
+def _load_category_rules() -> dict[str, str]:
+    if not _RULES_PATH.is_file():
+        return {}
+    try:
+        payload = json.loads(_RULES_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(key): str(value) for key, value in payload.items() if str(value) in ASSET_CATEGORIES} if isinstance(payload, dict) else {}
+
+
+def save_category_rule(dish_name: str, category: str) -> dict[str, str]:
+    normalized_name = _searchable_name(dish_name)
+    if not normalized_name:
+        raise ValueError("菜品名称不能为空")
+    if category not in ASSET_CATEGORIES:
+        raise ValueError("不支持的菜品分类")
+    with _RULES_LOCK:
+        rules = _load_category_rules()
+        rules[normalized_name] = category
+        _RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temporary = _RULES_PATH.with_suffix(f".{uuid.uuid4().hex}.tmp")
+        temporary.write_text(json.dumps(rules, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(_RULES_PATH)
+    return {"dishName": dish_name, "category": category}
+
+
+def _category_candidates(dish_name: str) -> list[str]:
     name = _searchable_name(dish_name)
-    for category, keywords in _CATEGORY_KEYWORDS.items():
-        if any(_searchable_name(keyword) in name for keyword in keywords):
-            return category
-    return "其他"
+    return [category for category, keywords in _CATEGORY_KEYWORDS.items() if any(_searchable_name(keyword) in name for keyword in keywords)]
+
+
+def classify_library_name(dish_name: str) -> dict[str, Any]:
+    normalized_name = _searchable_name(dish_name)
+    rules = _load_category_rules()
+    if normalized_name in rules:
+        category = rules[normalized_name]
+        return {"category": category, "candidates": [category], "reviewRequired": False, "reason": "已使用人工确认规则"}
+
+    name = normalized_name
+    candidates = _category_candidates(dish_name)
+    # These describe a package or a serving format, not one dish category.
+    combination_words = ("定食", "套餐", "拼盘", "拼盤", "盛合", "盛り合わせ", "组合", "組み合わせ", "set", "combo", "platter", "assortment")
+    is_combination = any(_searchable_name(word) in name for word in combination_words)
+
+    # The finished product wins over a preparation or topping word. This makes
+    # 天妇罗乌冬 a staple, while 天妇罗拼盘 remains a main dish review case.
+    staple_words = ("乌冬", "拉面", "荞麦", "面条", "炒面", "盖饭", "饭团", "米饭", "丼", "うどん", "ラーメン", "そば", "麺", "丼", "ご飯", "おにぎり", "noodle", "donburi", "rice")
+    dessert_words = ("冰淇淋", "雪糕", "蛋糕", "布丁", "甜点", "甜品", "大福", "パフェ", "アイス", "デザート", "cake", "pudding", "ice cream", "gelato", "dessert")
+    beverage_words = ("拿铁", "奶茶", "咖啡", "茶饮", "绿茶", "乌龙茶", "红茶", "果汁", "酒", "啤酒", "清酒", "饮料", "ラテ", "コーヒー", "ドリンク", "sake", "beer", "wine", "coffee", "juice")
+    if not is_combination and any(_searchable_name(word) in name for word in dessert_words):
+        candidates = ["甜品"]
+    elif not is_combination and any(_searchable_name(word) in name for word in beverage_words):
+        candidates = ["饮品"]
+    elif not is_combination and any(_searchable_name(word) in name for word in staple_words):
+        candidates = ["主食"]
+
+    if is_combination or len(candidates) > 1 or not candidates:
+        suggested = candidates[0] if len(candidates) == 1 else "其他"
+        reason = "组合菜名，需确认成品主体" if is_combination else "名称命中多个分类" if len(candidates) > 1 else "未匹配到分类词"
+        return {"category": suggested, "candidates": candidates, "reviewRequired": True, "reason": reason}
+    return {"category": candidates[0], "candidates": candidates, "reviewRequired": False, "reason": "本地规则匹配"}
+
+
+def infer_library_category(dish_name: str) -> str:
+    return str(classify_library_name(dish_name)["category"])
 
 
 def infer_food_type(dish_name: str, category: str) -> str:
@@ -103,13 +166,28 @@ def build_asset_plan(
     for dish_dir in dish_dirs:
         images = _images(dish_dir)
         if images:
-            grouped[infer_library_category(dish_dir.name)].append((dish_dir, images))
+            classification = classify_library_name(dish_dir.name)
+            grouped[str(classification["category"])].append((dish_dir, images))
     backgrounds = _images(background_path)
     if not backgrounds:
         raise ValueError("背景素材库中没有 JPG、PNG 或 WEBP 图片")
 
     selected: list[dict[str, Any]] = []
+    review_items: list[dict[str, Any]] = []
     warnings: list[str] = []
+    for dish_dir in dish_dirs:
+        images = _images(dish_dir)
+        if not images:
+            continue
+        classification = classify_library_name(dish_dir.name)
+        if classification["reviewRequired"]:
+            review_items.append({
+                "dishName": dish_dir.name,
+                "sourceCategory": str(classification["category"]),
+                "classificationReason": str(classification["reason"]),
+                "categoryCandidates": list(classification["candidates"]),
+                "suggestedCategory": str(classification["category"]),
+            })
     for category in ASSET_CATEGORIES:
         count = counts[category]
         candidates = list(grouped[category])
@@ -122,6 +200,7 @@ def build_asset_plan(
             background = _copy_background(generator.choice(backgrounds))
             app_category = "甜品" if category == "甜品" else "水果" if category == "水果" else "正餐"
             food_type = infer_food_type(dish_dir.name, category)
+            classification = classify_library_name(dish_dir.name)
             selected.append({
                 "dishName": dish_dir.name,
                 "sourceCategory": category,
@@ -132,6 +211,10 @@ def build_asset_plan(
                 "sourcePath": str(source),
                 "storedName": stored_name,
                 "background": background,
+                "reviewRequired": bool(classification["reviewRequired"]),
+                "classificationReason": str(classification["reason"]),
+                "categoryCandidates": list(classification["candidates"]),
+                "suggestedCategory": str(classification["category"]),
             })
     if not selected:
         raise ValueError("没有按分类数量抽取到菜品图片，请检查文件夹结构和分类名称")
@@ -141,4 +224,5 @@ def build_asset_plan(
         "selected": selected,
         "warnings": warnings,
         "categoryCounts": counts,
+        "reviewItems": review_items,
     }
