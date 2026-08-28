@@ -72,7 +72,7 @@ def _configured_qwen_cloned_voice_ids() -> set[str]:
 
 def qwen_tts_options() -> list[dict[str, str]]:
     """Return safe, non-secret Qwen model/voice metadata for the web UI."""
-    model_names = [QWEN_TTS_MODEL]
+    model_names = [QWEN_TTS_MODEL, "qwen-tts"]
     model_names.extend(item.strip() for item in QWEN_TTS_MODELS.split(",") if item.strip())
     built_in_models = [model for model in dict.fromkeys(model_names) if model != QWEN_TTS_CLONE_MODEL]
     built_in_options = [

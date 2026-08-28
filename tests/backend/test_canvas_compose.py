@@ -1,13 +1,22 @@
 import time
 from pathlib import Path
 
-from pipeline.video_render import _typewriter_prefixes
+from pipeline import video_render
+from pipeline.video_render import _typewriter_char_width, _typewriter_prefixes
 from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sound_node, _sync_caption_timings, _voice_items
 from web.services import canvas_compose, canvas_quality, canvas_state
 
 
 def test_typewriter_prefixes_keep_unicode_characters():
     assert _typewriter_prefixes("寿司🍣") == ["寿", "寿司", "寿司🍣"]
+
+
+def test_typewriter_widths_distinguish_ascii_punctuation_and_fullwidth_text():
+    assert _typewriter_char_width("你") == 0.95
+    assert _typewriter_char_width("，") == 0.95
+    assert _typewriter_char_width("’") < _typewriter_char_width("你")
+    assert _typewriter_char_width("@") > _typewriter_char_width("i")
+    assert _typewriter_char_width(" ") < _typewriter_char_width("a")
 
 
 def test_video_timing_diagnostics_detect_vfr_and_freeze(monkeypatch, tmp_path):
@@ -23,6 +32,29 @@ def test_video_timing_diagnostics_detect_vfr_and_freeze(monkeypatch, tmp_path):
     diagnostics = canvas_quality._timing_and_freeze_checks(tmp_path / "clip.mp4")
 
     assert diagnostics == {"vfrRatio": 0.1053, "maxFreezeSeconds": 0.42, "decodeOk": True}
+
+
+def test_typewriter_filters_animate_each_character_without_prefix_layers(monkeypatch, tmp_path):
+    source = tmp_path / "clip.mp4"
+    output = tmp_path / "output.mp4"
+    source.write_bytes(b"video")
+    commands = []
+    monkeypatch.setattr(video_render, "_run_ffmpeg", lambda command, timeout, action: commands.append(command))
+
+    video_render.concat_clips(
+        [str(source)],
+        str(output),
+        subtitles=[{"text": "寿司", "start": 0, "end": 2, "animation": "typewriter"}],
+    )
+
+    command = commands[0]
+    vf = command[command.index("-vf") + 1]
+    assert "drawtext=text='寿'" in vf
+    assert "drawtext=text='司'" in vf
+    assert "enable='gte(t,0.0)*lt(t,2.0)'" in vf
+    assert "enable='gte(t,1.0)*lt(t,2.0)'" in vf
+    assert "fontsize=42*(0.72+0.28*min(1\\,max(0\\,(t-0.000000)/0.180000)))" in vf
+    assert ":alpha=min(1\\,max(0\\,(t-1.000000)/0.180000))" in vf
 
 
 def test_overlay_can_follow_actual_voice_timing():

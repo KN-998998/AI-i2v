@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, type CaptionSegment, type NodeKind, type OverlayItem, type OverlayStyle, type WorkflowData, type WorkflowNode } from "../model";
+import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, type CaptionSegment, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type WorkflowData, type WorkflowNode } from "../model";
 import { fetchTTSOptions, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
@@ -8,6 +8,7 @@ import { Field, formatNodeValue, SectionTitle, Select, Tag } from "./ui";
 
 const OVERLAY_STYLE_PRESETS: Array<{ label: string; style: OverlayStyle }> = [
   { label: "经典白字", style: { fontFamily: "Microsoft YaHei", fontSize: 42, textBoxWidth: 0.84, singleLine: true, color: "#FFFFFF", fontWeight: "bold", strokeColor: "#000000", strokeWidth: 2, backgroundEnabled: true, backgroundColor: "#111417", backgroundOpacity: 0.62 } },
+  { label: "IG引流风格", style: { fontFamily: "Microsoft YaHei", fontSize: 48, textBoxWidth: 0.84, singleLine: true, color: "#FFD12E", fontWeight: "bold", strokeColor: "#111111", strokeWidth: 3, backgroundEnabled: false, backgroundColor: "#111417", backgroundOpacity: 0.62 } },
   { label: "金色 CTA", style: { fontFamily: "Microsoft YaHei", fontSize: 48, textBoxWidth: 0.84, singleLine: true, color: "#FFD166", fontWeight: "bold", strokeColor: "#2A1B00", strokeWidth: 3, backgroundEnabled: false, backgroundColor: "#111417", backgroundOpacity: 0.62 } },
   { label: "清爽白字", style: { fontFamily: "DengXian", fontSize: 40, textBoxWidth: 0.84, singleLine: true, color: "#FFFFFF", fontWeight: "normal", strokeColor: "#000000", strokeWidth: 1, backgroundEnabled: false, backgroundColor: "#111417", backgroundOpacity: 0.4 } },
   { label: "黑底卡片", style: { fontFamily: "Microsoft YaHei", fontSize: 40, textBoxWidth: 0.84, singleLine: true, color: "#FFFFFF", fontWeight: "bold", strokeColor: "#000000", strokeWidth: 0, backgroundEnabled: true, backgroundColor: "#111417", backgroundOpacity: 0.78 } },
@@ -115,6 +116,39 @@ function PromptFields({ node, onToast }: { node: WorkflowNode; onToast: (message
   </>;
 }
 
+function VoiceModelSelectors({ item, options, update }: { item: VoiceItem; options: TTSVoiceOption[]; update: (patch: Partial<VoiceItem>) => void }) {
+  const models = Array.from(new Set(options.map(option => option.model)));
+  const selectedModel = item.model && models.includes(item.model) ? item.model : models[0] ?? "";
+  const voices = options.filter(option => option.model === selectedModel);
+  const selectedVoice = voices.some(option => option.voice_id === item.voiceId) ? item.voiceId ?? "none" : "none";
+  const selectedOption = voices.find(option => option.voice_id === selectedVoice);
+  const selectModel = (model: string) => {
+    const nextOption = options.find(option => option.model === model && option.voice_id === item.voiceId);
+    update({
+      model,
+      provider: nextOption?.provider ?? "qwen",
+      voiceId: nextOption?.voice_id ?? "none",
+      voiceName: nextOption?.label ?? "无",
+      enabled: nextOption ? item.enabled !== false : false,
+    });
+  };
+  const selectVoice = (voiceId: string) => {
+    const option = voices.find(candidate => candidate.voice_id === voiceId);
+    update({
+      model: selectedModel,
+      provider: option?.provider ?? "qwen",
+      voiceId: option?.voice_id ?? "none",
+      voiceName: option?.label ?? "无",
+      enabled: Boolean(option),
+    });
+  };
+  return <div className="field-grid voice-selector-grid">
+    <label className="field"><span>合成模型</span><select className="input" value={selectedModel} disabled={models.length === 0} onChange={event => selectModel(event.target.value)}>{models.length === 0 ? <option value="">暂无可用模型</option> : models.map(model => <option key={model} value={model}>{model}</option>)}</select></label>
+    <label className="field"><span>音色</span><select className="input" value={selectedVoice} disabled={voices.length === 0} onChange={event => selectVoice(event.target.value)}><option value="none">无（默认，不生成 TTS）</option>{voices.map(option => <option key={option.voice_id} value={option.voice_id}>{option.label}</option>)}</select></label>
+    {selectedOption && <small className="voice-selection-hint">当前：{selectedOption.label}</small>}
+  </div>;
+}
+
 function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message: string) => void }) {
   const activePanel = useWorkflowStore(state => state.activePanel);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
@@ -200,7 +234,7 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
          <label className={`check ${item.enabled !== false && item.voiceId !== "none" ? "checked" : ""}`}><input type="checkbox" checked={item.enabled !== false && item.voiceId !== "none"} onChange={event => { if (event.target.checked && item.voiceId === "none") { onToast("请先选择具体音色，再启用人声"); return; } updateVoice(item.id, { enabled: event.target.checked }); }} />启用人声</label>
          <small className="voice-toggle-hint">{item.voiceId === "none" ? "当前为“无”，不会生成 TTS；选择音色后即可启用。" : item.enabled === false ? "当前已关闭，仅保留这段文字。" : "当前已启用，将生成这段 TTS。"}</small>
         <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateVoice(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateVoice(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
-        <label className="field"><span>音色</span><select className="input" value={item.voiceId === "none" ? "none" : ttsOptions.find(option => option.voice_id === item.voiceId && (!item.model || option.model === item.model)) ? `${item.model || ttsOptions.find(option => option.voice_id === item.voiceId)?.model}:${item.voiceId}` : "none"} onChange={event => { const value = event.target.value; const [model, voiceId] = value.split(":"); const option = ttsOptions.find(candidate => candidate.model === model && candidate.voice_id === voiceId); updateVoice(item.id, { enabled: value !== "none", voiceId: value === "none" ? "none" : voiceId, voiceName: option?.label || "无", provider: option?.provider || "qwen", model: option?.model || "" }); }}><option value="none">无（默认，不生成 TTS）</option>{ttsOptions.map(option => <option key={`${option.model}:${option.voice_id}`} value={`${option.model}:${option.voice_id}`}>{option.label} · {option.model}</option>)}</select></label>
+        <VoiceModelSelectors item={item} options={ttsOptions} update={patch => updateVoice(item.id, patch)} />
         {ttsOptions.length === 0 && <small className="clip-sync-error">未检测到 Qwen TTS 配置，当前只能选择“无”。</small>}
         <Field label="音量"><input className="range" type="range" min="0" max="100" value={item.volume ?? 85} onChange={event => updateVoice(item.id, { volume: Number(event.target.value) })} /></Field>
       </div>; })}</div>

@@ -36,6 +36,17 @@ def test_qwen_cloned_voice_is_exposed_and_bound_to_vc_model(monkeypatch):
     assert all(option["model"] != "qwen3-tts-vc-2026-01-22" for option in options if option["voice_id"] == "Cherry")
 
 
+def test_qwen_tts_includes_chelsie_voice(monkeypatch):
+    monkeypatch.setattr(voice_bgm, "QWEN_TTS_MODEL", "qwen3-tts-flash")
+    monkeypatch.setattr(voice_bgm, "QWEN_TTS_MODELS", "")
+    monkeypatch.setattr(voice_bgm, "QWEN_TTS_CLONED_VOICES", "")
+
+    option = next(option for option in voice_bgm.qwen_tts_options() if option["model"] == "qwen-tts" and option["voice_id"] == "Chelsie")
+
+    assert option["label"] == "女声 · Chelsie · 活泼清晰"
+    assert voice_bgm._qwen_tts_model("Chelsie", "qwen-tts") == "qwen-tts"
+
+
 def test_explicit_clone_model_keeps_a_manual_voice_id_and_builds_vc_request(monkeypatch, tmp_path):
     voice_id = "manual-clone-voice-id"
     monkeypatch.setattr(voice_bgm, "QWEN_API_KEY", "test-key")

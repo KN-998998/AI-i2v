@@ -4,6 +4,7 @@
 import os
 import re
 import subprocess
+import unicodedata
 from pathlib import Path
 from pipeline.config import FINAL_FPS, FINAL_RESOLUTION
 
@@ -67,7 +68,7 @@ def _wrap_text_for_width(text: str, width_ratio: float, font_size: int) -> str:
         current = []
         used = 0.0
         for character in paragraph:
-            units = 1.0 if ord(character) > 255 else 0.55
+            units = _typewriter_char_width(character)
             if current and used + units > max_units:
                 lines.append("".join(current))
                 current = []
@@ -76,6 +77,23 @@ def _wrap_text_for_width(text: str, width_ratio: float, font_size: int) -> str:
             used += units
         lines.append("".join(current))
     return "\n".join(lines)
+
+
+def _typewriter_char_width(character: str) -> float:
+    """Estimate a glyph cell width without treating all non-ASCII text as full-width."""
+    if character.isspace():
+        return 0.28
+    if unicodedata.east_asian_width(character) in {"W", "F"}:
+        return 0.95
+    if character in "@#&%":
+        return 0.72
+    if character in "MWmw":
+        return 0.82
+    if character in "ilIjtfr1":
+        return 0.32
+    if unicodedata.category(character).startswith("P"):
+        return 0.34
+    return 0.55
 
 
 def _typewriter_prefixes(text: str) -> list[str]:
@@ -182,21 +200,58 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
             background_color = _safe_color(style.get("backgroundColor"), "#111417")
             background_opacity = max(0.0, min(float(style.get("backgroundOpacity", 0.62) or 0.0), 1.0))
             box = f":box=1:boxcolor={background_color}@{background_opacity}:boxborderw=12" if background_enabled else ""
-            def append_text_filter(value: str, visible_start: float, visible_end: float) -> None:
+            def append_text_filter(
+                value: str,
+                visible_start: float,
+                visible_end: float,
+                exclusive_end: bool = False,
+                x_override: str | None = None,
+                fontsize_override: str | None = None,
+                alpha_override: str | None = None,
+            ) -> None:
                 safe_text = _escape_drawtext(value if single_line else _wrap_text_for_width(value, text_box_width, font_size))
+                enable = f"gte(t,{visible_start})*lt(t,{visible_end})" if exclusive_end else f"between(t,{visible_start},{visible_end})"
+                fontsize = fontsize_override or str(font_size)
+                alpha = f":alpha={alpha_override}" if alpha_override else ""
                 filters.append(
                     f"drawtext=text='{safe_text}':"
                     f"fontfile='{_font_file(style.get('fontFamily'), font_weight)}':"
-                    f"fontsize={font_size}:fontcolor={font_color}:borderw={stroke_width}:bordercolor={stroke_color}@0.8{box}:"
-                    f"x={x}:y={y}:"
-                    f"enable='between(t,{visible_start},{visible_end})'"
+                    f"fontsize={fontsize}:fontcolor={font_color}:borderw={stroke_width}:bordercolor={stroke_color}@0.8{box}{alpha}:"
+                    f"x={x_override or x}:y={y}:"
+                    f"enable='{enable}'"
                 )
 
             if item.get("animation") == "typewriter" and text:
-                prefixes = _typewriter_prefixes(text if single_line else _wrap_text_for_width(text, text_box_width, font_size))
-                step = (end_time - item_start) / len(prefixes)
-                for index, prefix in enumerate(prefixes):
-                    append_text_filter(prefix, item_start + index * step, end_time)
+                typewriter_text = text if single_line else _wrap_text_for_width(text, text_box_width, font_size)
+                characters = list(typewriter_text)
+                if single_line and characters:
+                    unit_widths = [font_size * _typewriter_char_width(character) for character in characters]
+                    total_width = sum(unit_widths)
+                    offset = 0.0
+                    step = (end_time - item_start) / len(characters)
+                    for index, character in enumerate(characters):
+                        char_start = item_start + index * step
+                        appear_duration = min(0.18, max(0.08, step * 0.7))
+                        progress = f"min(1\\,max(0\\,(t-{char_start:.6f})/{appear_duration:.6f}))"
+                        cell_width = unit_widths[index]
+                        char_x = f"(w-{total_width:.3f})/2+{offset:.3f}+({cell_width:.3f}-text_w)/2"
+                        append_text_filter(
+                            character,
+                            char_start,
+                            end_time,
+                            exclusive_end=True,
+                            x_override=char_x,
+                            fontsize_override=f"{font_size}*(0.72+0.28*{progress})",
+                            alpha_override=progress,
+                        )
+                        offset += cell_width
+                else:
+                    prefixes = _typewriter_prefixes(typewriter_text)
+                    step = (end_time - item_start) / len(prefixes)
+                    for index, prefix in enumerate(prefixes):
+                        prefix_start = item_start + index * step
+                        prefix_end = end_time if index == len(prefixes) - 1 else prefix_start + step
+                        append_text_filter(prefix, prefix_start, prefix_end, exclusive_end=True)
             else:
                 append_text_filter(text, item_start, end_time)
             if explicit_start is None and explicit_end is None:
