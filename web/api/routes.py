@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from pipeline.audio import qwen_tts_options
+from pipeline.caption_split import split_caption_text
 from pipeline.config import (
     BACKGROUND_REMOVAL_PROVIDER,
     CANVAS_CLIP_ROOT,
@@ -54,6 +55,17 @@ def list_canvas_tts_options() -> dict[str, Any]:
         "default_model": QWEN_TTS_MODEL if configured else None,
         "voices": qwen_tts_options() if configured else [],
     }
+
+
+@router.post("/api/canvas/captions/split")
+def split_canvas_caption(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    request = payload or {}
+    text = str(request.get("text") or "").strip()
+    if not text:
+        raise _json_error("请输入需要拆分的文案", 400)
+    if len(text) > 5000:
+        raise _json_error("单次文案不能超过 5000 个字符", 400)
+    return split_caption_text(text, use_llm=bool(request.get("use_llm", False)))
 
 
 def _clip_label(filename: str) -> str:

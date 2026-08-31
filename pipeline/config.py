@@ -67,6 +67,9 @@ QWEN_TTS_MODEL = os.environ.get("QWEN_TTS_MODEL", "qwen3-tts-flash")
 QWEN_TTS_MODELS = os.environ.get("QWEN_TTS_MODELS", "")
 QWEN_TTS_CLONE_MODEL = os.environ.get("QWEN_TTS_CLONE_MODEL", "qwen3-tts-vc-2026-01-22").strip()
 QWEN_TTS_CLONED_VOICES = os.environ.get("QWEN_TTS_CLONED_VOICES", "")
+QWEN_LLM_MODEL = os.environ.get("QWEN_LLM_MODEL", "qwen3.7-flash").strip() or "qwen3.7-flash"
+QWEN_LLM_BASE_URL = os.environ.get("QWEN_LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").strip().rstrip("/")
+QWEN_LLM_ENABLED = os.environ.get("QWEN_LLM_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 TTS_VOICE = os.environ.get("TTS_VOICE", "none")  # 音色标识
 
 # 腾讯云数据万象商品抠图（可选）。密钥只从 .env / 系统环境读取。

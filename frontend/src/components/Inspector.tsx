@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, type CaptionSegment, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type WorkflowData, type WorkflowNode } from "../model";
-import { fetchTTSOptions, uploadDraftFile, type TTSVoiceOption } from "../api";
+import { fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { ImageProcessControlFields } from "./ImageProcessControls";
@@ -164,6 +164,8 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   useEffect(() => {
     fetchTTSOptions().then(result => setTtsOptions(result.voices)).catch(() => setTtsOptions([]));
   }, []);
+  const [bulkCaptionText, setBulkCaptionText] = useState("");
+  const [captionSplitBusy, setCaptionSplitBusy] = useState(false);
   const data = node.data.kind === "sound" ? { ...node.data, ...(activeWorkspace?.soundConfig ?? {}) } : node.data;
   const captionSegments = captionSegmentsFromData(data);
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>(() => Object.fromEntries(captionSegments.flatMap((segment, index) => [[segment.overlay.id, index > 0], [segment.voice.id, index > 0]])));
@@ -181,6 +183,54 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const voiceItems = captionSegments.map(segment => segment.voice).filter(item => !item.placeholder);
   const positionLabel = (value: OverlayItem["position"]) => OVERLAY_POSITION_OPTIONS.find(item => item.value === value)?.label ?? OVERLAY_POSITION_OPTIONS[1].label;
   const commitSegments = (segments: CaptionSegment[]) => updateNodeData(node.id, captionSegmentsPatch(segments));
+  const applyBulkCaptionSplit = async (useLlm: boolean) => {
+    const source = bulkCaptionText.trim();
+    if (!source) {
+      onToast("请先输入一整段文案");
+      return;
+    }
+    setCaptionSplitBusy(true);
+    try {
+      const result = await splitCaptionText(source, useLlm);
+      const timestamp = Date.now();
+      const nextSegments = result.segments.map((text, index) => {
+        const current = captionSegments[index];
+        const currentOverlay = current?.overlay;
+        const currentVoice = current?.voice;
+        const start = currentOverlay?.startSeconds ?? currentVoice?.startSeconds ?? index * 2.5;
+        const end = currentOverlay?.endSeconds ?? currentVoice?.endSeconds ?? start + 2.5;
+        const voiceId = currentVoice && !currentVoice.id.startsWith("voice_for_") ? currentVoice.id : `voice_${timestamp}_${index}`;
+        const overlayId = currentOverlay && !currentOverlay.id.startsWith("overlay_for_") ? currentOverlay.id : `overlay_${timestamp}_${index}`;
+        return {
+          id: voiceId,
+          overlay: {
+            ...(currentOverlay ?? { position: "upper", ...overlayPositionCoordinates("upper") }),
+            id: overlayId,
+            text,
+            placeholder: false,
+            startSeconds: start,
+            endSeconds: Math.max(start + 0.1, end),
+            syncVoiceId: voiceId,
+          },
+          voice: {
+            ...(currentVoice ?? { provider: "qwen", model: "", voiceId: "none", voiceName: "none", volume: 85, enabled: false }),
+            id: voiceId,
+            text,
+            placeholder: false,
+            startSeconds: start,
+            endSeconds: Math.max(start + 0.1, end),
+          },
+        };
+      });
+      commitSegments(nextSegments);
+      setBulkCaptionText("");
+      onToast(result.warning ?? (result.used_llm ? `Qwen 已优化并生成 ${result.segments.length} 段文案` : `已按本地规则拆分为 ${result.segments.length} 段`));
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "文案拆分失败");
+    } finally {
+      setCaptionSplitBusy(false);
+    }
+  };
   const updateOverlay = (id: string, patch: Partial<OverlayItem>) => commitSegments(captionSegments.map(segment => {
     if (segment.overlay.id !== id) return segment;
      const overlay = { ...segment.overlay, ...patch };
@@ -210,6 +260,12 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const addVoice = addOverlay;
   const toggleCard = (id: string) => setCollapsedCards(current => ({ ...current, [id]: !current[id] }));
   return <>
+    <div className="caption-bulk-tools">
+      <div className="panel-section-head"><SectionTitle>整段文案拆分</SectionTitle><span className="muted">目标每段约 8-10 个中文字符</span></div>
+      <textarea className="input textarea caption-bulk-input" rows={4} value={bulkCaptionText} placeholder="粘贴一整段引流文案，拆分后会生成对应的多段文字和人声轨道" onChange={event => setBulkCaptionText(event.target.value)} />
+      <div className="caption-bulk-actions"><button type="button" className="btn" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(false)}>按本地规则拆分</button><button type="button" className="btn btn-primary" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(true)}>{captionSplitBusy ? "拆分中..." : "AI 优化拆分"}</button></div>
+      <small className="caption-bulk-hint">默认使用本地规则；只有点击“AI 优化拆分”时才调用 Qwen。拆分结果仍可逐段编辑、合并、删除和拖动。</small>
+    </div>
     <div className="tabs"><button type="button" className={`tab ${activePanel === "voice" ? "active" : ""}`} onClick={() => setActivePanel("voice")}>声音</button><button type="button" className={`tab ${activePanel === "overlay" ? "active" : ""}`} onClick={() => setActivePanel("overlay")}>文字</button></div>
     {activePanel === "overlay" ? <>
       <div className="panel-section-head"><SectionTitle>文案段</SectionTitle><button type="button" className="btn" onClick={addOverlay}>＋ 添加文案段</button></div>

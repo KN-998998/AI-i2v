@@ -56,6 +56,23 @@ export async function fetchTTSOptions(): Promise<TTSOptions> {
   return parseResponse<TTSOptions>(response);
 }
 
+export type CaptionSplitResponse = {
+  source: string;
+  segments: string[];
+  mode: "local" | "local_fallback" | "qwen";
+  used_llm: boolean;
+  warning: string | null;
+};
+
+export async function splitCaptionText(text: string, useLlm = false): Promise<CaptionSplitResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/captions/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, use_llm: useLlm }),
+  });
+  return parseResponse<CaptionSplitResponse>(response);
+}
+
 export async function uploadDraftFile(draftId: string, file: File, kind: "image" | "audio", metadata?: { dish?: string; category?: string }) {
   const body = new FormData();
   body.append("kind", kind);

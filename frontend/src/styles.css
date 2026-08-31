@@ -155,6 +155,12 @@ h1 { margin-top: 3px; font-size: 18px; }
 .result-version { display: grid; grid-template-columns: 110px minmax(0, 220px); gap: 12px; align-items: start; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.07); color: var(--cyan); font-size: 11px; }
 .result-version video { width: 100%; max-height: 300px; border: 1px solid var(--line); border-radius: 5px; background: #000; }
 .sound-compose-panel { margin-top: 18px; }
+.caption-bulk-tools { display: grid; gap: 8px; margin: 14px 0 16px; padding: 12px; border: 1px solid rgba(113,212,209,.22); border-radius: 6px; background: rgba(38,61,64,.18); }
+.caption-bulk-tools .panel-section-head { margin: 0; }
+.caption-bulk-tools .section-title { margin: 0; }
+.caption-bulk-input { min-height: 92px; resize: vertical; line-height: 1.6; }
+.caption-bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.caption-bulk-hint { color: var(--dim); font-size: 10px; line-height: 1.5; }
 .sound-text-explainer { display: grid; gap: 8px; margin: 18px 0 10px; padding: 14px 16px; border: 1px solid rgba(113,212,209,.22); border-left: 3px solid var(--cyan); border-radius: 6px; background: rgba(38,61,64,.28); }
 .sound-text-explainer strong { display: block; margin-top: 4px; color: var(--text); font-size: 13px; }
 .sound-text-explainer p { color: var(--muted); font-size: 11px; line-height: 1.65; }
