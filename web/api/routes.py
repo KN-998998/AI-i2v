@@ -302,16 +302,17 @@ def create_asset_library_plan(draft_id: str, payload: dict[str, Any] | None = No
 
 
 @router.post("/api/canvas/asset-library/rules")
-def create_asset_library_rule(payload: dict[str, Any] | None = None) -> dict[str, str]:
+def create_asset_library_rule(payload: dict[str, Any] | None = None) -> dict[str, str | None]:
     request = payload or {}
     try:
-        return save_category_rule(str(request.get("dish_name") or ""), str(request.get("category") or ""))
+        food_type = request.get("food_type")
+        return save_category_rule(str(request.get("dish_name") or ""), str(request.get("category") or ""), str(food_type) if food_type else None)
     except ValueError as exc:
         raise _json_error(str(exc), 400) from exc
 
 
 @router.get("/api/canvas/asset-library/rules")
-def get_asset_library_rules() -> list[dict[str, str]]:
+def get_asset_library_rules() -> list[dict[str, str | None]]:
     return list_category_rules()
 
 

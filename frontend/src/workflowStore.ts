@@ -69,7 +69,7 @@ type WorkflowState = {
   addWorkspaceClip: (workspaceId: string, clipId: string) => void;
   setWorkspaceJob: (workspaceId: string, job: ComposeJob | null) => void;
   setAssetLibraryPlan: (plan: AssetLibraryPlan | null) => void;
-  updateAssetLibraryReviewCategory: (dishName: string, category: string) => void;
+  updateAssetLibraryReviewClassification: (dishName: string, category: string, foodType: "冷食" | "热食" | null) => void;
   loadDraft: () => Promise<void>;
   saveDraft: () => Promise<void>;
 };
@@ -614,9 +614,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     revision: state.revision + 1,
   })),
   setAssetLibraryPlan: assetLibraryPlan => set(state => ({ assetLibraryPlan, revision: state.revision + 1 })),
-  updateAssetLibraryReviewCategory: (dishName, category) => set(state => {
+  updateAssetLibraryReviewClassification: (dishName, category, foodType) => set(state => {
     if (!state.assetLibraryPlan) return {};
-    const reviewItems = (state.assetLibraryPlan.reviewItems ?? []).map(item => item.dishName === dishName ? { ...item, suggestedCategory: category } : item);
+    const reviewItems = (state.assetLibraryPlan.reviewItems ?? []).map(item => item.dishName === dishName ? { ...item, suggestedCategory: category, foodType } : item);
     return { assetLibraryPlan: { ...state.assetLibraryPlan, reviewItems }, revision: state.revision + 1 };
   }),
   loadDraft: async () => {

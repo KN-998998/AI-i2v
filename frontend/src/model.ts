@@ -298,6 +298,7 @@ export type BackgroundTemplate = {
 
 export type AssetLibraryPlanItem = {
   dishName: string;
+  displayName?: string;
   sourceCategory: string;
   dishCategory: string;
   foodType: string;
@@ -310,15 +311,20 @@ export type AssetLibraryPlanItem = {
   classificationReason?: string;
   categoryCandidates?: string[];
   suggestedCategory?: string;
+  sourceFolderCount?: number;
+  sourceNames?: string[];
 };
 
 export type AssetLibraryReviewItem = {
   dishName: string;
+  displayName?: string;
   sourceCategory: string;
   classificationReason: string;
   categoryCandidates: string[];
   suggestedCategory: string;
+  foodType?: "冷食" | "热食" | null;
   folderCount?: number;
+  sourceNames?: string[];
 };
 
 export type AssetLibraryPlan = {

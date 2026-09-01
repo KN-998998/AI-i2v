@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PIL import Image
+import pytest
 
 from web.services import canvas_asset_library, canvas_state
 
@@ -37,7 +38,7 @@ def test_classification_surfaces_compound_names_for_review_and_remembers_rules(m
     assert combination["reviewRequired"] is True
     assert combination["category"] == "刺身"
 
-    canvas_asset_library.save_category_rule("刺身定食", "主菜")
+    canvas_asset_library.save_category_rule("刺身定食", "主菜", "热食")
     remembered = canvas_asset_library.classify_library_name("刺身定食")
     assert remembered["category"] == "主菜"
     assert remembered["reviewRequired"] is False
@@ -46,13 +47,35 @@ def test_classification_surfaces_compound_names_for_review_and_remembers_rules(m
 def test_category_rules_can_be_listed_for_management(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
 
-    canvas_asset_library.save_category_rule("烤龙虾", "主菜")
-    canvas_asset_library.save_category_rule("角切鱼生饭", "主食")
+    canvas_asset_library.save_category_rule("烤龙虾", "主菜", "热食")
+    canvas_asset_library.save_category_rule("角切鱼生饭", "主食", "热食")
 
     assert canvas_asset_library.list_category_rules() == [
-        {"dishName": "烤龙虾", "category": "主菜"},
-        {"dishName": "角切鱼生饭", "category": "主食"},
+        {"dishName": "烤龙虾", "category": "主菜", "foodType": "热食"},
+        {"dishName": "角切鱼生饭", "category": "主食", "foodType": "热食"},
     ]
+
+
+def test_category_rule_requires_food_type_except_for_dessert_and_fruit(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+
+    with pytest.raises(ValueError, match="冷食或热食"):
+        canvas_asset_library.save_category_rule("烤龙虾", "主菜")
+
+    saved = canvas_asset_library.save_category_rule("蜜瓜", "水果")
+    assert saved["foodType"] == "冷食"
+
+
+def test_legacy_category_rule_without_food_type_requires_review(monkeypatch, tmp_path):
+    rules_path = tmp_path / "rules.json"
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", rules_path)
+    rules_path.write_text(json.dumps({"烤龙虾": "主菜"}, ensure_ascii=False), encoding="utf-8")
+
+    result = canvas_asset_library.classify_library_name("烤龙虾")
+
+    assert result["category"] == "主菜"
+    assert result["foodType"] is None
+    assert result["reviewRequired"] is True
 
 
 def test_infer_library_category_supports_common_multilingual_names():
@@ -76,6 +99,27 @@ def test_traditional_chinese_food_names_are_normalized_before_matching():
 
     assert result["category"] == "寿司"
     assert result["reviewRequired"] is False
+    assert canvas_asset_library.simplify_dish_name("鹽烤左口魚") == "盐烤左口鱼"
+    assert canvas_asset_library._searchable_name("鹽烤左口魚") == canvas_asset_library._searchable_name("盐烤左口鱼")
+
+
+def test_batch_classification_uses_one_canonical_name_for_traditional_aliases(monkeypatch):
+    names = ["青花魚壽司", "青花鱼寿司"]
+    content = json.dumps({
+        "items": [{"dish_name": "青花鱼寿司", "category": "寿司", "confidence": 0.98, "reason": "寿司成品词"}],
+    }, ensure_ascii=False)
+    body = json.dumps({"choices": [{"message": {"content": content}}]}, ensure_ascii=False).encode()
+    monkeypatch.setattr(canvas_asset_library, "QWEN_API_KEY", "test-key")
+    monkeypatch.setattr(canvas_asset_library, "QWEN_LLM_ENABLED", True)
+
+    with patch.object(canvas_asset_library.urllib.request, "urlopen", return_value=_Response(body)) as urlopen:
+        result, mode, warning = canvas_asset_library.classify_library_names(names)
+
+    assert mode == "qwen"
+    assert warning is None
+    assert result[names[0]]["category"] == result[names[1]]["category"] == "寿司"
+    request_payload = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
+    assert json.loads(request_payload["messages"][1]["content"])["dish_names"] == ["青花鱼寿司"]
 
 
 def test_sushi_product_name_wins_over_ingredient_keywords():
@@ -173,3 +217,28 @@ def test_asset_library_finds_nested_dish_folders_from_parent_root(monkeypatch, t
     assert len(plan["reviewItems"]) == 1
     assert plan["reviewItems"][0]["dishName"] == "神秘菜"
     assert plan["reviewItems"][0]["folderCount"] == 2
+
+
+def test_asset_library_merges_simplified_and_traditional_duplicate_folders(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+    monkeypatch.setattr(canvas_asset_library, "QWEN_API_KEY", "")
+    monkeypatch.setattr(canvas_asset_library, "CANVAS_BACKGROUND_ROOT", tmp_path / "backgrounds")
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    asset_root = tmp_path / "library-root"
+    background_root = tmp_path / "background-source"
+    _write_image(asset_root / "烤鱼" / "simplified.png", "#d97979")
+    _write_image(asset_root / "烤魚" / "traditional.png", "#4c4265")
+    _write_image(background_root / "wood.png", "#806040")
+
+    plan = canvas_asset_library.build_asset_plan(
+        "aliases",
+        str(asset_root),
+        str(background_root),
+        {"主菜": 2},
+    )
+
+    assert len(plan["selected"]) == 1
+    assert plan["selected"][0]["dishName"] == "烤鱼"
+    assert plan["selected"][0]["sourceFolderCount"] == 2
+    assert set(plan["selected"][0]["sourceNames"]) == {"烤鱼", "烤魚"}
+    assert any("主菜 只找到 1 个不同菜品" in warning for warning in plan["warnings"])

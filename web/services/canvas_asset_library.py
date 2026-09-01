@@ -6,6 +6,7 @@ import random
 import re
 import shutil
 import threading
+import unicodedata
 import urllib.error
 import urllib.request
 import uuid
@@ -17,6 +18,7 @@ from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他")
+FOOD_TYPES = ("冷食", "热食")
 _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
 _RULES_LOCK = threading.RLock()
 
@@ -32,57 +34,84 @@ _CATEGORY_KEYWORDS = {
     "饮品": ("饮品", "饮料", "酒水", "清酒", "日本酒", "啤酒", "威士忌", "葡萄酒", "红酒", "白酒", "梅酒", "烧酒", "高球", "茶饮", "绿茶", "乌龙茶", "红茶", "抹茶", "咖啡", "果汁", "汽水", "苏打", "饮用水", "ドリンク", "日本酒", "ビール", "ワイン", "焼酎", "梅酒", "ハイボール", "お茶", "抹茶", "コーヒー", "ジュース", "drink", "beverage", "sake", "beer", "wine", "coffee", "juice"),
     "水果": ("水果", "鲜果", "果盘", "草莓", "西瓜", "芒果", "葡萄", "苹果", "柠檬", "橙子", "橙", "桃", "梨", "蓝莓", "樱桃", "菠萝", "凤梨", "香蕉", "柚子", "柑橘", "いちご", "苺", "すいか", "ぶどう", "りんご", "みかん", "フルーツ", "fruit", "strawberry", "watermelon", "mango", "grape", "apple", "lemon", "orange", "peach", "banana"),
 }
-_TRADITIONAL_TO_SIMPLIFIED = str.maketrans(
-    "壽魚鮭鮪鯛鰻鮑鰹鯖魷蝦貝烏龍麵飯飲湯鍋燒醬鹽餃點後氣櫻蔥蘿蔔雞豬",
-    "寿鱼鲑鲔鲷鳗鲍鲣鲭鱿虾贝乌龙面饭饮汤锅烧酱盐饺点后气樱葱萝卜鸡猪",
-)
+_TRADITIONAL_TO_SIMPLIFIED = str.maketrans({
+    "壽": "寿", "魚": "鱼", "鮭": "鲑", "鮪": "鲔", "鯛": "鲷", "鰻": "鳗",
+    "鮑": "鲍", "鰹": "鲣", "鯖": "鲭", "魷": "鱿", "蝦": "虾", "貝": "贝",
+    "烏": "乌", "龍": "龙", "麵": "面", "麪": "面", "飯": "饭", "飲": "饮",
+    "湯": "汤", "鍋": "锅", "燒": "烧", "醬": "酱", "鹽": "盐", "餃": "饺",
+    "點": "点", "後": "后", "氣": "气", "櫻": "樱", "蔥": "葱", "蘿": "萝",
+    "蔔": "卜", "雞": "鸡", "豬": "猪", "槍": "枪", "漬": "渍", "黃": "黄",
+    "雙": "双", "華": "华", "國": "国", "廣": "广", "門": "门", "臺": "台",
+    "與": "与", "專": "专", "業": "业", "東": "东", "發": "发", "後": "后",
+    "學": "学", "時": "时", "間": "间", "場": "场", "開": "开", "關": "关",
+    "實": "实", "驗": "验", "製": "制", "選": "选", "進": "进", "還": "还",
+    "這": "这", "個": "个", "種": "种", "類": "类", "別": "别", "點": "点",
+    "滿": "满", "從": "从", "來": "来", "為": "为", "無": "无", "與": "与",
+    "體": "体", "醫": "医", "藥": "药", "葉": "叶", "蘋": "苹", "檸": "柠",
+    "橙": "橙", "莓": "莓", "菠": "菠", "鳳": "凤", "柚": "柚", "麥": "麦",
+    "乾": "干", "鮮": "鲜", "凍": "冻", "冰": "冰", "裡": "里", "裾": "裙",
+})
+
+
+def simplify_dish_name(value: str) -> str:
+    """Return a stable display name for matching simplified/traditional aliases."""
+    return unicodedata.normalize("NFKC", str(value)).translate(_TRADITIONAL_TO_SIMPLIFIED).strip()
 
 
 def _searchable_name(value: str) -> str:
-    normalized = value.translate(_TRADITIONAL_TO_SIMPLIFIED).casefold()
-    return re.sub(r"[\s_\-鈥斺€?\\路銉籡]+", "", normalized)
+    normalized = simplify_dish_name(value).casefold()
+    return re.sub(r"[\s_\-—–·/\\]+", "", normalized)
 
 
-def _load_category_rules() -> dict[str, str]:
+def _load_category_rules() -> dict[str, dict[str, str | None]]:
     if not _RULES_PATH.is_file():
         return {}
     try:
         payload = json.loads(_RULES_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return {_searchable_name(str(key)): str(value) for key, value in payload.items() if str(value) in ASSET_CATEGORIES} if isinstance(payload, dict) else {}
+    if not isinstance(payload, dict):
+        return {}
+    rules: dict[str, dict[str, str | None]] = {}
+    for key, value in payload.items():
+        if isinstance(value, dict):
+            category = str(value.get("category") or "")
+            food_type = str(value.get("foodType") or "") or None
+        else:
+            category = str(value)
+            food_type = None
+        if category in ASSET_CATEGORIES:
+            rules[_searchable_name(str(key))] = {"category": category, "foodType": food_type if food_type in FOOD_TYPES else None}
+    return rules
 
 
-def save_category_rule(dish_name: str, category: str) -> dict[str, str]:
+def save_category_rule(dish_name: str, category: str, food_type: str | None = None) -> dict[str, str | None]:
     normalized_name = _searchable_name(dish_name)
     if not normalized_name:
         raise ValueError("菜品名称不能为空")
     if category not in ASSET_CATEGORIES:
         raise ValueError("不支持的菜品分类")
+    if category in {"甜品", "水果"}:
+        food_type = "冷食"
+    elif food_type not in FOOD_TYPES:
+        raise ValueError("该菜品分类必须选择冷食或热食")
     with _RULES_LOCK:
         rules = _load_category_rules()
-        rules[normalized_name] = category
+        rules[normalized_name] = {"category": category, "foodType": food_type}
         _RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
         temporary = _RULES_PATH.with_suffix(f".{uuid.uuid4().hex}.tmp")
         temporary.write_text(json.dumps(rules, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(_RULES_PATH)
-    return {"dishName": dish_name, "category": category}
+    return {"dishName": simplify_dish_name(dish_name), "category": category, "foodType": food_type}
 
 
-def list_category_rules() -> list[dict[str, str]]:
+def list_category_rules() -> list[dict[str, str | None]]:
     """Return the saved dish classification rules for the management UI."""
-    if not _RULES_PATH.is_file():
-        return []
-    try:
-        payload = json.loads(_RULES_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    if not isinstance(payload, dict):
-        return []
+    rules = _load_category_rules()
     rules = [
-        {"dishName": str(dish_name), "category": str(category)}
-        for dish_name, category in payload.items()
-        if str(category) in ASSET_CATEGORIES and str(dish_name).strip()
+        {"dishName": simplify_dish_name(str(dish_name)), "category": str(rule["category"]), "foodType": rule.get("foodType")}
+        for dish_name, rule in rules.items()
+        if str(rule.get("category")) in ASSET_CATEGORIES and str(dish_name).strip()
     ]
     return sorted(rules, key=lambda item: (ASSET_CATEGORIES.index(item["category"]), item["dishName"].casefold()))
 
@@ -96,12 +125,14 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     normalized_name = _searchable_name(dish_name)
     rules = _load_category_rules()
     if normalized_name in rules:
-        category = rules[normalized_name]
-        return {"category": category, "candidates": [category], "reviewRequired": False, "reason": "已使用人工确认规则"}
+        rule = rules[normalized_name]
+        category = str(rule["category"])
+        food_type = rule.get("foodType") or ("冷食" if category in {"甜品", "水果"} else None)
+        return {"category": category, "foodType": food_type, "candidates": [category], "reviewRequired": food_type is None, "reason": "已使用人工确认规则" if food_type else "分类规则已确认，还需确认冷食或热食"}
 
     name = normalized_name
     if any(token in name for token in ("寿司", "すし", "sushi")):
-        return {"category": "寿司", "candidates": ["寿司"], "reviewRequired": False, "reason": "寿司成品词优先"}
+        return {"category": "寿司", "foodType": "冷食", "candidates": ["寿司"], "reviewRequired": False, "reason": "寿司成品词优先"}
     candidates = _category_candidates(dish_name)
     # These describe a package or a serving format, not one dish category.
     combination_words = ("定食", "套餐", "拼盘", "拼盤", "盛合", "盛り合わせ", "组合", "組み合わせ", "set", "combo", "platter", "assortment")
@@ -122,8 +153,9 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     if is_combination or len(candidates) > 1 or not candidates:
         suggested = candidates[0] if len(candidates) == 1 else "其他"
         reason = "组合菜名，需确认成品主体" if is_combination else "名称命中多个分类" if len(candidates) > 1 else "未匹配到分类词"
-        return {"category": suggested, "candidates": candidates, "reviewRequired": True, "reason": reason}
-    return {"category": candidates[0], "candidates": candidates, "reviewRequired": False, "reason": "本地规则匹配"}
+        return {"category": suggested, "foodType": "冷食" if suggested in {"甜品", "水果"} else None, "candidates": candidates, "reviewRequired": True, "reason": reason}
+    category = candidates[0]
+    return {"category": category, "foodType": "冷食" if category in {"甜品", "水果", "寿司", "刺身", "前菜/小菜"} else "热食", "candidates": candidates, "reviewRequired": False, "reason": "本地规则匹配"}
 
 
 def _qwen_message_content(body: dict[str, Any]) -> str:
@@ -195,6 +227,7 @@ def _classify_with_qwen(dish_names: list[str]) -> dict[str, dict[str, Any]]:
         result[name] = {
             "category": category,
             "candidates": [category],
+            "foodType": infer_food_type(name, category),
             "reviewRequired": confidence < 0.85,
             "reason": f"Qwen 分类（置信度 {confidence:.0%}）：{str(item.get('reason') or '名称语义判断')}",
             "confidence": confidence,
@@ -207,25 +240,30 @@ def _classify_with_qwen(dish_names: list[str]) -> dict[str, dict[str, Any]]:
 def classify_library_names(dish_names: list[str]) -> tuple[dict[str, dict[str, Any]], str, str | None]:
     """Classify a batch with Qwen when configured, while keeping local fallback and rules."""
     unique_names = list(dict.fromkeys(dish_names))
-    local = {name: classify_library_name(name) for name in unique_names}
+    canonical_names: dict[str, str] = {}
+    for name in unique_names:
+        canonical_names.setdefault(_searchable_name(name), simplify_dish_name(name))
+    canonical_values = list(canonical_names.values())
+    local_canonical = {name: classify_library_name(name) for name in canonical_values}
     if not unique_names:
         return {}, "local", None
     rules = _load_category_rules()
-    llm_names = [name for name in unique_names if _searchable_name(name) not in rules]
+    llm_names = [name for name in canonical_values if _searchable_name(name) not in rules]
     if not llm_names:
-        return local, "manual_rules", None
+        return {name: local_canonical[canonical_names[_searchable_name(name)]] for name in unique_names}, "manual_rules", None
     if not QWEN_LLM_ENABLED or not QWEN_API_KEY:
-        return local, "local", None
+        return {name: local_canonical[canonical_names[_searchable_name(name)]] for name in unique_names}, "local", None
     try:
         ai_results = _classify_with_qwen(llm_names)
     except ValueError as exc:
-        return local, "local_fallback", str(exc)
+        return {name: local_canonical[canonical_names[_searchable_name(name)]] for name in unique_names}, "local_fallback", str(exc)
     for name, result in ai_results.items():
-        local_result = local[name]
+        local_result = local_canonical[name]
         if local_result["reviewRequired"] and local_result["candidates"]:
             result["reviewRequired"] = True
             result["reason"] = f"{result['reason']}；本地规则识别为组合或多分类候选，需人工确认"
-    return {**local, **ai_results}, "qwen", None
+    classified = {**local_canonical, **ai_results}
+    return {name: classified[canonical_names[_searchable_name(name)]] for name in unique_names}, "qwen", None
 
 
 def infer_library_category(dish_name: str) -> str:
@@ -233,7 +271,8 @@ def infer_library_category(dish_name: str) -> str:
 
 
 def infer_food_type(dish_name: str, category: str) -> str:
-    if category in {"刺身", "前菜/小菜", "甜品", "水果", "饮品"} or any(word in dish_name for word in ("刺身", "生鱼", "冷", "沙拉")):
+    name = simplify_dish_name(dish_name)
+    if category in {"刺身", "前菜/小菜", "甜品", "水果", "饮品"} or any(word in name for word in ("刺身", "生鱼", "冷", "沙拉")):
         return "冷食"
     if category == "寿司":
         return "冷食"
@@ -257,6 +296,32 @@ def _dish_directories(root: Path) -> list[tuple[Path, list[Path]]]:
         if not any(path != other and path in other.parents for other, _ in candidates)
     ]
     return sorted(leaf_candidates, key=lambda item: str(item[0]).casefold())
+
+
+def _merge_duplicate_dish_directories(
+    dish_images: list[tuple[Path, list[Path]]],
+) -> list[dict[str, Any]]:
+    """Merge folders whose names identify the same dish after normalization."""
+    grouped: dict[str, dict[str, Any]] = {}
+    for dish_dir, images in dish_images:
+        key = _searchable_name(dish_dir.name)
+        if not key:
+            continue
+        group = grouped.setdefault(key, {
+            "dishName": simplify_dish_name(dish_dir.name) or dish_dir.name,
+            "sourceNames": [],
+            "sourceFolders": [],
+            "images": [],
+        })
+        if dish_dir.name not in group["sourceNames"]:
+            group["sourceNames"].append(dish_dir.name)
+        group["sourceFolders"].append(dish_dir)
+        group["images"].extend(images)
+    for group in grouped.values():
+        source_names = list(dict.fromkeys(group["sourceNames"]))
+        group["sourceNames"] = source_names
+        group["displayName"] = "/".join(source_names) if len(source_names) > 1 else str(group["dishName"])
+    return sorted(grouped.values(), key=lambda item: str(item["dishName"]).casefold())
 
 
 def _normalize_category_counts(category_counts: Mapping[str, int]) -> dict[str, int]:
@@ -306,53 +371,56 @@ def build_asset_plan(
         raise ValueError("背景素材库路径不存在或不是文件夹")
     counts = _normalize_category_counts(category_counts)
     generator = rng or random.Random()
-    grouped: dict[str, list[tuple[Path, list[Path]]]] = {category: [] for category in ASSET_CATEGORIES}
-    dish_images = _dish_directories(root)
-    classifications, classification_mode, classification_warning = classify_library_names([dish_dir.name for dish_dir, _ in dish_images])
+    grouped: dict[str, list[dict[str, Any]]] = {category: [] for category in ASSET_CATEGORIES}
+    raw_dish_images = _dish_directories(root)
+    dish_groups = _merge_duplicate_dish_directories(raw_dish_images)
+    classifications, classification_mode, classification_warning = classify_library_names([
+        group["dishName"] for group in dish_groups
+    ])
     warnings: list[str] = []
     if classification_warning:
         warnings.append(f"{classification_warning}，已回退本地规则")
-    for dish_dir, images in dish_images:
-        classification = classifications[dish_dir.name]
+    for group in dish_groups:
+        classification = classifications[group["dishName"]]
         if classification["category"] in grouped:
-            grouped[str(classification["category"])].append((dish_dir, images))
+            grouped[str(classification["category"])].append(group)
     backgrounds = _images(background_path)
     if not backgrounds:
         raise ValueError("背景素材库中没有 JPG、PNG 或 WEBP 图片")
 
     selected: list[dict[str, Any]] = []
     review_by_name: dict[str, dict[str, Any]] = {}
-    for dish_dir, _images_for_dish in dish_images:
-        classification = classifications[dish_dir.name]
+    for group in dish_groups:
+        classification = classifications[group["dishName"]]
         if classification["reviewRequired"]:
-            review_item = review_by_name.get(dish_dir.name)
-            if review_item:
-                review_item["folderCount"] = int(review_item["folderCount"]) + 1
-            else:
-                review_by_name[dish_dir.name] = {
-                    "dishName": dish_dir.name,
-                    "sourceCategory": str(classification["category"]),
-                    "classificationReason": str(classification["reason"]),
-                    "categoryCandidates": list(classification["candidates"]),
-                    "suggestedCategory": str(classification["category"]),
-                    "folderCount": 1,
-                }
+            review_by_name[group["dishName"]] = {
+                "dishName": group["dishName"],
+                "displayName": group["displayName"],
+                "sourceCategory": str(classification["category"]),
+                "classificationReason": str(classification["reason"]),
+                "categoryCandidates": list(classification["candidates"]),
+                "suggestedCategory": str(classification["category"]),
+                "foodType": classification.get("foodType") if classification["category"] in {"甜品", "水果"} else None,
+                "folderCount": len(group["sourceFolders"]),
+                "sourceNames": list(group["sourceNames"]),
+            }
     review_items = list(review_by_name.values())
     for category in ASSET_CATEGORIES:
         count = counts[category]
         candidates = list(grouped[category])
         generator.shuffle(candidates)
         if count > len(candidates):
-            warnings.append(f"{category} 只找到 {len(candidates)} 个菜品文件夹，无法满足 {count} 张")
-        for dish_dir, images in candidates[:count]:
-            source = generator.choice(images)
+            warnings.append(f"{category} 只找到 {len(candidates)} 个不同菜品，无法满足 {count} 张")
+        for group in candidates[:count]:
+            source = generator.choice(group["images"])
             stored_name, image_url = _copy_into_draft(source, draft_id)
             background = _copy_background(generator.choice(backgrounds))
             app_category = "甜品" if category == "甜品" else "水果" if category == "水果" else "正餐"
-            food_type = infer_food_type(dish_dir.name, category)
-            classification = classifications[dish_dir.name]
+            classification = classifications[group["dishName"]]
+            food_type = str(classification.get("foodType") or infer_food_type(group["dishName"], category))
             selected.append({
-                "dishName": dish_dir.name,
+                "dishName": group["dishName"],
+                "displayName": group["displayName"],
                 "sourceCategory": category,
                 "dishCategory": app_category,
                 "foodType": food_type,
@@ -365,6 +433,8 @@ def build_asset_plan(
                 "classificationReason": str(classification["reason"]),
                 "categoryCandidates": list(classification["candidates"]),
                 "suggestedCategory": str(classification["category"]),
+                "sourceFolderCount": len(group["sourceFolders"]),
+                "sourceNames": list(group["sourceNames"]),
             })
     if not selected:
         raise ValueError("没有按分类数量抽取到菜品图片，请检查文件夹结构和分类名称")

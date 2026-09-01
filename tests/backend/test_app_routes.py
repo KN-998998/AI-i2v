@@ -35,12 +35,12 @@ def test_workflow_pages_use_react_spa_fallback():
 
 def test_asset_library_rules_route_lists_saved_categories(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
-    canvas_asset_library.save_category_rule("烤龙虾", "主菜")
+    canvas_asset_library.save_category_rule("烤龙虾", "主菜", "热食")
 
     response = TestClient(create_app()).get("/api/canvas/asset-library/rules")
 
     assert response.status_code == 200
-    assert response.json() == [{"dishName": "烤龙虾", "category": "主菜"}]
+    assert response.json() == [{"dishName": "烤龙虾", "category": "主菜", "foodType": "热食"}]
 
 
 def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):

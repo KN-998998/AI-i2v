@@ -114,16 +114,16 @@ export async function pickAssetLibraryFolder(title: string): Promise<string> {
   return payload.path;
 }
 
-export async function saveAssetLibraryRule(dishName: string, category: string): Promise<{ dishName: string; category: string }> {
+export async function saveAssetLibraryRule(dishName: string, category: string, foodType?: "冷食" | "热食"): Promise<{ dishName: string; category: string; foodType?: "冷食" | "热食" | null }> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dish_name: dishName, category }),
+    body: JSON.stringify({ dish_name: dishName, category, food_type: foodType ?? null }),
   });
   return parseResponse<{ dishName: string; category: string }>(response);
 }
 
-export type AssetLibraryRule = { dishName: string; category: string };
+export type AssetLibraryRule = { dishName: string; category: string; foodType?: "冷食" | "热食" | null };
 
 export async function fetchAssetLibraryRules(): Promise<AssetLibraryRule[]> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, { cache: "no-store" });
