@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { createAssetLibraryPlan, fetchAssetLibraryRules, pickAssetLibraryFolder, saveAssetLibraryRule, type AssetLibraryRule } from "../api";
-import type { AssetLibraryPlan, AssetLibraryReviewItem } from "../model";
+import { createAssetLibraryPlan, fetchAssetLibraryClassifications, fetchAssetLibraryRules, pickAssetLibraryFolder, saveAssetLibraryRule, type AssetLibraryRule } from "../api";
+import type { AssetLibraryClassificationItem, AssetLibraryPlan, AssetLibraryReviewItem } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 
-const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
+const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
 const FOOD_TYPES = ["冷食", "热食"] as const;
 const ASSET_ROOT_STORAGE_KEY = "restaurant-video.asset-library.asset-root";
 const BACKGROUND_ROOT_STORAGE_KEY = "restaurant-video.asset-library.background-root";
@@ -79,6 +79,19 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     setCounts(current => Object.values(current).some(value => value > 0) ? current : { ...current, ...plan.categoryCounts });
     setReviewCategories(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
     setReviewFoodTypes(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.suggestedCategory ?? item.sourceCategory)])));
+    setPendingRuleCategories(current => ({ ...current, ...Object.fromEntries((plan.classificationResults ?? []).map(item => [item.dishName, item.category])) }));
+    setPendingRuleFoodTypes(current => ({ ...current, ...Object.fromEntries((plan.classificationResults ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.category)])) }));
+    if (!plan.classificationResults?.length && plan.assetRoot) {
+      let active = true;
+      fetchAssetLibraryClassifications(plan.assetRoot).then(result => {
+        if (!active || !result.classificationResults?.length) return;
+        setAssetLibraryPlan({ ...plan, ...result });
+        void saveDraft();
+      }).catch(() => {
+        // Keep the persisted plan visible if the original asset folder is unavailable.
+      });
+      return () => { active = false; };
+    }
   }, [plan]);
 
   const updateCount = (category: string, value: number) => setCounts(current => ({ ...current, [category]: Math.max(0, Math.min(50, Number.isFinite(value) ? Math.round(value) : 0)) }));
@@ -135,8 +148,14 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
           ? { ...selected, sourceCategory: category, suggestedCategory: category, foodType, reviewRequired: false, classificationReason: "已使用人工确认规则", categoryCandidates: [category] }
           : selected),
         reviewItems: (plan.reviewItems ?? []).filter(review => review.dishName !== item.dishName),
+        classificationResults: (plan.classificationResults ?? []).map(result => result.dishName === item.dishName
+          ? { ...result, category, sourceCategory: category, suggestedCategory: category, foodType, reviewRequired: false, classificationSource: "人工规则" as const, classificationReason: "已使用人工确认规则", categoryCandidates: [category] }
+          : result),
       } : null;
       setAssetLibraryPlan(nextPlan);
+      setCategoryRules(current => current.some(rule => rule.dishName === item.dishName)
+        ? current.map(rule => rule.dishName === item.dishName ? { ...rule, category, foodType } : rule)
+        : [...current, { dishName: item.dishName, category, foodType }]);
       await saveDraft();
       setRulesChanged(true);
       onToast(`已保存“${item.dishName}”的分类规则`);
@@ -159,7 +178,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     onToast(`已创建 ${ids.length} 条流程，请先检查节点信息`);
   };
 
-  const saveManagedRule = async (rule: AssetLibraryRule) => {
+  const saveManagedRule = async (rule: AssetLibraryClassificationItem | AssetLibraryRule) => {
     const category = pendingRuleCategories[rule.dishName] ?? rule.category;
     const foodType = pendingRuleFoodTypes[rule.dishName] || defaultFoodType(category);
     if (category === rule.category && foodType === (rule.foodType ?? defaultFoodType(rule.category))) return;
@@ -171,6 +190,17 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     try {
       const saved = await saveAssetLibraryRule(rule.dishName, category, foodType);
       setCategoryRules(current => current.map(item => item.dishName === rule.dishName ? saved : item));
+      if (plan?.classificationResults?.some(item => item.dishName === rule.dishName)) {
+        setAssetLibraryPlan({
+          ...plan,
+          classificationResults: plan.classificationResults.map(item => item.dishName === rule.dishName
+            ? { ...item, category, sourceCategory: category, suggestedCategory: category, foodType, reviewRequired: false, classificationSource: "人工规则" as const, classificationReason: "已使用人工确认规则", categoryCandidates: [category] }
+            : item),
+        });
+        await saveDraft();
+      }
+      setCategoryRules(current => current.some(item => item.dishName === rule.dishName) ? current : [...current, saved]);
+      setPendingRuleCategories(current => ({ ...current, [rule.dishName]: category }));
       setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: foodType }));
       onToast(`已将“${rule.dishName}”调整为${category}`);
     } catch (error) {
@@ -180,7 +210,16 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     }
   };
 
-  const groupedRules = CATEGORIES.map(category => ({ category, items: categoryRules.filter(rule => rule.category === category) }));
+  const scannedResults = plan?.classificationResults ?? [];
+  const scannedNames = new Set(scannedResults.map(item => item.dishName));
+  const managedItems: Array<AssetLibraryClassificationItem | AssetLibraryRule> = [
+    ...scannedResults,
+    ...categoryRules.filter(rule => !scannedNames.has(rule.dishName)),
+  ];
+  const groupedRules = CATEGORIES.map(category => ({
+    category,
+    items: managedItems.filter(item => (pendingRuleCategories[item.dishName] ?? item.category) === category),
+  }));
 
   const execute = async () => {
     if (!createdGeneratorIds.length) return;
@@ -202,8 +241,8 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     <div className="asset-category-grid">{CATEGORIES.map(category => <label className="field" key={category}><span>{category}数量</span><input className="input" type="number" min="0" max="50" value={counts[category]} onChange={event => updateCount(category, Number(event.target.value))} /></label>)}</div>
     <div className="compose-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void buildPlan()}>{busy ? "处理中..." : rulesChanged ? "按最新规则重新抽取" : "扫描并生成待确认方案"}</button><button type="button" className="btn" disabled={!plan || busy || (plan.reviewItems ?? []).length > 0} onClick={() => void applyPlan()}>应用到画布</button><button type="button" className="btn btn-danger" disabled={!createdGeneratorIds.length || busy} onClick={() => void execute()}>确认并执行抠图 + 生成</button></div>
     <section className="asset-category-results">
-      <div className="panel-section-head"><div><span className="panel-label">SAVED CLASSIFICATION RULES</span><h2>分类结果管理</h2><p className="muted">这里展示已确认、会参与后续扫描的菜品分类。修改后点击保存，下一次扫描会直接使用新分类。</p></div><span className="muted">{rulesLoading ? "加载中..." : `${categoryRules.length} 个菜品`}</span></div>
-      <div className="asset-category-result-list">{groupedRules.map(group => <details className="asset-category-result" key={group.category} open={group.items.length > 0}><summary><span>{group.category}</span><strong>{group.items.length}</strong></summary><div className="asset-category-result-items">{group.items.length ? group.items.map(rule => { const category = pendingRuleCategories[rule.dishName] ?? rule.category; const foodType = pendingRuleFoodTypes[rule.dishName] || defaultFoodType(category); const unchanged = category === rule.category && foodType === (rule.foodType ?? defaultFoodType(rule.category)); return <div className="asset-rule-row" key={rule.dishName}><strong title={rule.dishName}>{rule.dishName}</strong><select className="input" value={category} onChange={event => { const nextCategory = event.target.value; setPendingRuleCategories(current => ({ ...current, [rule.dishName]: nextCategory })); setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: defaultFoodType(nextCategory) })); }}>{CATEGORIES.map(categoryOption => <option key={categoryOption} value={categoryOption}>{categoryOption}</option>)}</select><select className="input" value={foodType} onChange={event => setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: event.target.value as "冷食" | "热食" | "" }))}><option value="">选择冷/热食</option>{FOOD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select><button type="button" className="btn" disabled={ruleSaving !== null || unchanged || !foodType} onClick={() => void saveManagedRule(rule)}>{ruleSaving === rule.dishName ? "保存中..." : "保存"}</button></div>; }) : <small className="muted">暂无已确认菜品</small>}</div></details>)}</div>
+      <div className="panel-section-head"><div><span className="panel-label">FULL CLASSIFICATION REVIEW</span><h2>分类结果管理</h2><p className="muted">这里展示最近一次扫描发现的全部去重菜品，包括本地规则自动确认项和待确认项。请逐项检查分类与冷热属性，修改后点击保存即可记入人工规则。</p></div><span className="muted">{rulesLoading ? "加载中..." : `${managedItems.length} 个菜品`}</span></div>
+      <div className="asset-category-result-list">{groupedRules.map(group => <details className="asset-category-result" key={group.category} open={group.items.length > 0}><summary><span>{group.category}</span><strong>{group.items.length}</strong></summary><div className="asset-category-result-items">{group.items.length ? group.items.map(rule => { const category = pendingRuleCategories[rule.dishName] ?? rule.category; const foodType = pendingRuleFoodTypes[rule.dishName] || defaultFoodType(category); const originalFoodType = rule.foodType ?? defaultFoodType(rule.category); const unchanged = category === rule.category && foodType === originalFoodType; const classificationSource = "classificationSource" in rule ? rule.classificationSource : "人工规则"; const reviewRequired = "reviewRequired" in rule ? rule.reviewRequired : !foodType; const reason = "classificationReason" in rule ? rule.classificationReason : "已使用人工确认规则"; return <div className={`asset-rule-row ${reviewRequired ? "is-review" : ""}`} key={rule.dishName}><div className="asset-rule-name"><strong title={rule.dishName}>{rule.dishName}</strong><small>{classificationSource} · {reviewRequired ? "待确认" : "已确认"}{reason ? ` · ${reason}` : ""}</small></div><select className="input" value={category} onChange={event => { const nextCategory = event.target.value; setPendingRuleCategories(current => ({ ...current, [rule.dishName]: nextCategory })); setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: defaultFoodType(nextCategory) })); }}>{CATEGORIES.map(categoryOption => <option key={categoryOption} value={categoryOption}>{categoryOption}</option>)}</select><select className="input" value={foodType} onChange={event => setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: event.target.value as "冷食" | "热食" | "" }))}><option value="">选择冷/热食</option>{FOOD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select><button type="button" className="btn" disabled={ruleSaving !== null || unchanged || !foodType} onClick={() => void saveManagedRule(rule)}>{ruleSaving === rule.dishName ? "保存中..." : "保存"}</button></div>; }) : <small className="muted">暂无菜品</small>}</div></details>)}</div>
     </section>
     {plan && <div className="asset-library-plan">
       <strong>扫描结果：已抽取 {plan.selected.length} 个方案 · {plan.reviewItems?.length ?? 0} 个待确认</strong>

@@ -82,7 +82,7 @@ def test_infer_library_category_supports_common_multilingual_names():
     cases = {
         "サーモン刺身": "刺身",
         "Tuna Sushi": "寿司",
-        "天ぷら盛り合わせ": "主菜",
+        "天ぷら盛り合わせ": "炸物",
         "味噌ラーメン": "主食",
         "抹茶ラテ": "饮品",
         "葡萄酒": "饮品",
@@ -92,6 +92,13 @@ def test_infer_library_category_supports_common_multilingual_names():
     }
     for name, expected in cases.items():
         assert canvas_asset_library.infer_library_category(name) == expected
+
+
+def test_fried_dishes_use_the_dedicated_fried_category():
+    for name in ("天妇罗虾", "炸鸡", "唐揚げ", "炸猪排"):
+        result = canvas_asset_library.classify_library_name(name)
+        assert result["category"] == "炸物"
+        assert result["foodType"] == "热食"
 
 
 def test_traditional_chinese_food_names_are_normalized_before_matching():
@@ -127,6 +134,32 @@ def test_sushi_product_name_wins_over_ingredient_keywords():
         result = canvas_asset_library.classify_library_name(name)
         assert result["category"] == "寿司"
         assert result["reviewRequired"] is False
+
+
+def test_seared_sushi_is_hot_food_but_regular_sushi_remains_cold():
+    for name in ("火炙鹅肝金枪鱼寿司", "炙烧三文鱼寿司", "炙烤和牛寿司", "炙りサーモン寿司"):
+        result = canvas_asset_library.classify_library_name(name)
+        assert result["category"] == "寿司"
+        assert result["foodType"] == "热食"
+
+    regular = canvas_asset_library.classify_library_name("青花鱼寿司")
+    assert regular["category"] == "寿司"
+    assert regular["foodType"] == "冷食"
+
+
+def test_qwen_sushi_food_type_respects_searing_process():
+    assert canvas_asset_library.infer_food_type("炙烧三文鱼寿司", "寿司") == "热食"
+    assert canvas_asset_library.infer_food_type("三文鱼寿司", "寿司") == "冷食"
+
+
+def test_saved_cold_rule_cannot_override_a_hot_preparation(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+    canvas_asset_library.save_category_rule("火炙三文鱼寿司", "寿司", "冷食")
+
+    result = canvas_asset_library.classify_library_name("火炙三文鱼寿司")
+
+    assert result["category"] == "寿司"
+    assert result["foodType"] == "热食"
 
 
 def test_batch_classification_prefers_qwen_when_configured(monkeypatch):
@@ -187,6 +220,9 @@ def test_asset_library_selects_by_category_and_copies_files(monkeypatch, tmp_pat
     assert {item["sourceCategory"] for item in plan["selected"]} == {"寿司", "甜品"}
     assert {item["dishName"] for item in plan["reviewItems"]} == {"季节限定"}
     assert plan["categoryCounts"]["刺身"] == 0
+    assert len(plan["classificationResults"]) == 3
+    assert {item["dishName"] for item in plan["classificationResults"]} == {"寿司-三文鱼", "甜品-布丁", "季节限定"}
+    assert next(item for item in plan["classificationResults"] if item["dishName"] == "寿司-三文鱼")["classificationSource"] == "本地规则"
     for item in plan["selected"]:
         assert (canvas_state.draft_directory("default") / "files" / item["storedName"]).is_file()
         assert (tmp_path / "backgrounds" / item["background"]["id"]).is_file()
@@ -217,6 +253,22 @@ def test_asset_library_finds_nested_dish_folders_from_parent_root(monkeypatch, t
     assert len(plan["reviewItems"]) == 1
     assert plan["reviewItems"][0]["dishName"] == "神秘菜"
     assert plan["reviewItems"][0]["folderCount"] == 2
+
+
+def test_asset_library_classification_scan_returns_all_dishes_without_copying(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+    monkeypatch.setattr(canvas_asset_library, "QWEN_API_KEY", "")
+    asset_root = tmp_path / "library-root"
+    _write_image(asset_root / "寿司" / "三文鱼寿司" / "dish.png", "#d97979")
+    _write_image(asset_root / "主菜" / "烤龙虾" / "dish.png", "#806040")
+    _write_image(asset_root / "archive" / "神秘菜" / "dish.png", "#7aa879")
+
+    result = canvas_asset_library.scan_asset_classifications(str(asset_root))
+
+    assert len(result["classificationResults"]) == 3
+    assert {item["dishName"] for item in result["classificationResults"]} == {"三文鱼寿司", "烤龙虾", "神秘菜"}
+    assert next(item for item in result["classificationResults"] if item["dishName"] == "三文鱼寿司")["classificationSource"] == "本地规则"
+    assert next(item for item in result["classificationResults"] if item["dishName"] == "神秘菜")["reviewRequired"] is True
 
 
 def test_asset_library_merges_simplified_and_traditional_duplicate_folders(monkeypatch, tmp_path):

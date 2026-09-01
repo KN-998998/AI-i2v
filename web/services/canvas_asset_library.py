@@ -17,8 +17,9 @@ from pipeline.config import QWEN_API_KEY, QWEN_LLM_BASE_URL, QWEN_LLM_ENABLED, Q
 from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他")
+ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他")
 FOOD_TYPES = ("冷食", "热食")
+_HOT_PREPARATION_KEYWORDS = ("火炙", "炙烧", "炙烤", "炙り", "炙")
 _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
 _RULES_LOCK = threading.RLock()
 
@@ -26,7 +27,8 @@ _CATEGORY_KEYWORDS = {
     "寿司": ("寿司", "卷寿司", "手卷", "握寿司", "军舰", "卷物", "巻き寿司", "握り", "にぎり", "軍艦", "手巻き", "ちらし寿司", "押し寿司", "稲荷寿司", "すし", "sushi"),
     "刺身": ("刺身", "生鱼片", "生鱼", "海鲜刺身", "お造り", "造り", "sashimi", "刺し身"),
     "前菜/小菜": ("前菜", "小菜", "开胃菜", "开胃", "沙拉", "色拉", "毛豆", "玉子烧", "茶碗蒸し", "冷菜", "凉菜", "泡菜", "腌菜", "配菜", "下酒菜", "小吃", "先付", "お通し", "おつまみ", "サラダ", "枝豆", "だし巻き", "冷奴", "appetizer", "side dish"),
-    "主菜": ("主菜", "烧鸟", "烤鱼", "烤肉", "牛排", "天妇罗", "炸物", "唐扬", "炸鸡", "煮物", "锅物", "火锅", "鳗鱼", "猪排", "炸猪排", "焼き鳥", "焼魚", "天ぷら", "揚げ", "唐揚げ", "とんかつ", "うなぎ", "ステーキ", "主菜", "main dish", "entree"),
+    "炸物": ("炸物", "天妇罗", "唐扬", "炸鸡", "炸虾", "炸猪排", "炸牛排", "炸", "天婦羅", "天ぷら", "揚げ", "唐揚げ", "とんかつ", "フライ", "カツ", "fry", "fried"),
+    "主菜": ("主菜", "烧鸟", "烤鱼", "烤肉", "牛排", "煮物", "锅物", "火锅", "鳗鱼", "猪排", "焼き鳥", "焼魚", "うなぎ", "ステーキ", "主菜", "main dish", "entree"),
     "主食": ("主食", "米饭", "炒饭", "拉面", "乌冬", "荞麦", "面条", "盖饭", "饭团", "炒面", "ご飯", "ライス", "チャーハン", "ラーメン", "うどん", "そば", "麺", "丼", "おにぎり", "焼きそば", "rice", "noodle", "donburi"),
     "汤品": ("汤品", "味噌汤", "味噌汁", "清汤", "浓汤", "海鲜汤", "汤羹", "お吸い物", "潮汁", "豚汁", "スープ", "soup"),
     "甜品": ("甜品", "甜点", "饭后甜点", "蛋糕", "布丁", "冰淇淋", "雪糕", "慕斯", "奶油", "大福", "和果子", "可丽露", "马卡龙", "巧克力", "果冻", "芭菲", "パフェ", "和菓子", "どら焼き", "羊羹", "アイス", "デザート", "dessert", "cake", "pudding", "ice cream", "gelato", "sorbet"),
@@ -121,18 +123,31 @@ def _category_candidates(dish_name: str) -> list[str]:
     return [category for category, keywords in _CATEGORY_KEYWORDS.items() if any(_searchable_name(keyword) in name for keyword in keywords)]
 
 
+def _has_hot_preparation(dish_name: str) -> bool:
+    name = _searchable_name(dish_name)
+    return any(_searchable_name(token) in name for token in _HOT_PREPARATION_KEYWORDS)
+
+
 def classify_library_name(dish_name: str) -> dict[str, Any]:
     normalized_name = _searchable_name(dish_name)
     rules = _load_category_rules()
     if normalized_name in rules:
         rule = rules[normalized_name]
         category = str(rule["category"])
-        food_type = rule.get("foodType") or ("冷食" if category in {"甜品", "水果"} else None)
-        return {"category": category, "foodType": food_type, "candidates": [category], "reviewRequired": food_type is None, "reason": "已使用人工确认规则" if food_type else "分类规则已确认，还需确认冷食或热食"}
+        food_type = "热食" if _has_hot_preparation(dish_name) else rule.get("foodType") or ("冷食" if category in {"甜品", "水果"} else None)
+        reason = "人工规则中的加热工序优先" if _has_hot_preparation(dish_name) else "已使用人工确认规则" if food_type else "分类规则已确认，还需确认冷食或热食"
+        return {"category": category, "foodType": food_type, "candidates": [category], "reviewRequired": food_type is None, "reason": reason}
 
     name = normalized_name
     if any(token in name for token in ("寿司", "すし", "sushi")):
-        return {"category": "寿司", "foodType": "冷食", "candidates": ["寿司"], "reviewRequired": False, "reason": "寿司成品词优先"}
+        is_hot_sushi = _has_hot_preparation(dish_name)
+        return {
+            "category": "寿司",
+            "foodType": "热食" if is_hot_sushi else "冷食",
+            "candidates": ["寿司"],
+            "reviewRequired": False,
+            "reason": "寿司含加热工序词" if is_hot_sushi else "寿司成品词优先",
+        }
     candidates = _category_candidates(dish_name)
     # These describe a package or a serving format, not one dish category.
     combination_words = ("定食", "套餐", "拼盘", "拼盤", "盛合", "盛り合わせ", "组合", "組み合わせ", "set", "combo", "platter", "assortment")
@@ -143,12 +158,15 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     staple_words = ("乌冬", "拉面", "荞麦", "面条", "炒面", "盖饭", "饭团", "米饭", "丼", "うどん", "ラーメン", "そば", "麺", "丼", "ご飯", "おにぎり", "noodle", "donburi", "rice")
     dessert_words = ("冰淇淋", "雪糕", "蛋糕", "布丁", "甜点", "甜品", "大福", "パフェ", "アイス", "デザート", "cake", "pudding", "ice cream", "gelato", "dessert")
     beverage_words = ("拿铁", "奶茶", "咖啡", "茶饮", "绿茶", "乌龙茶", "红茶", "果汁", "酒", "啤酒", "清酒", "饮料", "ラテ", "コーヒー", "ドリンク", "sake", "beer", "wine", "coffee", "juice")
+    fried_words = ("炸物", "天妇罗", "唐扬", "炸鸡", "炸虾", "炸猪排", "炸牛排", "天婦羅", "天ぷら", "揚げ", "唐揚げ", "とんかつ", "フライ", "カツ", "fry", "fried")
     if not is_combination and any(_searchable_name(word) in name for word in dessert_words):
         candidates = ["甜品"]
     elif not is_combination and any(_searchable_name(word) in name for word in beverage_words):
         candidates = ["饮品"]
     elif not is_combination and any(_searchable_name(word) in name for word in staple_words):
         candidates = ["主食"]
+    elif not is_combination and any(_searchable_name(word) in name for word in fried_words):
+        candidates = ["炸物"]
 
     if is_combination or len(candidates) > 1 or not candidates:
         suggested = candidates[0] if len(candidates) == 1 else "其他"
@@ -272,11 +290,64 @@ def infer_library_category(dish_name: str) -> str:
 
 def infer_food_type(dish_name: str, category: str) -> str:
     name = simplify_dish_name(dish_name)
+    if _has_hot_preparation(dish_name):
+        return "热食"
     if category in {"刺身", "前菜/小菜", "甜品", "水果", "饮品"} or any(word in name for word in ("刺身", "生鱼", "冷", "沙拉")):
         return "冷食"
     if category == "寿司":
         return "冷食"
     return "热食"
+
+
+def _classification_results(
+    dish_groups: list[dict[str, Any]],
+    classifications: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rules = _load_category_rules()
+    results: list[dict[str, Any]] = []
+    for group in dish_groups:
+        dish_name = str(group["dishName"])
+        classification = classifications[dish_name]
+        normalized_name = _searchable_name(dish_name)
+        if normalized_name in rules:
+            source = "人工规则"
+        elif str(classification.get("reason") or "").startswith("Qwen"):
+            source = "Qwen"
+        else:
+            source = "本地规则"
+        results.append({
+            "dishName": dish_name,
+            "displayName": group["displayName"],
+            "category": str(classification["category"]),
+            "sourceCategory": str(classification["category"]),
+            "foodType": classification.get("foodType"),
+            "classificationReason": str(classification["reason"]),
+            "categoryCandidates": list(classification["candidates"]),
+            "suggestedCategory": str(classification["category"]),
+            "reviewRequired": bool(classification["reviewRequired"]),
+            "classificationSource": source,
+            "folderCount": len(group["sourceFolders"]),
+            "sourceNames": list(group["sourceNames"]),
+        })
+    return results
+
+
+def scan_asset_classifications(asset_root: str) -> dict[str, Any]:
+    """Scan and classify all deduplicated dish folders without copying files."""
+    root = Path(asset_root).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError("菜品素材库路径不存在或不是文件夹")
+    dish_groups = _merge_duplicate_dish_directories(_dish_directories(root))
+    classifications, classification_mode, classification_warning = classify_library_names([
+        group["dishName"] for group in dish_groups
+    ])
+    results = _classification_results(dish_groups, classifications)
+    return {
+        "assetRoot": str(root),
+        "classificationResults": results,
+        "classificationMode": classification_mode,
+        "classificationWarning": classification_warning,
+    }
 
 
 def _images(root: Path) -> list[Path]:
@@ -390,6 +461,7 @@ def build_asset_plan(
 
     selected: list[dict[str, Any]] = []
     review_by_name: dict[str, dict[str, Any]] = {}
+    classification_results = _classification_results(dish_groups, classifications)
     for group in dish_groups:
         classification = classifications[group["dishName"]]
         if classification["reviewRequired"]:
@@ -415,7 +487,7 @@ def build_asset_plan(
             source = generator.choice(group["images"])
             stored_name, image_url = _copy_into_draft(source, draft_id)
             background = _copy_background(generator.choice(backgrounds))
-            app_category = "甜品" if category == "甜品" else "水果" if category == "水果" else "正餐"
+            app_category = category if category == "炸物" else "甜品" if category == "甜品" else "水果" if category == "水果" else "正餐"
             classification = classifications[group["dishName"]]
             food_type = str(classification.get("foodType") or infer_food_type(group["dishName"], category))
             selected.append({
@@ -444,6 +516,7 @@ def build_asset_plan(
         "selected": selected,
         "warnings": warnings,
         "categoryCounts": counts,
+        "classificationResults": classification_results,
         "reviewItems": review_items,
         "classificationMode": classification_mode,
         "classificationWarning": classification_warning,

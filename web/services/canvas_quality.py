@@ -15,7 +15,7 @@ from PIL import Image, ImageFilter, ImageStat
 from pipeline.config import FINAL_DURATION_RANGE
 from web.services.canvas_state import draft_directory, uploaded_file
 
-_CATEGORIES = {"正餐", "小吃", "甜品", "水果", "饮品", "其他"}
+_CATEGORIES = {"正餐", "小吃", "炸物", "甜品", "水果", "饮品", "其他"}
 _FRUIT_KEYWORDS = ("蜜瓜", "草莓", "西瓜", "芒果", "葡萄", "蓝莓", "树莓", "樱桃", "桃", "梨", "苹果", "橙", "柚", "柠檬")
 _DESSERT_KEYWORDS = ("蛋糕", "布丁", "冰淇淋", "甜点", "甜品", "慕斯", "奶油", "铜锣烧", "抹茶", "芝士")
 _SNACK_KEYWORDS = ("天妇罗", "炸", "串", "薯", "饼", "小吃")

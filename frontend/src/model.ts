@@ -83,7 +83,7 @@ export type CaptionTiming = {
   endSeconds: number;
 };
 
-export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "甜品", "水果", "饮品", "其他"] as const;
+export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "炸物", "甜品", "水果", "饮品", "其他"] as const;
 export type DishCategory = typeof DISH_CATEGORY_OPTIONS[number];
 
 export type WorkflowData = {
@@ -327,12 +327,19 @@ export type AssetLibraryReviewItem = {
   sourceNames?: string[];
 };
 
+export type AssetLibraryClassificationItem = AssetLibraryReviewItem & {
+  category: string;
+  classificationSource: "本地规则" | "人工规则" | "Qwen";
+  reviewRequired: boolean;
+};
+
 export type AssetLibraryPlan = {
   assetRoot: string;
   backgroundRoot: string;
   selected: AssetLibraryPlanItem[];
   warnings: string[];
   categoryCounts: Record<string, number>;
+  classificationResults?: AssetLibraryClassificationItem[];
   reviewItems?: AssetLibraryReviewItem[];
   classificationMode?: "qwen" | "local" | "local_fallback" | "manual_rules";
   classificationWarning?: string | null;

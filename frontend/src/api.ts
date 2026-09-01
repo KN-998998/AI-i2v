@@ -130,6 +130,11 @@ export async function fetchAssetLibraryRules(): Promise<AssetLibraryRule[]> {
   return parseResponse<AssetLibraryRule[]>(response);
 }
 
+export async function fetchAssetLibraryClassifications(assetRoot: string): Promise<Pick<AssetLibraryPlan, "assetRoot" | "classificationResults" | "classificationMode" | "classificationWarning">> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/classifications?asset_root=${encodeURIComponent(assetRoot)}`, { cache: "no-store" });
+  return parseResponse<Pick<AssetLibraryPlan, "assetRoot" | "classificationResults" | "classificationMode" | "classificationWarning">>(response);
+}
+
 export async function startCanvasImageProcessing(draftId: string, nodeId: string): Promise<ImageProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/image-processing`, {
     method: "POST",
