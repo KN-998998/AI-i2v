@@ -429,7 +429,9 @@ h1 { margin-top: 3px; font-size: 18px; }
 .pool-card small { color: var(--dim); font-size: 10px; }
 .pool-card.selected { border-color: var(--cyan); background: var(--cyan-soft); }
 .toast { position: fixed; right: 20px; bottom: 20px; z-index: 50; padding: 10px 13px; border: 1px solid var(--cyan); border-radius: 5px; color: #f2f4f5; background: #17282a; box-shadow: var(--shadow); font-size: 11px; }
-.asset-library-batch-panel { border-color: rgba(114,185,178,.42); }
+.asset-library-batch-panel { display: flex; flex-direction: column; border-color: rgba(114,185,178,.42); }
+.asset-library-plan { order: 1; }
+.asset-category-results { order: 2; }
 .asset-library-paths { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .asset-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .asset-category-grid { display: grid; grid-template-columns: repeat(6, minmax(72px, 1fr)); gap: 8px; margin-top: 12px; }
