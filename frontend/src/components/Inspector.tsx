@@ -223,7 +223,6 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
         };
       });
       commitSegments(nextSegments);
-      setBulkCaptionText("");
       onToast(result.warning ?? (result.used_llm ? `Qwen 已优化并生成 ${result.segments.length} 段文案` : `已按本地规则拆分为 ${result.segments.length} 段`));
     } catch (error) {
       onToast(error instanceof Error ? error.message : "文案拆分失败");
@@ -260,15 +259,15 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const addVoice = addOverlay;
   const toggleCard = (id: string) => setCollapsedCards(current => ({ ...current, [id]: !current[id] }));
   return <>
-    <div className="caption-bulk-tools">
-      <div className="panel-section-head"><SectionTitle>整段文案拆分</SectionTitle><span className="muted">目标每段约 8-10 个中文字符</span></div>
-      <textarea className="input textarea caption-bulk-input" rows={4} value={bulkCaptionText} placeholder="粘贴一整段引流文案，拆分后会生成对应的多段文字和人声轨道" onChange={event => setBulkCaptionText(event.target.value)} />
-      <div className="caption-bulk-actions"><button type="button" className="btn" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(false)}>按本地规则拆分</button><button type="button" className="btn btn-primary" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(true)}>{captionSplitBusy ? "拆分中..." : "AI 优化拆分"}</button></div>
-      <small className="caption-bulk-hint">默认使用本地规则；只有点击“AI 优化拆分”时才调用 Qwen。拆分结果仍可逐段编辑、合并、删除和拖动。</small>
-    </div>
     <div className="tabs"><button type="button" className={`tab ${activePanel === "voice" ? "active" : ""}`} onClick={() => setActivePanel("voice")}>声音</button><button type="button" className={`tab ${activePanel === "overlay" ? "active" : ""}`} onClick={() => setActivePanel("overlay")}>文字</button></div>
     {activePanel === "overlay" ? <>
       <div className="panel-section-head"><SectionTitle>文案段</SectionTitle><button type="button" className="btn" onClick={addOverlay}>＋ 添加文案段</button></div>
+      <div className="caption-bulk-tools">
+        <div className="caption-bulk-heading"><strong>整段文案拆分</strong><span>粘贴长文案，自动生成多个文字段</span></div>
+        <textarea className="input textarea caption-bulk-input" rows={3} value={bulkCaptionText} placeholder="粘贴一整段引流文案" onChange={event => setBulkCaptionText(event.target.value)} />
+        <div className="caption-bulk-actions"><button type="button" className="btn" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(false)}>本地规则拆分</button><button type="button" className="btn btn-primary" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(true)}>{captionSplitBusy ? "拆分中..." : "AI 优化拆分"}</button></div>
+        <small className="caption-bulk-hint">本地规则免费且默认推荐；AI 优化只在点击后调用 Qwen。生成后仍可逐段修改。</small>
+      </div>
       <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面；绑定人声可选择自动匹配、不绑定或指定某一段人声。</span></div>
       <div className="overlay-editor-list" onClick={event => { const target = event.target as HTMLElement; if (target.closest(".clip-remove")) return; const header = target.closest(".overlay-editor-head"); if (!header) return; const index = Array.from(event.currentTarget.querySelectorAll(".overlay-editor-head")).indexOf(header); const item = overlayItems[index]; if (item) toggleCard(item.id); }}>{overlayItems.map((item, index) => { const style = overlayStyleFromItem(item); const collapsed = Boolean(collapsedCards[item.id]); return <div className={`overlay-editor-item ${collapsed ? "is-collapsed" : ""}`} key={item.id}>
         <div className="overlay-editor-head" role="button" tabIndex={0} aria-expanded={!collapsed} onClick={event => { event.stopPropagation(); toggleCard(item.id); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCard(item.id); } }}><span className="overlay-collapse-icon" aria-hidden="true">{collapsed ? "▸" : "▾"}</span><div><strong>文案段 {index + 1}</strong><small>{positionLabel(item.position)} · {item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s · {item.text.trim() || "未填写文案"}</small></div><button type="button" className="clip-remove" aria-label={`删除文案段 ${index + 1}`} onClick={event => { event.stopPropagation(); removeOverlay(item.id); }}>×</button></div>

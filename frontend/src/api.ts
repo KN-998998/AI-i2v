@@ -118,6 +118,8 @@ export type AssetLibraryPlan = {
   warnings: string[];
   categoryCounts: Record<string, number>;
   reviewItems?: AssetLibraryReviewItem[];
+  classificationMode?: "qwen" | "local" | "local_fallback" | "manual_rules";
+  classificationWarning?: string | null;
 };
 
 export type AssetLibraryReviewItem = {
@@ -126,6 +128,7 @@ export type AssetLibraryReviewItem = {
   classificationReason: string;
   categoryCandidates: string[];
   suggestedCategory: string;
+  folderCount?: number;
 };
 
 export async function createAssetLibraryPlan(draftId: string, assetRoot: string, backgroundRoot: string, categoryCounts: Record<string, number>): Promise<AssetLibraryPlan> {

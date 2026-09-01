@@ -6,10 +6,13 @@ import random
 import re
 import shutil
 import threading
+import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
+from pipeline.config import QWEN_API_KEY, QWEN_LLM_BASE_URL, QWEN_LLM_ENABLED, QWEN_LLM_MODEL
 from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -29,10 +32,15 @@ _CATEGORY_KEYWORDS = {
     "饮品": ("饮品", "饮料", "酒水", "清酒", "日本酒", "啤酒", "威士忌", "葡萄酒", "红酒", "白酒", "梅酒", "烧酒", "高球", "茶饮", "绿茶", "乌龙茶", "红茶", "抹茶", "咖啡", "果汁", "汽水", "苏打", "饮用水", "ドリンク", "日本酒", "ビール", "ワイン", "焼酎", "梅酒", "ハイボール", "お茶", "抹茶", "コーヒー", "ジュース", "drink", "beverage", "sake", "beer", "wine", "coffee", "juice"),
     "水果": ("水果", "鲜果", "果盘", "草莓", "西瓜", "芒果", "葡萄", "苹果", "柠檬", "橙子", "橙", "桃", "梨", "蓝莓", "樱桃", "菠萝", "凤梨", "香蕉", "柚子", "柑橘", "いちご", "苺", "すいか", "ぶどう", "りんご", "みかん", "フルーツ", "fruit", "strawberry", "watermelon", "mango", "grape", "apple", "lemon", "orange", "peach", "banana"),
 }
+_TRADITIONAL_TO_SIMPLIFIED = str.maketrans(
+    "壽魚鮭鮪鯛鰻鮑鰹鯖魷蝦貝烏龍麵飯飲湯鍋燒醬鹽餃點後氣櫻蔥蘿蔔雞豬",
+    "寿鱼鲑鲔鲷鳗鲍鲣鲭鱿虾贝乌龙面饭饮汤锅烧酱盐饺点后气樱葱萝卜鸡猪",
+)
 
 
 def _searchable_name(value: str) -> str:
-    return re.sub(r"[\s_\-—–/\\·・]+", "", value.casefold())
+    normalized = value.translate(_TRADITIONAL_TO_SIMPLIFIED).casefold()
+    return re.sub(r"[\s_\-鈥斺€?\\路銉籡]+", "", normalized)
 
 
 def _load_category_rules() -> dict[str, str]:
@@ -42,7 +50,7 @@ def _load_category_rules() -> dict[str, str]:
         payload = json.loads(_RULES_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return {str(key): str(value) for key, value in payload.items() if str(value) in ASSET_CATEGORIES} if isinstance(payload, dict) else {}
+    return {_searchable_name(str(key)): str(value) for key, value in payload.items() if str(value) in ASSET_CATEGORIES} if isinstance(payload, dict) else {}
 
 
 def save_category_rule(dish_name: str, category: str) -> dict[str, str]:
@@ -74,6 +82,8 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
         return {"category": category, "candidates": [category], "reviewRequired": False, "reason": "已使用人工确认规则"}
 
     name = normalized_name
+    if any(token in name for token in ("寿司", "すし", "sushi")):
+        return {"category": "寿司", "candidates": ["寿司"], "reviewRequired": False, "reason": "寿司成品词优先"}
     candidates = _category_candidates(dish_name)
     # These describe a package or a serving format, not one dish category.
     combination_words = ("定食", "套餐", "拼盘", "拼盤", "盛合", "盛り合わせ", "组合", "組み合わせ", "set", "combo", "platter", "assortment")
@@ -98,6 +108,108 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     return {"category": candidates[0], "candidates": candidates, "reviewRequired": False, "reason": "本地规则匹配"}
 
 
+def _qwen_message_content(body: dict[str, Any]) -> str:
+    choices = body.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        raise ValueError("Qwen 返回了无效的分类结果")
+    message = choices[0].get("message")
+    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+        raise ValueError("Qwen 返回了无效的分类内容")
+    return str(message["content"])
+
+
+def _classify_with_qwen(dish_names: list[str]) -> dict[str, dict[str, Any]]:
+    categories = "、".join(ASSET_CATEGORIES)
+    system_prompt = (
+        "你是餐饮素材库分类助手。根据菜品文件夹名称判断它最适合的一个分类。"
+        f"允许的分类只有：{categories}。"
+        "必须保留每个 dish_name 原样，不得改写、遗漏或新增名称。"
+        "只返回 JSON：{\"items\":[{\"dish_name\":\"原名称\",\"category\":\"分类\",\"confidence\":0.0,\"reason\":\"简短理由\"}]}。"
+        "confidence 必须是 0 到 1 的数字；无法确定、套餐或组合菜请降低置信度。"
+    )
+    payload = json.dumps({
+        "model": QWEN_LLM_MODEL,
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps({"dish_names": dish_names}, ensure_ascii=False)},
+        ],
+    }, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        f"{QWEN_LLM_BASE_URL.rstrip('/')}/chat/completions",
+        data=payload,
+        headers={"Authorization": f"Bearer {QWEN_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            body = json.loads(response.read().decode("utf-8", errors="replace"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ValueError("Qwen 菜品分类请求失败") from exc
+    if not isinstance(body, dict):
+        raise ValueError("Qwen 返回了无效的分类响应")
+    content = _qwen_message_content(body).strip()
+    if content.startswith("```"):
+        content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content, flags=re.IGNORECASE | re.DOTALL).strip()
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Qwen 返回的分类不是有效 JSON") from exc
+    items = parsed.get("items") if isinstance(parsed, dict) else None
+    if not isinstance(items, list) or len(items) != len(dish_names):
+        raise ValueError("Qwen 分类结果数量与菜品数量不一致")
+    expected = set(dish_names)
+    result: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("Qwen 分类结果格式无效")
+        name = item.get("dish_name")
+        category = item.get("category")
+        if not isinstance(name, str) or name not in expected or name in result or category not in ASSET_CATEGORIES:
+            raise ValueError("Qwen 返回了未要求的菜品名称或非法分类")
+        try:
+            confidence = float(item.get("confidence"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Qwen 返回了无效的分类置信度") from exc
+        if not 0 <= confidence <= 1:
+            raise ValueError("Qwen 返回了超出范围的分类置信度")
+        result[name] = {
+            "category": category,
+            "candidates": [category],
+            "reviewRequired": confidence < 0.85,
+            "reason": f"Qwen 分类（置信度 {confidence:.0%}）：{str(item.get('reason') or '名称语义判断')}",
+            "confidence": confidence,
+        }
+    if set(result) != expected:
+        raise ValueError("Qwen 分类结果遗漏了菜品名称")
+    return result
+
+
+def classify_library_names(dish_names: list[str]) -> tuple[dict[str, dict[str, Any]], str, str | None]:
+    """Classify a batch with Qwen when configured, while keeping local fallback and rules."""
+    unique_names = list(dict.fromkeys(dish_names))
+    local = {name: classify_library_name(name) for name in unique_names}
+    if not unique_names:
+        return {}, "local", None
+    rules = _load_category_rules()
+    llm_names = [name for name in unique_names if _searchable_name(name) not in rules]
+    if not llm_names:
+        return local, "manual_rules", None
+    if not QWEN_LLM_ENABLED or not QWEN_API_KEY:
+        return local, "local", None
+    try:
+        ai_results = _classify_with_qwen(llm_names)
+    except ValueError as exc:
+        return local, "local_fallback", str(exc)
+    for name, result in ai_results.items():
+        local_result = local[name]
+        if local_result["reviewRequired"] and local_result["candidates"]:
+            result["reviewRequired"] = True
+            result["reason"] = f"{result['reason']}；本地规则识别为组合或多分类候选，需人工确认"
+    return {**local, **ai_results}, "qwen", None
+
+
 def infer_library_category(dish_name: str) -> str:
     return str(classify_library_name(dish_name)["category"])
 
@@ -112,6 +224,21 @@ def infer_food_type(dish_name: str, category: str) -> str:
 
 def _images(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
+
+
+def _dish_directories(root: Path) -> list[tuple[Path, list[Path]]]:
+    """Find leaf folders containing images, allowing a library root above category folders."""
+    images_by_directory: dict[Path, list[Path]] = {}
+    for path in root.rglob("*"):
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
+            images_by_directory.setdefault(path.parent, []).append(path)
+    candidates = list(images_by_directory.items())
+    leaf_candidates = [
+        (path, images)
+        for path, images in candidates
+        if not any(path != other and path in other.parents for other, _ in candidates)
+    ]
+    return sorted(leaf_candidates, key=lambda item: str(item[0]).casefold())
 
 
 def _normalize_category_counts(category_counts: Mapping[str, int]) -> dict[str, int]:
@@ -161,33 +288,38 @@ def build_asset_plan(
         raise ValueError("背景素材库路径不存在或不是文件夹")
     counts = _normalize_category_counts(category_counts)
     generator = rng or random.Random()
-    dish_dirs = [path for path in root.iterdir() if path.is_dir()]
     grouped: dict[str, list[tuple[Path, list[Path]]]] = {category: [] for category in ASSET_CATEGORIES}
-    for dish_dir in dish_dirs:
-        images = _images(dish_dir)
-        if images:
-            classification = classify_library_name(dish_dir.name)
+    dish_images = _dish_directories(root)
+    classifications, classification_mode, classification_warning = classify_library_names([dish_dir.name for dish_dir, _ in dish_images])
+    warnings: list[str] = []
+    if classification_warning:
+        warnings.append(f"{classification_warning}，已回退本地规则")
+    for dish_dir, images in dish_images:
+        classification = classifications[dish_dir.name]
+        if classification["category"] in grouped:
             grouped[str(classification["category"])].append((dish_dir, images))
     backgrounds = _images(background_path)
     if not backgrounds:
         raise ValueError("背景素材库中没有 JPG、PNG 或 WEBP 图片")
 
     selected: list[dict[str, Any]] = []
-    review_items: list[dict[str, Any]] = []
-    warnings: list[str] = []
-    for dish_dir in dish_dirs:
-        images = _images(dish_dir)
-        if not images:
-            continue
-        classification = classify_library_name(dish_dir.name)
+    review_by_name: dict[str, dict[str, Any]] = {}
+    for dish_dir, _images_for_dish in dish_images:
+        classification = classifications[dish_dir.name]
         if classification["reviewRequired"]:
-            review_items.append({
-                "dishName": dish_dir.name,
-                "sourceCategory": str(classification["category"]),
-                "classificationReason": str(classification["reason"]),
-                "categoryCandidates": list(classification["candidates"]),
-                "suggestedCategory": str(classification["category"]),
-            })
+            review_item = review_by_name.get(dish_dir.name)
+            if review_item:
+                review_item["folderCount"] = int(review_item["folderCount"]) + 1
+            else:
+                review_by_name[dish_dir.name] = {
+                    "dishName": dish_dir.name,
+                    "sourceCategory": str(classification["category"]),
+                    "classificationReason": str(classification["reason"]),
+                    "categoryCandidates": list(classification["candidates"]),
+                    "suggestedCategory": str(classification["category"]),
+                    "folderCount": 1,
+                }
+    review_items = list(review_by_name.values())
     for category in ASSET_CATEGORIES:
         count = counts[category]
         candidates = list(grouped[category])
@@ -200,7 +332,7 @@ def build_asset_plan(
             background = _copy_background(generator.choice(backgrounds))
             app_category = "甜品" if category == "甜品" else "水果" if category == "水果" else "正餐"
             food_type = infer_food_type(dish_dir.name, category)
-            classification = classify_library_name(dish_dir.name)
+            classification = classifications[dish_dir.name]
             selected.append({
                 "dishName": dish_dir.name,
                 "sourceCategory": category,
@@ -225,4 +357,6 @@ def build_asset_plan(
         "warnings": warnings,
         "categoryCounts": counts,
         "reviewItems": review_items,
+        "classificationMode": classification_mode,
+        "classificationWarning": classification_warning,
     }

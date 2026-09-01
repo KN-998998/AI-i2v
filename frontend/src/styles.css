@@ -437,7 +437,9 @@ h1 { margin-top: 3px; font-size: 18px; }
 .asset-library-review { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(238,184,104,.42); background: rgba(77,58,34,.22); }
 .asset-library-review > div:first-child { display: grid; gap: 3px; }
 .asset-library-review small { color: var(--muted); font-size: 10px; }
-.asset-review-item { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px; align-items: center; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.asset-review-item { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px; align-items: center; padding: 8px; border-top: 1px solid rgba(255,255,255,.08); border-left: 2px solid transparent; transition: background-color .16s ease, border-color .16s ease; cursor: pointer; }
+.asset-review-item:hover { background: rgba(112, 211, 204, .08); border-left-color: rgba(112, 211, 204, .5); }
+.asset-review-item.is-active { background: rgba(112, 211, 204, .16); border-left-color: var(--cyan); box-shadow: inset 0 0 0 1px rgba(112, 211, 204, .2); }
 .asset-review-item > span { display: grid; gap: 3px; min-width: 0; }
 .asset-review-item strong, .asset-review-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-plan-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
