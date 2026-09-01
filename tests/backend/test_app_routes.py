@@ -51,6 +51,21 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
         ],
         "bgmName": "默认 BGM",
         "bgmUrl": "",
+        "assetLibraryPlan": {
+            "assetRoot": "F:\\assets",
+            "backgroundRoot": "F:\\backgrounds",
+            "selected": [],
+            "warnings": [],
+            "categoryCounts": {"寿司": 2},
+            "reviewItems": [{
+                "dishName": "炙烧寿司",
+                "sourceCategory": "未确认",
+                "classificationReason": "名称存在多个候选分类",
+                "categoryCandidates": ["寿司", "正餐"],
+                "suggestedCategory": "寿司",
+                "folderCount": 2,
+            }],
+        },
     }
 
     assert client.get("/api/canvas/drafts/default").status_code == 404
@@ -60,6 +75,9 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
     assert client.get("/api/canvas/drafts/default").json()["nextNodeNumber"] == 3
     assert client.get("/api/canvas/drafts/default").json()["composeBatchCount"] == 2
     assert len(client.get("/api/canvas/drafts/default").json()["composeWorkspaces"]) == 2
+    persisted_plan = client.get("/api/canvas/drafts/default").json()["assetLibraryPlan"]
+    assert persisted_plan["assetRoot"] == "F:\\assets"
+    assert persisted_plan["reviewItems"][0]["dishName"] == "炙烧寿司"
 
     uploaded = client.post(
         "/api/canvas/drafts/default/files",

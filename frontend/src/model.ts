@@ -183,6 +183,7 @@ export type DraftPayload = {
   bgmName: string;
   bgmUrl: string;
   composeJob?: ComposeJob | null;
+  assetLibraryPlan?: AssetLibraryPlan | null;
 };
 
 export type ComposeJob = {
@@ -293,6 +294,42 @@ export type BackgroundTemplate = {
   name: string;
   url: string;
   source: "local";
+};
+
+export type AssetLibraryPlanItem = {
+  dishName: string;
+  sourceCategory: string;
+  dishCategory: string;
+  foodType: string;
+  imageName: string;
+  imagePreview: string;
+  sourcePath: string;
+  storedName: string;
+  background: BackgroundTemplate;
+  reviewRequired?: boolean;
+  classificationReason?: string;
+  categoryCandidates?: string[];
+  suggestedCategory?: string;
+};
+
+export type AssetLibraryReviewItem = {
+  dishName: string;
+  sourceCategory: string;
+  classificationReason: string;
+  categoryCandidates: string[];
+  suggestedCategory: string;
+  folderCount?: number;
+};
+
+export type AssetLibraryPlan = {
+  assetRoot: string;
+  backgroundRoot: string;
+  selected: AssetLibraryPlanItem[];
+  warnings: string[];
+  categoryCounts: Record<string, number>;
+  reviewItems?: AssetLibraryReviewItem[];
+  classificationMode?: "qwen" | "local" | "local_fallback" | "manual_rules";
+  classificationWarning?: string | null;
 };
 
 export type ClipLibraryItem = TimelineClip & {

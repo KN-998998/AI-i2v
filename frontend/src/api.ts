@@ -1,4 +1,4 @@
-import type { BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, MediaAnalysis } from "./model";
+import type { AssetLibraryPlan, BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, MediaAnalysis } from "./model";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -94,42 +94,6 @@ export async function uploadBackgroundTemplate(file: File): Promise<BackgroundTe
   const response = await fetch(`${API_BASE_URL}/api/canvas/backgrounds`, { method: "POST", body });
   return parseResponse<BackgroundTemplate>(response);
 }
-
-export type AssetLibraryPlanItem = {
-  dishName: string;
-  sourceCategory: string;
-  dishCategory: string;
-  foodType: string;
-  imageName: string;
-  imagePreview: string;
-  sourcePath: string;
-  storedName: string;
-  background: BackgroundTemplate;
-  reviewRequired?: boolean;
-  classificationReason?: string;
-  categoryCandidates?: string[];
-  suggestedCategory?: string;
-};
-
-export type AssetLibraryPlan = {
-  assetRoot: string;
-  backgroundRoot: string;
-  selected: AssetLibraryPlanItem[];
-  warnings: string[];
-  categoryCounts: Record<string, number>;
-  reviewItems?: AssetLibraryReviewItem[];
-  classificationMode?: "qwen" | "local" | "local_fallback" | "manual_rules";
-  classificationWarning?: string | null;
-};
-
-export type AssetLibraryReviewItem = {
-  dishName: string;
-  sourceCategory: string;
-  classificationReason: string;
-  categoryCandidates: string[];
-  suggestedCategory: string;
-  folderCount?: number;
-};
 
 export async function createAssetLibraryPlan(draftId: string, assetRoot: string, backgroundRoot: string, categoryCounts: Record<string, number>): Promise<AssetLibraryPlan> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/plan?draft_id=${encodeURIComponent(draftId)}`, {

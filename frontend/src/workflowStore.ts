@@ -1,8 +1,8 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
-import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing, type AssetLibraryPlanItem } from "./api";
+import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
 
 type WorkflowState = {
@@ -24,6 +24,7 @@ type WorkflowState = {
   bgmName: string;
   bgmUrl: string;
   composeJob: ComposeJob | null;
+  assetLibraryPlan: AssetLibraryPlan | null;
   nextNodeNumber: number;
   draftId: string;
   hydrated: boolean;
@@ -67,6 +68,8 @@ type WorkflowState = {
   removeWorkspaceClip: (workspaceId: string, clipId: string) => void;
   addWorkspaceClip: (workspaceId: string, clipId: string) => void;
   setWorkspaceJob: (workspaceId: string, job: ComposeJob | null) => void;
+  setAssetLibraryPlan: (plan: AssetLibraryPlan | null) => void;
+  updateAssetLibraryReviewCategory: (dishName: string, category: string) => void;
   loadDraft: () => Promise<void>;
   saveDraft: () => Promise<void>;
 };
@@ -195,6 +198,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   bgmName: workflowSeed.bgmName,
   bgmUrl: "",
   composeJob: null,
+  assetLibraryPlan: null,
   nextNodeNumber: 1,
   draftId: "default",
   hydrated: false,
@@ -609,6 +613,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     composeJob: job,
     revision: state.revision + 1,
   })),
+  setAssetLibraryPlan: assetLibraryPlan => set(state => ({ assetLibraryPlan, revision: state.revision + 1 })),
+  updateAssetLibraryReviewCategory: (dishName, category) => set(state => {
+    if (!state.assetLibraryPlan) return {};
+    const reviewItems = (state.assetLibraryPlan.reviewItems ?? []).map(item => item.dishName === dishName ? { ...item, suggestedCategory: category } : item);
+    return { assetLibraryPlan: { ...state.assetLibraryPlan, reviewItems }, revision: state.revision + 1 };
+  }),
   loadDraft: async () => {
     const state = get();
     if (state.hydrated) return;
@@ -636,6 +646,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
        bgmName: draft.bgmName ?? "",
       bgmUrl: draft.bgmUrl ?? "",
       composeJob: draft.composeJob ?? null,
+      assetLibraryPlan: draft.assetLibraryPlan ?? null,
       activePanel: draft.activePanel as Panel,
       nextNodeNumber: draft.nextNodeNumber,
       hydrated: true,
@@ -661,6 +672,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         bgmName: state.bgmName,
         bgmUrl: state.bgmUrl,
         composeJob: state.composeJob,
+        assetLibraryPlan: state.assetLibraryPlan,
       };
       const saved = await persistDraft(state.draftId, payload);
       set({ saving: false, lastSavedAt: (saved as DraftPayload & { updated_at?: string }).updated_at ?? new Date().toISOString() });

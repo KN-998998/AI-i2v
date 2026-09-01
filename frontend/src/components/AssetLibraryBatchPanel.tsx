@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { createAssetLibraryPlan, pickAssetLibraryFolder, saveAssetLibraryRule, type AssetLibraryPlan, type AssetLibraryReviewItem } from "../api";
+import { createAssetLibraryPlan, pickAssetLibraryFolder, saveAssetLibraryRule } from "../api";
+import type { AssetLibraryPlan, AssetLibraryReviewItem } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 
 const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
@@ -26,12 +27,14 @@ function rememberPath(key: string, value: string): void {
 export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string) => void }) {
   const draftId = useWorkflowStore(state => state.draftId);
   const saveDraft = useWorkflowStore(state => state.saveDraft);
+  const savedPlan = useWorkflowStore(state => state.assetLibraryPlan);
+  const setAssetLibraryPlan = useWorkflowStore(state => state.setAssetLibraryPlan);
+  const updateAssetLibraryReviewCategory = useWorkflowStore(state => state.updateAssetLibraryReviewCategory);
   const createBatchWorkflows = useWorkflowStore(state => state.createBatchWorkflows);
   const runBatchGeneration = useWorkflowStore(state => state.runBatchGeneration);
   const [assetRoot, setAssetRoot] = useState(() => rememberedPath(ASSET_ROOT_STORAGE_KEY));
   const [backgroundRoot, setBackgroundRoot] = useState(() => rememberedPath(BACKGROUND_ROOT_STORAGE_KEY));
   const [counts, setCounts] = useState<Record<string, number>>(() => Object.fromEntries(CATEGORIES.map(category => [category, 0])));
-  const [plan, setPlan] = useState<AssetLibraryPlan | null>(null);
   const [createdGeneratorIds, setCreatedGeneratorIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
@@ -40,8 +43,17 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const [savingRule, setSavingRule] = useState<string | null>(null);
   const [rulesChanged, setRulesChanged] = useState(false);
 
+  const plan: AssetLibraryPlan | null = savedPlan;
+
   useEffect(() => rememberPath(ASSET_ROOT_STORAGE_KEY, assetRoot), [assetRoot]);
   useEffect(() => rememberPath(BACKGROUND_ROOT_STORAGE_KEY, backgroundRoot), [backgroundRoot]);
+  useEffect(() => {
+    if (!plan) return;
+    setAssetRoot(current => current || plan.assetRoot);
+    setBackgroundRoot(current => current || plan.backgroundRoot);
+    setCounts(current => Object.values(current).some(value => value > 0) ? current : { ...current, ...plan.categoryCounts });
+    setReviewCategories(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
+  }, [plan]);
 
   const updateCount = (category: string, value: number) => setCounts(current => ({ ...current, [category]: Math.max(0, Math.min(50, Number.isFinite(value) ? Math.round(value) : 0)) }));
 
@@ -66,11 +78,12 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     setBusy(true);
     try {
       const next = await createAssetLibraryPlan(draftId, assetRoot.trim(), backgroundRoot.trim(), counts);
-      setPlan(next);
+      setAssetLibraryPlan(next);
       setReviewCategories(Object.fromEntries((next.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
       setActiveReviewItem(null);
       setRulesChanged(false);
       setCreatedGeneratorIds([]);
+      await saveDraft();
       onToast(`已抽取 ${next.selected.length} 个待确认方案`);
     } catch (error) {
       onToast(error instanceof Error ? error.message : "素材库扫描失败");
@@ -84,13 +97,15 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     setSavingRule(item.dishName);
     try {
       await saveAssetLibraryRule(item.dishName, category);
-      setPlan(current => current ? {
-        ...current,
-        selected: current.selected.map(selected => selected.dishName === item.dishName
+      const nextPlan = plan ? {
+        ...plan,
+        selected: plan.selected.map(selected => selected.dishName === item.dishName
           ? { ...selected, sourceCategory: category, suggestedCategory: category, reviewRequired: false, classificationReason: "已使用人工确认规则", categoryCandidates: [category] }
           : selected),
-        reviewItems: (current.reviewItems ?? []).filter(review => review.dishName !== item.dishName),
-      } : current);
+        reviewItems: (plan.reviewItems ?? []).filter(review => review.dishName !== item.dishName),
+      } : null;
+      setAssetLibraryPlan(nextPlan);
+      await saveDraft();
       setRulesChanged(true);
       onToast(`已保存“${item.dishName}”的分类规则`);
     } catch (error) {
@@ -138,7 +153,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
         <div><strong>分类确认页面</strong><small>这里列出素材库中所有无法可靠判断的菜品。选择真实分类并保存后，会写入本地规则；点击上方“按最新规则重新抽取”后，新规则会参与分类数量抽取。</small></div>
         {(plan.reviewItems ?? []).map(item => <div className={`asset-review-item ${activeReviewItem === item.dishName ? "is-active" : ""}`} key={item.dishName} onClick={() => setActiveReviewItem(item.dishName)}>
           <span><strong>{item.dishName}</strong><small>{item.classificationReason} · {item.folderCount && item.folderCount > 1 ? `共 ${item.folderCount} 个同名文件夹 · ` : ""}候选：{item.categoryCandidates?.join("、") || "无"}</small></span>
-          <select className="input" value={reviewCategories[item.dishName] ?? item.sourceCategory} onChange={event => setReviewCategories(current => ({ ...current, [item.dishName]: event.target.value }))}>{CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select>
+          <select className="input" value={reviewCategories[item.dishName] ?? item.sourceCategory} onChange={event => { const category = event.target.value; setReviewCategories(current => ({ ...current, [item.dishName]: category })); updateAssetLibraryReviewCategory(item.dishName, category); void saveDraft(); }}>{CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select>
           <button type="button" className="btn" disabled={savingRule !== null} onClick={() => void confirmCategory(item)}>{savingRule === item.dishName ? "保存中..." : "保存规则"}</button>
         </div>)}
       </div>}
