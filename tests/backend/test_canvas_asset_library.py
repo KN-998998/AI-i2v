@@ -43,6 +43,18 @@ def test_classification_surfaces_compound_names_for_review_and_remembers_rules(m
     assert remembered["reviewRequired"] is False
 
 
+def test_category_rules_can_be_listed_for_management(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+
+    canvas_asset_library.save_category_rule("烤龙虾", "主菜")
+    canvas_asset_library.save_category_rule("角切鱼生饭", "主食")
+
+    assert canvas_asset_library.list_category_rules() == [
+        {"dishName": "烤龙虾", "category": "主菜"},
+        {"dishName": "角切鱼生饭", "category": "主食"},
+    ]
+
+
 def test_infer_library_category_supports_common_multilingual_names():
     cases = {
         "サーモン刺身": "刺身",

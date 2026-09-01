@@ -123,6 +123,13 @@ export async function saveAssetLibraryRule(dishName: string, category: string): 
   return parseResponse<{ dishName: string; category: string }>(response);
 }
 
+export type AssetLibraryRule = { dishName: string; category: string };
+
+export async function fetchAssetLibraryRules(): Promise<AssetLibraryRule[]> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, { cache: "no-store" });
+  return parseResponse<AssetLibraryRule[]>(response);
+}
+
 export async function startCanvasImageProcessing(draftId: string, nodeId: string): Promise<ImageProcessingJob> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/image-processing`, {
     method: "POST",

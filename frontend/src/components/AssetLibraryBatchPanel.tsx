@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createAssetLibraryPlan, pickAssetLibraryFolder, saveAssetLibraryRule } from "../api";
+import { createAssetLibraryPlan, fetchAssetLibraryRules, pickAssetLibraryFolder, saveAssetLibraryRule, type AssetLibraryRule } from "../api";
 import type { AssetLibraryPlan, AssetLibraryReviewItem } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 
@@ -42,11 +42,28 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const [activeReviewItem, setActiveReviewItem] = useState<string | null>(null);
   const [savingRule, setSavingRule] = useState<string | null>(null);
   const [rulesChanged, setRulesChanged] = useState(false);
+  const [categoryRules, setCategoryRules] = useState<AssetLibraryRule[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [ruleSaving, setRuleSaving] = useState<string | null>(null);
+  const [pendingRuleCategories, setPendingRuleCategories] = useState<Record<string, string>>({});
 
   const plan: AssetLibraryPlan | null = savedPlan;
 
   useEffect(() => rememberPath(ASSET_ROOT_STORAGE_KEY, assetRoot), [assetRoot]);
   useEffect(() => rememberPath(BACKGROUND_ROOT_STORAGE_KEY, backgroundRoot), [backgroundRoot]);
+  useEffect(() => {
+    let active = true;
+    setRulesLoading(true);
+    fetchAssetLibraryRules()
+      .then(rules => {
+        if (!active) return;
+        setCategoryRules(rules);
+        setPendingRuleCategories(Object.fromEntries(rules.map(rule => [rule.dishName, rule.category])));
+      })
+      .catch(error => { if (active) onToast(error instanceof Error ? error.message : "分类规则加载失败"); })
+      .finally(() => { if (active) setRulesLoading(false); });
+    return () => { active = false; };
+  }, [onToast]);
   useEffect(() => {
     if (!plan) return;
     setAssetRoot(current => current || plan.assetRoot);
@@ -127,6 +144,23 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     onToast(`已创建 ${ids.length} 条流程，请先检查节点信息`);
   };
 
+  const saveManagedRule = async (rule: AssetLibraryRule) => {
+    const category = pendingRuleCategories[rule.dishName] ?? rule.category;
+    if (category === rule.category) return;
+    setRuleSaving(rule.dishName);
+    try {
+      const saved = await saveAssetLibraryRule(rule.dishName, category);
+      setCategoryRules(current => current.map(item => item.dishName === rule.dishName ? saved : item));
+      onToast(`已将“${rule.dishName}”调整为${category}`);
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "分类规则保存失败");
+    } finally {
+      setRuleSaving(null);
+    }
+  };
+
+  const groupedRules = CATEGORIES.map(category => ({ category, items: categoryRules.filter(rule => rule.category === category) }));
+
   const execute = async () => {
     if (!createdGeneratorIds.length) return;
     setBusy(true);
@@ -146,6 +180,10 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     <div className="field-grid asset-library-paths"><label className="field"><span>菜品素材库路径</span><div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="例如：F:\\...\\鮨政exp" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("asset")}>{folderBusy === "asset" ? "选择中..." : "选择文件夹"}</button></div></label><label className="field"><span>背景素材库路径</span><div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="例如：F:\\...\\背景模板" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("background")}>{folderBusy === "background" ? "选择中..." : "选择文件夹"}</button></div></label></div>
     <div className="asset-category-grid">{CATEGORIES.map(category => <label className="field" key={category}><span>{category}数量</span><input className="input" type="number" min="0" max="50" value={counts[category]} onChange={event => updateCount(category, Number(event.target.value))} /></label>)}</div>
     <div className="compose-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void buildPlan()}>{busy ? "处理中..." : rulesChanged ? "按最新规则重新抽取" : "扫描并生成待确认方案"}</button><button type="button" className="btn" disabled={!plan || busy || (plan.reviewItems ?? []).length > 0} onClick={() => void applyPlan()}>应用到画布</button><button type="button" className="btn btn-danger" disabled={!createdGeneratorIds.length || busy} onClick={() => void execute()}>确认并执行抠图 + 生成</button></div>
+    <section className="asset-category-results">
+      <div className="panel-section-head"><div><span className="panel-label">SAVED CLASSIFICATION RULES</span><h2>分类结果管理</h2><p className="muted">这里展示已确认、会参与后续扫描的菜品分类。修改后点击保存，下一次扫描会直接使用新分类。</p></div><span className="muted">{rulesLoading ? "加载中..." : `${categoryRules.length} 个菜品`}</span></div>
+      <div className="asset-category-result-list">{groupedRules.map(group => <details className="asset-category-result" key={group.category} open={group.items.length > 0}><summary><span>{group.category}</span><strong>{group.items.length}</strong></summary><div className="asset-category-result-items">{group.items.length ? group.items.map(rule => <div className="asset-rule-row" key={rule.dishName}><strong title={rule.dishName}>{rule.dishName}</strong><select className="input" value={pendingRuleCategories[rule.dishName] ?? rule.category} onChange={event => setPendingRuleCategories(current => ({ ...current, [rule.dishName]: event.target.value }))}>{CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select><button type="button" className="btn" disabled={ruleSaving !== null || (pendingRuleCategories[rule.dishName] ?? rule.category) === rule.category} onClick={() => void saveManagedRule(rule)}>{ruleSaving === rule.dishName ? "保存中..." : "保存"}</button></div>) : <small className="muted">暂无已确认菜品</small>}</div></details>)}</div>
+    </section>
     {plan && <div className="asset-library-plan">
       <strong>扫描结果：已抽取 {plan.selected.length} 个方案 · {plan.reviewItems?.length ?? 0} 个待确认</strong>
       {plan.warnings.map(warning => <small className="source-pending" key={warning}>{warning}</small>)}

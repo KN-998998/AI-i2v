@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from web.app import create_app
 from web.services import canvas_state
 from web.services import canvas_quality
+from web.services import canvas_asset_library
 from web.api import routes as api_routes
 
 
@@ -30,6 +31,16 @@ def test_workflow_pages_use_react_spa_fallback():
         assert response.status_code == 200
         assert "/static/canvas-app/assets/index.js" in response.text
     assert client.get("/workflow/unknown").status_code == 404
+
+
+def test_asset_library_rules_route_lists_saved_categories(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+    canvas_asset_library.save_category_rule("烤龙虾", "主菜")
+
+    response = TestClient(create_app()).get("/api/canvas/asset-library/rules")
+
+    assert response.status_code == 200
+    assert response.json() == [{"dishName": "烤龙虾", "category": "主菜"}]
 
 
 def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):

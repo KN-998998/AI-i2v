@@ -434,6 +434,15 @@ h1 { margin-top: 3px; font-size: 18px; }
 .asset-path-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .asset-category-grid { display: grid; grid-template-columns: repeat(6, minmax(72px, 1fr)); gap: 8px; margin-top: 12px; }
 .asset-library-plan { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.asset-category-results { display: grid; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.asset-category-result-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.asset-category-result { min-width: 0; border: 1px solid var(--line); background: rgba(16,20,23,.72); }
+.asset-category-result summary { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; color: var(--text); cursor: pointer; list-style-position: inside; }
+.asset-category-result summary strong { min-width: 22px; color: var(--cyan); text-align: right; }
+.asset-category-result-items { display: grid; gap: 6px; padding: 0 8px 8px; }
+.asset-rule-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; gap: 6px; align-items: center; min-width: 0; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.06); }
+.asset-rule-row > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.asset-rule-row .input { min-width: 0; }
 .asset-library-review { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(238,184,104,.42); background: rgba(77,58,34,.22); }
 .asset-library-review > div:first-child { display: grid; gap: 3px; }
 .asset-library-review small { color: var(--muted); font-size: 10px; }
@@ -501,6 +510,6 @@ h1 { margin-top: 3px; font-size: 18px; }
   .storyboard-preview-media { max-width: 104px; }
   .image-process-grid { grid-template-columns: 1fr; }
   .background-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .asset-library-paths, .asset-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .asset-library-paths, .asset-category-grid, .asset-category-result-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .asset-path-control { grid-template-columns: 1fr; }
 }

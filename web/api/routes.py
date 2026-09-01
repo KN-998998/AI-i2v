@@ -35,7 +35,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
-from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, save_category_rule
+from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, save_category_rule
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
@@ -308,6 +308,11 @@ def create_asset_library_rule(payload: dict[str, Any] | None = None) -> dict[str
         return save_category_rule(str(request.get("dish_name") or ""), str(request.get("category") or ""))
     except ValueError as exc:
         raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/canvas/asset-library/rules")
+def get_asset_library_rules() -> list[dict[str, str]]:
+    return list_category_rules()
 
 
 @router.post("/api/canvas/asset-library/pick-folder")

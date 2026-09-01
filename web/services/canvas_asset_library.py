@@ -69,6 +69,24 @@ def save_category_rule(dish_name: str, category: str) -> dict[str, str]:
     return {"dishName": dish_name, "category": category}
 
 
+def list_category_rules() -> list[dict[str, str]]:
+    """Return the saved dish classification rules for the management UI."""
+    if not _RULES_PATH.is_file():
+        return []
+    try:
+        payload = json.loads(_RULES_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(payload, dict):
+        return []
+    rules = [
+        {"dishName": str(dish_name), "category": str(category)}
+        for dish_name, category in payload.items()
+        if str(category) in ASSET_CATEGORIES and str(dish_name).strip()
+    ]
+    return sorted(rules, key=lambda item: (ASSET_CATEGORIES.index(item["category"]), item["dishName"].casefold()))
+
+
 def _category_candidates(dish_name: str) -> list[str]:
     name = _searchable_name(dish_name)
     return [category for category, keywords in _CATEGORY_KEYWORDS.items() if any(_searchable_name(keyword) in name for keyword in keywords)]
