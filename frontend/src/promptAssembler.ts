@@ -12,6 +12,7 @@ export type SpeedCurve = "uniform" | "ease_in" | "ease_out";
 export type L2Item = { type: L2Type; target: string };
 
 export type PromptFoodType = "冷食" | "热食" | "混合/多温";
+export type PromptVisualSubjectType = "菜品主体" | "手部" | "厨师上半身" | "手部+厨师上半身";
 export type PromptConfig = {
   mode: PromptMode;
   camera_move: CameraMove;
@@ -26,6 +27,7 @@ export type PromptConfig = {
   seamless_loop: boolean;
   endImageReady?: boolean;
   food_type?: PromptFoodType;
+  visual_subject_type?: PromptVisualSubjectType;
 };
 
 export type PromptIssue = { code: string; message: string; field: string };
@@ -151,6 +153,7 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   speed_curve: null,
   seamless_loop: false,
   endImageReady: false,
+  visual_subject_type: "菜品主体",
 };
 
 function issue(code: string, message: string, field: string): PromptIssue {
@@ -168,6 +171,7 @@ function l2Type(type: L2Type) {
 function normalizeConfig(config: PromptConfig): PromptConfig {
   return {
     ...config,
+    visual_subject_type: ["菜品主体", "手部", "厨师上半身", "手部+厨师上半身"].includes(config.visual_subject_type ?? "") ? config.visual_subject_type : "菜品主体",
     shot_size: SHOT_SIZE_OPTIONS.some(item => item.value === config.shot_size) ? config.shot_size : DEFAULT_PROMPT_CONFIG.shot_size,
     elements: [...config.elements],
     l2_dynamics: config.l2_dynamics.map(item => ({ ...item })),
@@ -257,6 +261,9 @@ function buildPrompt(config: PromptConfig, locked: string[]): string {
   const dynamics = dynamicText(config);
   const sections: string[] = [];
   sections.push(`【景别】${SHOT_SIZE_OPTIONS.find(item => item.value === config.shot_size)?.text ?? SHOT_SIZE_OPTIONS[0].text}。`);
+  if (config.visual_subject_type === "手部") sections.push("【素材主体】原图包含手部与菜品，保留手部、手指和菜品的真实比例及连接关系，不抠除手部、不新增手指。");
+  if (config.visual_subject_type === "厨师上半身") sections.push("【素材主体】原图包含厨师上半身与菜品，保留人物躯干、手臂和菜品的真实关系，人物仅完成指定动作，不改变人物外观。");
+  if (config.visual_subject_type === "手部+厨师上半身") sections.push("【素材主体】原图同时包含手部、厨师上半身与菜品，保留人物、手部和菜品的真实比例及相互关系，不抠除人物或手部。");
   if (config.food_type === "混合/多温") sections.push("【餐品属性】当前为套餐组合，包含冷食与热食；保持整套摆盘、各组成餐品的数量、形态和相互位置稳定，不新增或替换组成餐品。");
   if (config.mode === "single_image") {
     if (config.camera_move === "locked_off") sections.push("【镜头】固定机位不动（locked-off），画面构图保持不变。");
@@ -318,6 +325,7 @@ type LegacyPromptData = {
   promptSpeedCurve?: SpeedCurve | null;
   promptSeamlessLoop?: boolean;
   foodType?: PromptFoodType;
+  visualSubjectType?: PromptVisualSubjectType;
   promptEndImageName?: string;
   promptEndImagePreview?: string;
 };
@@ -353,6 +361,7 @@ export function promptConfigFromData(data: LegacyPromptData): PromptConfig {
     seamless_loop: data.promptSeamlessLoop ?? false,
     endImageReady: Boolean(data.promptEndImageName || data.promptEndImagePreview),
     food_type: data.foodType,
+    visual_subject_type: data.visualSubjectType,
   };
 }
 
@@ -382,5 +391,6 @@ export function promptLegacyPatch(config: PromptConfig): PromptLegacyPatch {
     promptSpeedCurve: config.speed_curve,
     promptSeamlessLoop: config.seamless_loop,
     foodType: config.food_type,
+    visualSubjectType: config.visual_subject_type,
   };
 }

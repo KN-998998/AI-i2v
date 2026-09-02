@@ -306,7 +306,8 @@ def create_asset_library_rule(payload: dict[str, Any] | None = None) -> dict[str
     request = payload or {}
     try:
         food_type = request.get("food_type")
-        return save_category_rule(str(request.get("dish_name") or ""), str(request.get("category") or ""), str(food_type) if food_type else None)
+        visual_subject_type = request.get("visual_subject_type")
+        return save_category_rule(str(request.get("dish_name") or ""), str(request.get("category") or ""), str(food_type) if food_type else None, str(visual_subject_type) if visual_subject_type else None)
     except ValueError as exc:
         raise _json_error(str(exc), 400) from exc
 

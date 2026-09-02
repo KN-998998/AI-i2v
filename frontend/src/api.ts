@@ -122,16 +122,16 @@ export async function scanManualAssetLibraryUpload(files: File[]): Promise<Manua
   return parseResponse<ManualAssetReviewScan>(response);
 }
 
-export async function saveAssetLibraryRule(dishName: string, category: string, foodType?: "冷食" | "热食" | "混合/多温"): Promise<{ dishName: string; category: string; foodType?: "冷食" | "热食" | "混合/多温" | null }> {
+export async function saveAssetLibraryRule(dishName: string, category: string, foodType?: "冷食" | "热食" | "混合/多温", visualSubjectType?: "菜品主体" | "手部" | "厨师上半身" | "手部+厨师上半身"): Promise<{ dishName: string; category: string; foodType?: "冷食" | "热食" | "混合/多温" | null; visualSubjectType?: "菜品主体" | "手部" | "厨师上半身" | "手部+厨师上半身" }> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dish_name: dishName, category, food_type: foodType ?? null }),
+    body: JSON.stringify({ dish_name: dishName, category, food_type: foodType ?? null, visual_subject_type: visualSubjectType ?? "菜品主体" }),
   });
   return parseResponse<{ dishName: string; category: string }>(response);
 }
 
-export type AssetLibraryRule = { dishName: string; category: string; foodType?: "冷食" | "热食" | "混合/多温" | null };
+export type AssetLibraryRule = { dishName: string; category: string; foodType?: "冷食" | "热食" | "混合/多温" | null; visualSubjectType?: "菜品主体" | "手部" | "厨师上半身" | "手部+厨师上半身" };
 
 export async function fetchAssetLibraryRules(): Promise<AssetLibraryRule[]> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, { cache: "no-store" });
@@ -153,7 +153,7 @@ export async function fetchManualAssetReviewScan(scanId: string): Promise<Manual
   return parseResponse<ManualAssetReviewScan>(response);
 }
 
-export async function organizeManualAssetLibrary(scanId: string, targetRoot: string, classifications: Array<{ dishKey: string; category: string; foodType: "冷食" | "热食" | "混合/多温" }>, excludedDishKeys: string[] = []): Promise<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }> {
+export async function organizeManualAssetLibrary(scanId: string, targetRoot: string, classifications: Array<{ dishKey: string; category: string; foodType: "冷食" | "热食" | "混合/多温"; visualSubjectType: "菜品主体" | "手部" | "厨师上半身" | "手部+厨师上半身" }>, excludedDishKeys: string[] = []): Promise<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/organize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

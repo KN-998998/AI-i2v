@@ -57,6 +57,7 @@ class PromptConfig:
     speed_curve: Optional[str] = None    # 仅 keyframes 时非空
     seamless_loop: bool = False
     food_type: str = ""
+    visual_subject_type: str = "菜品主体"
 
 
 @dataclass
@@ -334,6 +335,13 @@ def _l1_text(cfg: PromptConfig) -> str:
 def _build_sections(cfg: PromptConfig, locked: list) -> list:
     sections = []
     sections.append(f"【景别】{SHOT_SIZE_TEXT.get(cfg.shot_size, SHOT_SIZE_TEXT['close_up'])}。")
+    visual_subject_text = {
+        "手部": "原图包含手部与菜品，保留手部、手指和菜品的真实比例及连接关系，不抠除手部、不新增手指。",
+        "厨师上半身": "原图包含厨师上半身与菜品，保留人物躯干、手臂和菜品的真实关系，人物仅完成指定动作，不改变人物外观。",
+        "手部+厨师上半身": "原图同时包含手部、厨师上半身与菜品，保留人物、手部和菜品的真实比例及相互关系，不抠除人物或手部。",
+    }.get(cfg.visual_subject_type)
+    if visual_subject_text:
+        sections.append(f"【素材主体】{visual_subject_text}")
     if cfg.food_type == "混合/多温":
         sections.append("【餐品属性】当前为套餐组合，包含冷食与热食；保持整套摆盘、各组成餐品的数量、形态和相互位置稳定，不新增或替换组成餐品。")
 

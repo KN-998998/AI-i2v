@@ -19,6 +19,9 @@ from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他")
 FOOD_TYPES = ("冷食", "热食", "混合/多温")
+VISUAL_SUBJECT_TYPES = ("菜品主体", "手部", "厨师上半身", "手部+厨师上半身")
+DEFAULT_VISUAL_SUBJECT_TYPE = "菜品主体"
+_ASSET_METADATA_FILENAME = "asset_metadata.json"
 _HOT_PREPARATION_KEYWORDS = ("火炙", "炙烧", "炙烤", "炙り", "炙")
 _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
 _MANUAL_REVIEW_ROOT = CANVAS_BACKGROUND_ROOT.parent / "asset_library_manual_review"
@@ -85,11 +88,16 @@ def _load_category_rules() -> dict[str, dict[str, str | None]]:
             category = str(value)
             food_type = None
         if category in ASSET_CATEGORIES:
-            rules[_searchable_name(str(key))] = {"category": category, "foodType": food_type if food_type in FOOD_TYPES else None}
+            visual_subject_type = str(value.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE) if isinstance(value, dict) else DEFAULT_VISUAL_SUBJECT_TYPE
+            rules[_searchable_name(str(key))] = {
+                "category": category,
+                "foodType": food_type if food_type in FOOD_TYPES else None,
+                "visualSubjectType": visual_subject_type if visual_subject_type in VISUAL_SUBJECT_TYPES else DEFAULT_VISUAL_SUBJECT_TYPE,
+            }
     return rules
 
 
-def save_category_rule(dish_name: str, category: str, food_type: str | None = None) -> dict[str, str | None]:
+def save_category_rule(dish_name: str, category: str, food_type: str | None = None, visual_subject_type: str | None = None) -> dict[str, str | None]:
     normalized_name = _searchable_name(dish_name)
     if not normalized_name:
         raise ValueError("菜品名称不能为空")
@@ -101,24 +109,31 @@ def save_category_rule(dish_name: str, category: str, food_type: str | None = No
         raise ValueError("套餐必须选择混合/多温")
     elif food_type not in FOOD_TYPES:
         raise ValueError("该菜品分类必须选择冷食或热食")
+    visual_subject_type = visual_subject_type or DEFAULT_VISUAL_SUBJECT_TYPE
+    if visual_subject_type not in VISUAL_SUBJECT_TYPES:
+        raise ValueError("不支持的画面主体类型")
     with _RULES_LOCK:
         rules = _load_category_rules()
-        rules[normalized_name] = {"category": category, "foodType": food_type}
+        rules[normalized_name] = {"category": category, "foodType": food_type, "visualSubjectType": visual_subject_type}
         _RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
         temporary = _RULES_PATH.with_suffix(f".{uuid.uuid4().hex}.tmp")
         temporary.write_text(json.dumps(rules, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(_RULES_PATH)
-    return {"dishName": simplify_dish_name(dish_name), "category": category, "foodType": food_type}
+    return {"dishName": simplify_dish_name(dish_name), "category": category, "foodType": food_type, "visualSubjectType": visual_subject_type}
 
 
 def list_category_rules() -> list[dict[str, str | None]]:
     """Return the saved dish classification rules for the management UI."""
-    rules = _load_category_rules()
-    rules = [
-        {"dishName": simplify_dish_name(str(dish_name)), "category": str(rule["category"]), "foodType": rule.get("foodType")}
-        for dish_name, rule in rules.items()
-        if str(rule.get("category")) in ASSET_CATEGORIES and str(dish_name).strip()
-    ]
+    saved_rules = _load_category_rules()
+    rules = []
+    for dish_name, rule in saved_rules.items():
+        if str(rule.get("category")) not in ASSET_CATEGORIES or not str(dish_name).strip():
+            continue
+        item = {"dishName": simplify_dish_name(str(dish_name)), "category": str(rule["category"]), "foodType": rule.get("foodType")}
+        visual_subject_type = rule.get("visualSubjectType")
+        if visual_subject_type and visual_subject_type != DEFAULT_VISUAL_SUBJECT_TYPE:
+            item["visualSubjectType"] = visual_subject_type
+        rules.append(item)
     return sorted(rules, key=lambda item: (ASSET_CATEGORIES.index(item["category"]), item["dishName"].casefold()))
 
 
@@ -139,8 +154,9 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
         rule = rules[normalized_name]
         category = str(rule["category"])
         food_type = "混合/多温" if category == "套餐" else "热食" if _has_hot_preparation(dish_name) else rule.get("foodType") or ("冷食" if category in {"甜品", "水果"} else None)
+        visual_subject_type = str(rule.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE)
         reason = "人工规则中的加热工序优先" if _has_hot_preparation(dish_name) else "已使用人工确认规则" if food_type else "分类规则已确认，还需确认冷食或热食"
-        return {"category": category, "foodType": food_type, "candidates": [category], "reviewRequired": food_type is None, "reason": reason}
+        return {"category": category, "foodType": food_type, "visualSubjectType": visual_subject_type, "candidates": [category], "reviewRequired": food_type is None, "reason": reason}
 
     name = normalized_name
     if any(token in name for token in ("寿司", "すし", "sushi")):
@@ -148,6 +164,7 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
         return {
             "category": "寿司",
             "foodType": "热食" if is_hot_sushi else "冷食",
+            "visualSubjectType": DEFAULT_VISUAL_SUBJECT_TYPE,
             "candidates": ["寿司"],
             "reviewRequired": False,
             "reason": "寿司含加热工序词" if is_hot_sushi else "寿司成品词优先",
@@ -177,9 +194,9 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     if is_combination or len(candidates) > 1 or not candidates:
         suggested = candidates[0] if len(candidates) == 1 else "其他"
         reason = "组合菜名，需确认成品主体" if is_combination else "名称命中多个分类" if len(candidates) > 1 else "未匹配到分类词"
-        return {"category": suggested, "foodType": "混合/多温" if suggested == "套餐" else "冷食" if suggested in {"甜品", "水果"} else None, "candidates": candidates, "reviewRequired": True, "reason": reason}
+        return {"category": suggested, "foodType": "混合/多温" if suggested == "套餐" else "冷食" if suggested in {"甜品", "水果"} else None, "visualSubjectType": DEFAULT_VISUAL_SUBJECT_TYPE, "candidates": candidates, "reviewRequired": True, "reason": reason}
     category = candidates[0]
-    return {"category": category, "foodType": "冷食" if category in {"甜品", "水果", "寿司", "刺身", "前菜/小菜"} else "热食", "candidates": candidates, "reviewRequired": False, "reason": "本地规则匹配"}
+    return {"category": category, "foodType": "冷食" if category in {"甜品", "水果", "寿司", "刺身", "前菜/小菜"} else "热食", "visualSubjectType": DEFAULT_VISUAL_SUBJECT_TYPE, "candidates": candidates, "reviewRequired": False, "reason": "本地规则匹配"}
 
 
 def _qwen_message_content(body: dict[str, Any]) -> str:
@@ -252,6 +269,7 @@ def _classify_with_qwen(dish_names: list[str]) -> dict[str, dict[str, Any]]:
             "category": category,
             "candidates": [category],
             "foodType": infer_food_type(name, category),
+            "visualSubjectType": DEFAULT_VISUAL_SUBJECT_TYPE,
             "reviewRequired": confidence < 0.85,
             "reason": f"Qwen 分类（置信度 {confidence:.0%}）：{str(item.get('reason') or '名称语义判断')}",
             "confidence": confidence,
@@ -329,6 +347,7 @@ def _classification_results(
             "category": str(classification["category"]),
             "sourceCategory": str(classification["category"]),
             "foodType": classification.get("foodType"),
+            "visualSubjectType": classification.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE,
             "classificationReason": str(classification["reason"]),
             "categoryCandidates": list(classification["candidates"]),
             "suggestedCategory": str(classification["category"]),
@@ -349,6 +368,12 @@ def scan_asset_classifications(asset_root: str) -> dict[str, Any]:
     classifications, classification_mode, classification_warning = classify_library_names([
         group["dishName"] for group in dish_groups
     ])
+    asset_metadata = _load_asset_metadata(root)
+    for group in dish_groups:
+        classification = classifications[group["dishName"]]
+        metadata = _metadata_for_dish(asset_metadata, str(classification["category"]), group["dishName"])
+        if metadata:
+            classification["visualSubjectType"] = metadata["visualSubjectType"]
     results = _classification_results(dish_groups, classifications)
     return {
         "assetRoot": str(root),
@@ -360,6 +385,29 @@ def scan_asset_classifications(asset_root: str) -> dict[str, Any]:
 
 def _images(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
+
+
+def _load_asset_metadata(root: Path) -> dict[str, dict[str, str]]:
+    path = root / _ASSET_METADATA_FILENAME
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        str(key): value
+        for key, value in payload.items()
+        if isinstance(value, dict)
+        and value.get("visualSubjectType") in VISUAL_SUBJECT_TYPES
+        and value.get("category") in ASSET_CATEGORIES
+    }
+
+
+def _metadata_for_dish(metadata: dict[str, dict[str, str]], category: str, dish_name: str) -> dict[str, str]:
+    return metadata.get(f"{category}/{_searchable_name(dish_name)}", {})
 
 
 def _dish_directories(root: Path) -> list[tuple[Path, list[Path]]]:
@@ -468,6 +516,7 @@ def manual_review_scan_response(payload: Mapping[str, Any]) -> dict[str, Any]:
             "sourceNames": [str(name) for name in group.get("sourceNames", [])],
             "folderCount": len(group.get("sourceFolders", [])),
             "imageCount": len(images),
+            "visualSubjectType": str(group.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE),
             "previewUrls": [f"/api/canvas/asset-library/manual-review/scans/{payload['scanId']}/previews/{dish_key}/{index}" for index in range(min(4, len(images)))],
         })
     return {"scanId": str(payload.get("scanId") or ""), "assetRoot": str(payload.get("assetRoot") or ""), "items": items}
@@ -515,7 +564,7 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
         raise ValueError("至少保留一个素材后才能整理入库")
     if not isinstance(classifications, list) or len(classifications) != len(active_groups):
         raise ValueError("请完成所有菜品的人工分类和冷热标记")
-    confirmed: dict[str, tuple[str, str]] = {}
+    confirmed: dict[str, tuple[str, str, str]] = {}
     for item in classifications:
         if not isinstance(item, Mapping):
             raise ValueError("人工分类结果格式无效")
@@ -528,7 +577,10 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
             raise ValueError("套餐必须选择混合/多温")
         if category in {"甜品", "水果"} and food_type != "冷食":
             raise ValueError("甜品和水果必须选择冷食")
-        confirmed[key] = (category, food_type)
+        visual_subject_type = str(item.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE)
+        if visual_subject_type not in VISUAL_SUBJECT_TYPES:
+            raise ValueError("人工分类结果包含无效的画面主体类型")
+        confirmed[key] = (category, food_type, visual_subject_type)
     if set(confirmed) != set(active_groups):
         raise ValueError("请完成所有菜品的人工分类和冷热标记")
     target = Path(target_root).expanduser().resolve()
@@ -536,8 +588,9 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
         raise ValueError("标准素材库不能位于原始素材库内部")
     target.mkdir(parents=True, exist_ok=True)
     copied = 0
+    metadata: dict[str, dict[str, str]] = {}
     for key, group in active_groups.items():
-        category, _food_type = confirmed[key]
+        category, food_type, visual_subject_type = confirmed[key]
         dish_dir = target / category / _safe_library_name(str(group.get("dishName") or "未命名菜品"))
         dish_dir.mkdir(parents=True, exist_ok=True)
         for source_value in group.get("images", []):
@@ -547,6 +600,15 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
             destination = _unique_destination(dish_dir / source.name)
             shutil.copy2(source, destination)
             copied += 1
+        metadata[f"{category}/{_searchable_name(str(group.get('dishName') or ''))}"] = {
+            "category": category,
+            "foodType": food_type,
+            "visualSubjectType": visual_subject_type,
+        }
+    metadata_path = target / _ASSET_METADATA_FILENAME
+    temporary = metadata_path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+    temporary.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(metadata_path)
     return {"scanId": scan_id, "targetRoot": str(target), "dishCount": len(active_groups), "imageCount": copied}
 
 
@@ -612,6 +674,7 @@ def build_asset_plan(
         raise ValueError("背景素材库路径不存在或不是文件夹")
     counts = _normalize_category_counts(category_counts)
     generator = rng or random.Random()
+    asset_metadata = _load_asset_metadata(root)
     grouped: dict[str, list[dict[str, Any]]] = {category: [] for category in ASSET_CATEGORIES}
     raw_dish_images = _dish_directories(root)
     dish_groups = _merge_duplicate_dish_directories(raw_dish_images)
@@ -623,6 +686,9 @@ def build_asset_plan(
         warnings.append(f"{classification_warning}，已回退本地规则")
     for group in dish_groups:
         classification = classifications[group["dishName"]]
+        metadata = _metadata_for_dish(asset_metadata, str(classification["category"]), group["dishName"])
+        if metadata:
+            classification["visualSubjectType"] = metadata["visualSubjectType"]
         if classification["category"] in grouped:
             grouped[str(classification["category"])].append(group)
     backgrounds = _images(background_path)
@@ -643,6 +709,7 @@ def build_asset_plan(
                 "categoryCandidates": list(classification["candidates"]),
                 "suggestedCategory": str(classification["category"]),
                 "foodType": classification.get("foodType") if classification["category"] in {"甜品", "水果", "套餐"} else None,
+                "visualSubjectType": classification.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE,
                 "folderCount": len(group["sourceFolders"]),
                 "sourceNames": list(group["sourceNames"]),
             }

@@ -44,12 +44,12 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <div className="dish-preview"><div className="dish-image-fallback">{data.imagePreview ? <img src={data.imagePreview} alt={formatNodeValue(data.dishName, "菜品素材")} /> : "素材"}</div></div>
       <Row label="当前菜品" value={formatNodeValue(data.dishName, "未选择菜品")} />
       <Row label="首帧 / 尾帧" value={`${formatNodeValue(data.imageName, "未上传")} / 可选`} />
-      <div className="tag-list"><Tag good>{formatNodeValue(data.foodType, "待确认")}</Tag><Tag>{dishCategory}</Tag><Tag>{formatNodeValue(data.assetMode, "单图模式")}</Tag></div>
+      <div className="tag-list"><Tag good>{formatNodeValue(data.foodType, "待确认")}</Tag><Tag>{dishCategory}</Tag><Tag>{formatNodeValue(data.visualSubjectType, "菜品主体")}</Tag><Tag>{formatNodeValue(data.assetMode, "单图模式")}</Tag></div>
       <Footer><ActionButton onClick={() => action()}>编辑素材</ActionButton></Footer>
     </>,
     image_process: <>
       <div className="dish-preview"><div className="dish-image-fallback">{data.processedImagePreview ? <img src={data.processedImagePreview} alt="处理后首帧" /> : data.backgroundPreview ? <img src={data.backgroundPreview} alt="背景模板" /> : "待处理"}</div></div>
-      <Row label="模型" value="GoodsMatting" />
+      <Row label="处理方式" value={data.visualSubjectType && data.visualSubjectType !== "菜品主体" ? "保留原图" : "GoodsMatting 抠图"} />
       <Row label="背景" value={formatNodeValue(data.backgroundTemplateName, "未选择") } />
       <Row label="输出" value={formatNodeValue(data.processedImageName, "尚未生成") } />
       <Footer><ActionButton primary onClick={() => { setSelection(id); navigate("/workflow/image-processing"); }}>编辑图片处理</ActionButton></Footer>

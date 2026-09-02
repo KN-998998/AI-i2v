@@ -29,6 +29,7 @@ from web.services.canvas_state import background_file, draft_directory, generate
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _JOB_LOCK = threading.RLock()
 _CANVAS_SIZE = (1080, 1920)
+_VISUAL_SUBJECT_TYPES = {"菜品主体", "手部", "厨师上半身", "手部+厨师上半身"}
 
 
 def _now() -> str:
@@ -253,6 +254,35 @@ def _compose_image(foreground_path: Path, background_path: Path | None, destinat
     canvas.convert("RGB").save(destination, "JPEG", quality=95, optimize=True)
 
 
+def _visual_subject_type(input_data: dict[str, Any]) -> str:
+    value = str(input_data.get("visualSubjectType") or "菜品主体")
+    if value not in _VISUAL_SUBJECT_TYPES:
+        raise ValueError("素材画面主体类型无效，请重新选择")
+    return value
+
+
+def _process_source_image(
+    draft_id: str,
+    source_image: Path,
+    process_data: dict[str, Any],
+    input_data: dict[str, Any],
+) -> tuple[Path, str | None, str]:
+    visual_subject_type = _visual_subject_type(input_data)
+    if visual_subject_type != "菜品主体":
+        result_path = generated_file_path(draft_id, ".jpg")
+        with Image.open(source_image) as source:
+            ImageOps.exif_transpose(source).convert("RGB").save(result_path, "JPEG", quality=95, optimize=True)
+        return result_path, None, "保留原图，跳过抠图与背景合成"
+
+    cutout_path = generated_file_path(draft_id, ".png")
+    _goods_matting(source_image, cutout_path, draft_id)
+    template_name = str(process_data.get("backgroundTemplateId") or "")
+    template_path = background_file(template_name) if template_name else None
+    result_path = generated_file_path(draft_id, ".jpg")
+    _compose_image(cutout_path, template_path, result_path, process_data)
+    return result_path, cutout_path.name, "抠图并合成背景首帧"
+
+
 def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
     draft = load_draft(draft_id)
     if draft is None:
@@ -265,6 +295,7 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
     source_image = _draft_image(draft_id, input_data.get("imagePreview"))
     if source_image is None or not source_image.is_file():
         raise ValueError("请将素材与菜品节点连接到当前图片处理节点，并上传菜品图片")
+    visual_subject_type = _visual_subject_type(input_data)
 
     job_id = uuid.uuid4().hex
     job = {
@@ -279,6 +310,8 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
         "result_name": None,
         "analysis": None,
         "error": None,
+        "visualSubjectType": visual_subject_type,
+        "processingMode": "matting_composite" if visual_subject_type == "菜品主体" else "preserve_original",
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)
@@ -287,14 +320,9 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
         try:
             data = process_node.get("data", {})
             _persist_node_status(draft_id, node_id, "处理中", imageProcessingJobId=job_id)
-            _update_job(draft_id, job, status="running", stage="上传图片并调用 GoodsMatting")
-            cutout_path = generated_file_path(draft_id, ".png")
-            _goods_matting(source_image, cutout_path, draft_id)
-            _update_job(draft_id, job, stage="合成背景首帧")
-            template_name = str(data.get("backgroundTemplateId") or "")
-            template_path = background_file(template_name) if template_name else None
-            result_path = generated_file_path(draft_id, ".jpg")
-            _compose_image(cutout_path, template_path, result_path, data)
+            _update_job(draft_id, job, status="running", stage="准备图片处理")
+            result_path, cutout_name, stage = _process_source_image(draft_id, source_image, data, input_data)
+            _update_job(draft_id, job, stage=stage)
             analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
             result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
             _update_job(
@@ -304,7 +332,7 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
                 stage="图片处理完成",
                 result_url=result_url,
                 result_name=result_path.name,
-                cutout_name=cutout_path.name,
+                cutout_name=cutout_name,
                 analysis=analysis,
             )
             _persist_node_status(
@@ -315,6 +343,8 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
                 processedImagePreview=result_url,
                 processedImageName=result_path.name,
                 processedImageAnalysis=analysis,
+                processedImageMode=job["processingMode"],
+                visualSubjectType=visual_subject_type,
             )
         except Exception as exc:
             _update_job(draft_id, job, status="error", stage="图片处理失败", error=str(exc))
@@ -359,19 +389,15 @@ def _recover_image_processing_job(draft_id: str, job: dict[str, Any]) -> None:
         if source_image is None or not source_image.is_file():
             raise ValueError("恢复任务找不到菜品原图，请重新上传素材")
         data = process_node.get("data", {})
+        visual_subject_type = _visual_subject_type(input_data)
         _update_job(draft_id, job, status="running", stage="恢复图片处理任务")
         _persist_node_status(draft_id, node_id, "处理中", imageProcessingJobId=job["job_id"])
-        cutout_path = generated_file_path(draft_id, ".png")
-        _goods_matting(source_image, cutout_path, draft_id)
-        _update_job(draft_id, job, stage="合成背景首帧")
-        template_name = str(data.get("backgroundTemplateId") or "")
-        template_path = background_file(template_name) if template_name else None
-        result_path = generated_file_path(draft_id, ".jpg")
-        _compose_image(cutout_path, template_path, result_path, data)
+        result_path, cutout_name, stage = _process_source_image(draft_id, source_image, data, input_data)
+        _update_job(draft_id, job, stage=stage, visualSubjectType=visual_subject_type, processingMode="matting_composite" if visual_subject_type == "菜品主体" else "preserve_original")
         analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
         result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
-        _update_job(draft_id, job, status="done", stage="图片处理完成", result_url=result_url, result_name=result_path.name, cutout_name=cutout_path.name, analysis=analysis)
-        _persist_node_status(draft_id, node_id, "已处理", imageProcessingJobId=job["job_id"], processedImagePreview=result_url, processedImageName=result_path.name, processedImageAnalysis=analysis)
+        _update_job(draft_id, job, status="done", stage="图片处理完成", result_url=result_url, result_name=result_path.name, cutout_name=cutout_name, analysis=analysis)
+        _persist_node_status(draft_id, node_id, "已处理", imageProcessingJobId=job["job_id"], processedImagePreview=result_url, processedImageName=result_path.name, processedImageAnalysis=analysis, processedImageMode=job.get("processingMode"), visualSubjectType=visual_subject_type)
     except Exception as exc:
         _update_job(draft_id, job, status="error", stage="图片处理恢复失败", error=str(exc))
         _persist_node_status(draft_id, node_id, "处理失败", imageProcessingJobId=job.get("job_id"))

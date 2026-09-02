@@ -87,6 +87,8 @@ export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "炸物", "甜品", "�
 export type DishCategory = typeof DISH_CATEGORY_OPTIONS[number];
 export const FOOD_TYPE_OPTIONS = ["冷食", "热食", "混合/多温"] as const;
 export type FoodType = typeof FOOD_TYPE_OPTIONS[number];
+export const VISUAL_SUBJECT_TYPE_OPTIONS = ["菜品主体", "手部", "厨师上半身", "手部+厨师上半身"] as const;
+export type VisualSubjectType = typeof VISUAL_SUBJECT_TYPE_OPTIONS[number];
 
 export type WorkflowData = {
   kind: NodeKind;
@@ -95,6 +97,7 @@ export type WorkflowData = {
   status: string;
   dishName?: string;
   foodType?: FoodType;
+  visualSubjectType?: VisualSubjectType;
   dishCategory?: DishCategory;
   sourceLibraryCategory?: string;
   sourceLibraryPath?: string;
@@ -113,6 +116,7 @@ export type WorkflowData = {
   processedImageName?: string;
   processedImagePreview?: string;
   processedImageAnalysis?: MediaAnalysis;
+  processedImageMode?: "matting_composite" | "preserve_original";
   imageProcessingJobId?: string;
   duration?: string;
   resolution?: string;
@@ -289,6 +293,8 @@ export type ImageProcessingJob = {
   result_name?: string | null;
   cutout_name?: string | null;
   analysis?: MediaAnalysis | null;
+  visualSubjectType?: VisualSubjectType;
+  processingMode?: "matting_composite" | "preserve_original";
   error?: string | null;
 };
 
@@ -305,6 +311,7 @@ export type AssetLibraryPlanItem = {
   sourceCategory: string;
   dishCategory: string;
   foodType: FoodType;
+  visualSubjectType: VisualSubjectType;
   imageName: string;
   imagePreview: string;
   sourcePath: string;
@@ -326,6 +333,7 @@ export type AssetLibraryReviewItem = {
   categoryCandidates: string[];
   suggestedCategory: string;
   foodType?: FoodType | null;
+  visualSubjectType?: VisualSubjectType;
   folderCount?: number;
   sourceNames?: string[];
 };
