@@ -35,7 +35,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
-from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, manual_review_preview_path, manual_review_scan_response, organize_manual_asset_library, save_category_rule, scan_asset_classifications, scan_manual_asset_library
+from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, manual_review_preview_path, manual_review_scan_response, manual_review_upload_directory, organize_manual_asset_library, save_category_rule, scan_asset_classifications, scan_manual_asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
@@ -329,6 +329,29 @@ def create_manual_asset_review_scan(asset_root: str) -> dict[str, Any]:
     try:
         return scan_manual_asset_library(asset_root)
     except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/canvas/asset-library/manual-review/scans/uploads")
+async def create_manual_asset_review_upload(files: list[UploadFile] = File(...)) -> dict[str, Any]:
+    upload_root = manual_review_upload_directory()
+    try:
+        for upload in files:
+            filename = str(upload.filename or "").replace("\\", "/")
+            parts = Path(filename).parts
+            if not filename or Path(filename).is_absolute() or any(part in {"", ".", ".."} for part in parts):
+                raise ValueError("上传的文件夹结构无效")
+            destination = (upload_root / Path(*parts)).resolve()
+            if upload_root.resolve() not in destination.parents:
+                raise ValueError("上传文件路径无效")
+            if destination.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("wb") as output:
+                shutil.copyfileobj(upload.file, output)
+        return scan_manual_asset_library(str(upload_root))
+    except (OSError, ValueError) as exc:
+        shutil.rmtree(upload_root, ignore_errors=True)
         raise _json_error(str(exc), 400) from exc
 
 

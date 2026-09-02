@@ -402,6 +402,10 @@ def _manual_review_file(scan_id: str) -> Path:
     return _MANUAL_REVIEW_ROOT / f"{scan_id}.json"
 
 
+def manual_review_upload_directory() -> Path:
+    return _MANUAL_REVIEW_ROOT / "uploads" / uuid.uuid4().hex
+
+
 def _manual_review_groups(asset_root: str) -> list[dict[str, Any]]:
     root = Path(asset_root).expanduser().resolve()
     if not root.is_dir():

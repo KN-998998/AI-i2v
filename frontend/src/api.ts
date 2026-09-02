@@ -104,14 +104,22 @@ export async function createAssetLibraryPlan(draftId: string, assetRoot: string,
   return parseResponse<AssetLibraryPlan>(response);
 }
 
-export async function pickAssetLibraryFolder(title: string): Promise<string> {
+export async function pickAssetLibraryFolder(title: string, signal?: AbortSignal): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/pick-folder`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
+    signal,
   });
   const payload = await parseResponse<{ path: string }>(response);
   return payload.path;
+}
+
+export async function scanManualAssetLibraryUpload(files: File[]): Promise<ManualAssetReviewScan> {
+  const form = new FormData();
+  files.forEach(file => form.append("files", file, (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name));
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/scans/uploads`, { method: "POST", body: form });
+  return parseResponse<ManualAssetReviewScan>(response);
 }
 
 export async function saveAssetLibraryRule(dishName: string, category: string, foodType?: "冷食" | "热食"): Promise<{ dishName: string; category: string; foodType?: "冷食" | "热食" | null }> {

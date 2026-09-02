@@ -86,6 +86,18 @@ def test_manual_asset_review_routes_require_confirmation_and_copy_images(monkeyp
     assert source_image.is_file()
 
 
+def test_manual_asset_review_upload_route_preserves_folder_structure(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
+    response = TestClient(create_app()).post(
+        "/api/canvas/asset-library/manual-review/scans/uploads",
+        files=[("files", ("raw/寿司/三文鱼寿司/dish.jpg", b"jpeg-bytes", "image/jpeg"))],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["dishName"] == "三文鱼寿司"
+    assert response.json()["items"][0]["imageCount"] == 1
+
+
 def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
     test_root = tmp_path / "canvas-draft"
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { organizeManualAssetLibrary, pickAssetLibraryFolder, scanManualAssetLibrary } from "../api";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type InputHTMLAttributes } from "react";
+import { organizeManualAssetLibrary, pickAssetLibraryFolder, scanManualAssetLibrary, scanManualAssetLibraryUpload } from "../api";
 import type { ManualAssetReviewScan } from "../model";
 import { navigate } from "../router";
 
 type Props = { onToast: (message: string) => void };
 type FoodType = "冷食" | "热食";
 type Selection = { category: string; foodType: FoodType | "" };
+type FolderInputAttributes = InputHTMLAttributes<HTMLInputElement> & { webkitdirectory?: string; directory?: string };
 
 const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
 const DEFAULT_TARGET_ROOT = "E:\\图片素材库";
@@ -35,6 +36,7 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
   const [folderBusy, setFolderBusy] = useState<"source" | "target" | null>(null);
   const [scanning, setScanning] = useState(false);
   const [organizing, setOrganizing] = useState(false);
+  const sourceFolderInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ scan, targetRoot, selections })); } catch { /* Browser storage is optional. */ }
@@ -44,12 +46,37 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
   const allConfirmed = Boolean(scan?.items.length && confirmedCount === scan.items.length);
 
   const chooseFolder = async (kind: "source" | "target") => {
+    if (kind === "source") {
+      sourceFolderInput.current?.click();
+      return;
+    }
     setFolderBusy(kind);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30_000);
     try {
-      const path = await pickAssetLibraryFolder(kind === "source" ? "选择待整理的原始图片目录" : "选择标准图片素材库目录");
-      if (path) kind === "source" ? setSourceRoot(path) : setTargetRoot(path);
+      const path = await pickAssetLibraryFolder("选择标准图片素材库目录", controller.signal);
+      if (path) setTargetRoot(path);
     } catch (error) {
-      onToast(error instanceof Error ? error.message : "文件夹选择失败");
+      onToast(error instanceof DOMException && error.name === "AbortError" ? "系统文件夹选择器未响应，请直接填写目录路径" : error instanceof Error ? error.message : "文件夹选择失败");
+    } finally {
+      window.clearTimeout(timeout);
+      setFolderBusy(null);
+    }
+  };
+
+  const importSourceFolder = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    setFolderBusy("source");
+    try {
+      const result = await scanManualAssetLibraryUpload(files);
+      setScan(result);
+      setSourceRoot(result.assetRoot);
+      setSelections({});
+      onToast(`已导入并扫描 ${result.items.length} 个菜品，等待人工分类`);
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "文件夹导入失败");
     } finally {
       setFolderBusy(null);
     }
@@ -98,7 +125,7 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
     <div className="step-header"><div><span className="panel-label">MANUAL ASSET LIBRARY</span><h1>人工整理图片素材库</h1><p>扫描只读取文件夹和图片。分类、冷热食全部由人工确认，不调用 AI 或本地规则；原始素材只复制，不移动、不删除。</p></div></div>
     <section className="step-panel manual-library-controls">
       <div className="manual-library-paths">
-        <label className="field"><span>原始图片素材目录</span><div className="asset-path-control"><input className="input" value={sourceRoot} onChange={event => setSourceRoot(event.target.value)} placeholder="选择需要整理的图片素材总目录" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("source")}>{folderBusy === "source" ? "选择中..." : "选择文件夹"}</button></div></label>
+        <label className="field"><span>原始图片素材目录</span><div className="asset-path-control"><input className="input" value={sourceRoot} onChange={event => setSourceRoot(event.target.value)} placeholder="选择文件夹后自动导入，或手动填写目录路径" /><input ref={sourceFolderInput} className="folder-input-hidden" type="file" multiple {...({ webkitdirectory: "", directory: "" } as FolderInputAttributes)} onChange={event => void importSourceFolder(event)} /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("source")}>{folderBusy === "source" ? "导入中..." : "选择文件夹"}</button></div></label>
         <label className="field"><span>标准素材库目录</span><div className="asset-path-control"><input className="input" value={targetRoot} onChange={event => setTargetRoot(event.target.value)} /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("target")}>{folderBusy === "target" ? "选择中..." : "选择文件夹"}</button></div></label>
       </div>
       <div className="manual-library-actions"><button type="button" className="btn btn-primary" disabled={scanning || organizing} onClick={() => void scanSource()}>{scanning ? "扫描中..." : "扫描待整理菜品"}</button><span className="muted">{scan ? `已确认 ${confirmedCount}/${scan.items.length} 个菜品` : "尚未扫描"}</span><button type="button" className="btn btn-danger" disabled={!allConfirmed || organizing || scanning} onClick={() => void organize()}>{organizing ? "正在复制入库..." : "全部确认并整理入库"}</button></div>
