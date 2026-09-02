@@ -325,16 +325,6 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
             _update_job(draft_id, job, stage=stage)
             analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
             result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
-            _update_job(
-                draft_id,
-                job,
-                status="done",
-                stage="图片处理完成",
-                result_url=result_url,
-                result_name=result_path.name,
-                cutout_name=cutout_name,
-                analysis=analysis,
-            )
             _persist_node_status(
                 draft_id,
                 node_id,
@@ -345,6 +335,16 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
                 processedImageAnalysis=analysis,
                 processedImageMode=job["processingMode"],
                 visualSubjectType=visual_subject_type,
+            )
+            _update_job(
+                draft_id,
+                job,
+                status="done",
+                stage="图片处理完成",
+                result_url=result_url,
+                result_name=result_path.name,
+                cutout_name=cutout_name,
+                analysis=analysis,
             )
         except Exception as exc:
             _update_job(draft_id, job, status="error", stage="图片处理失败", error=str(exc))
@@ -396,8 +396,8 @@ def _recover_image_processing_job(draft_id: str, job: dict[str, Any]) -> None:
         _update_job(draft_id, job, stage=stage, visualSubjectType=visual_subject_type, processingMode="matting_composite" if visual_subject_type == "菜品主体" else "preserve_original")
         analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
         result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
-        _update_job(draft_id, job, status="done", stage="图片处理完成", result_url=result_url, result_name=result_path.name, cutout_name=cutout_name, analysis=analysis)
         _persist_node_status(draft_id, node_id, "已处理", imageProcessingJobId=job["job_id"], processedImagePreview=result_url, processedImageName=result_path.name, processedImageAnalysis=analysis, processedImageMode=job.get("processingMode"), visualSubjectType=visual_subject_type)
+        _update_job(draft_id, job, status="done", stage="图片处理完成", result_url=result_url, result_name=result_path.name, cutout_name=cutout_name, analysis=analysis)
     except Exception as exc:
         _update_job(draft_id, job, status="error", stage="图片处理恢复失败", error=str(exc))
         _persist_node_status(draft_id, node_id, "处理失败", imageProcessingJobId=job.get("job_id"))

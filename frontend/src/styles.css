@@ -469,6 +469,9 @@ h1 { margin-top: 3px; font-size: 18px; }
 .folder-input-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .manual-library-actions .btn-danger { margin-left: auto; }
 .manual-review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; margin-top: 16px; }
+.manual-review-pagination { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); color: var(--muted); background: rgba(16,20,23,.72); font-size: 11px; }
+.manual-review-pagination > div { display: flex; align-items: center; gap: 8px; }
+.manual-review-pagination strong { color: var(--text); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .manual-review-card { display: grid; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
 .manual-review-head { position: relative; }
 .manual-review-remove { width: 24px; height: 24px; margin-left: auto; padding: 0; border: 1px solid rgba(238,130,130,.45); border-radius: 4px; color: #ffc4c4; background: transparent; font-size: 18px; line-height: 20px; cursor: pointer; }
@@ -484,9 +487,11 @@ h1 { margin-top: 3px; font-size: 18px; }
 .manual-review-head small { color: var(--muted); font-size: 10px; }
 .manual-review-head b { color: var(--amber); font-size: 10px; font-weight: 500; white-space: nowrap; }
 .manual-review-card.is-complete .manual-review-head b { color: var(--green); }
-.manual-review-previews { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; min-height: 74px; }
-.manual-review-previews img, .manual-review-previews span { width: 100%; height: 74px; border: 1px solid var(--line); border-radius: 4px; object-fit: cover; background: #090b0d; }
+.manual-review-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 5px; min-height: 74px; }
+.manual-review-previews img, .manual-review-previews span, .manual-review-previews button { width: 100%; height: 74px; border: 1px solid var(--line); border-radius: 4px; object-fit: cover; background: #090b0d; }
 .manual-review-previews span { display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+.manual-review-preview-more { min-height: 74px; padding: 6px; border: 1px dashed rgba(112,211,204,.45); border-radius: 4px; color: var(--cyan); background: rgba(112,211,204,.06); font-size: 10px; cursor: pointer; }
+.manual-review-preview-more:hover { background: rgba(112,211,204,.14); }
 .manual-review-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .manual-review-fields .field { gap: 5px; margin: 0; }
 .manual-review-fields .field > span { color: var(--muted); font-size: 10px; }
@@ -551,4 +556,6 @@ h1 { margin-top: 3px; font-size: 18px; }
   .asset-rule-row, .asset-review-item { grid-template-columns: minmax(0, 1fr) minmax(88px, 1fr); }
   .asset-rule-name, .asset-review-item > span { grid-column: 1 / -1; }
   .asset-rule-row .btn, .asset-review-item .btn { justify-self: start; }
+  .manual-review-pagination { align-items: flex-start; flex-direction: column; }
+  .manual-review-pagination > div { width: 100%; justify-content: space-between; }
 }

@@ -13,6 +13,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
+from PIL import Image, ImageOps
+
 from pipeline.config import QWEN_API_KEY, QWEN_LLM_BASE_URL, QWEN_LLM_ENABLED, QWEN_LLM_MODEL
 from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
@@ -545,7 +547,21 @@ def manual_review_preview_path(scan_id: str, dish_key: str, image_index: int) ->
             break
         path = Path(str(images[image_index])).resolve()
         if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
-            return path
+            thumbnail = _MANUAL_REVIEW_ROOT / "thumbnails" / scan_id / f"{dish_key}_{image_index}.jpg"
+            if thumbnail.is_file():
+                return thumbnail
+            try:
+                thumbnail.parent.mkdir(parents=True, exist_ok=True)
+                temporary = thumbnail.with_name(f"{thumbnail.stem}.{uuid.uuid4().hex}.tmp.jpg")
+                with Image.open(path) as image:
+                    preview = ImageOps.exif_transpose(image).convert("RGB")
+                    preview.thumbnail((480, 480), Image.Resampling.LANCZOS)
+                    preview.save(temporary, format="JPEG", quality=78, optimize=True)
+                temporary.replace(thumbnail)
+                return thumbnail
+            except (OSError, ValueError):
+                # Keep the review page usable for unusual or partially corrupt files.
+                return path
         break
     raise ValueError("人工整理预览图片不存在")
 

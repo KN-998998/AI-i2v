@@ -366,7 +366,9 @@ def get_manual_asset_review_scan(scan_id: str) -> dict[str, Any]:
 @router.get("/api/canvas/asset-library/manual-review/scans/{scan_id}/previews/{dish_key}/{image_index}")
 def get_manual_asset_review_preview(scan_id: str, dish_key: str, image_index: int) -> FileResponse:
     try:
-        return FileResponse(str(manual_review_preview_path(scan_id, dish_key, image_index)))
+        preview_path = manual_review_preview_path(scan_id, dish_key, image_index)
+        media_type = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(preview_path.suffix.lower(), "application/octet-stream")
+        return FileResponse(str(preview_path), media_type=media_type, headers={"Cache-Control": "public, max-age=86400, immutable"})
     except (OSError, ValueError) as exc:
         raise _json_error(str(exc), 404) from exc
 
