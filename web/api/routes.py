@@ -35,7 +35,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
-from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, save_category_rule, scan_asset_classifications
+from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, manual_review_preview_path, manual_review_scan_response, organize_manual_asset_library, save_category_rule, scan_asset_classifications, scan_manual_asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
@@ -320,6 +320,39 @@ def get_asset_library_rules() -> list[dict[str, str | None]]:
 def get_asset_library_classifications(asset_root: str) -> dict[str, Any]:
     try:
         return scan_asset_classifications(asset_root)
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/canvas/asset-library/manual-review/scans")
+def create_manual_asset_review_scan(asset_root: str) -> dict[str, Any]:
+    try:
+        return scan_manual_asset_library(asset_root)
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/canvas/asset-library/manual-review/scans/{scan_id}")
+def get_manual_asset_review_scan(scan_id: str) -> dict[str, Any]:
+    try:
+        return manual_review_scan_response(load_manual_review_scan(scan_id))
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 404) from exc
+
+@router.get("/api/canvas/asset-library/manual-review/scans/{scan_id}/previews/{dish_key}/{image_index}")
+def get_manual_asset_review_preview(scan_id: str, dish_key: str, image_index: int) -> FileResponse:
+    try:
+        return FileResponse(str(manual_review_preview_path(scan_id, dish_key, image_index)))
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 404) from exc
+
+
+@router.post("/api/canvas/asset-library/manual-review/organize")
+def organize_manual_asset_review(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    request = payload or {}
+    try:
+        classifications = request.get("classifications")
+        return organize_manual_asset_library(str(request.get("scan_id") or ""), str(request.get("target_root") or ""), classifications)
     except (OSError, ValueError) as exc:
         raise _json_error(str(exc), 400) from exc
 

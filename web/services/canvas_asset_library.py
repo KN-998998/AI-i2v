@@ -21,6 +21,7 @@ ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "炸物", "主菜", "�
 FOOD_TYPES = ("冷食", "热食")
 _HOT_PREPARATION_KEYWORDS = ("火炙", "炙烧", "炙烤", "炙り", "炙")
 _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
+_MANUAL_REVIEW_ROOT = CANVAS_BACKGROUND_ROOT.parent / "asset_library_manual_review"
 _RULES_LOCK = threading.RLock()
 
 _CATEGORY_KEYWORDS = {
@@ -393,6 +394,154 @@ def _merge_duplicate_dish_directories(
         group["sourceNames"] = source_names
         group["displayName"] = "/".join(source_names) if len(source_names) > 1 else str(group["dishName"])
     return sorted(grouped.values(), key=lambda item: str(item["dishName"]).casefold())
+
+
+def _manual_review_file(scan_id: str) -> Path:
+    if not re.fullmatch(r"[a-f0-9]{32}", scan_id):
+        raise ValueError("人工整理扫描 ID 无效")
+    return _MANUAL_REVIEW_ROOT / f"{scan_id}.json"
+
+
+def _manual_review_groups(asset_root: str) -> list[dict[str, Any]]:
+    root = Path(asset_root).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError("菜品素材库路径不存在或不是文件夹")
+    groups = _merge_duplicate_dish_directories(_dish_directories(root))
+    return [
+        {
+            "dishKey": _searchable_name(str(group["dishName"])),
+            "dishName": str(group["dishName"]),
+            "displayName": str(group["displayName"]),
+            "sourceNames": list(group["sourceNames"]),
+            "sourceFolders": [str(path) for path in group["sourceFolders"]],
+            "images": [str(path) for path in group["images"]],
+        }
+        for group in groups
+    ]
+
+
+def scan_manual_asset_library(asset_root: str) -> dict[str, Any]:
+    """Create a pure-manual review manifest; no classifier is called here."""
+    groups = _manual_review_groups(asset_root)
+    if not groups:
+        raise ValueError("没有找到包含图片的菜品文件夹")
+    scan_id = uuid.uuid4().hex
+    payload = {
+        "scanId": scan_id,
+        "assetRoot": str(Path(asset_root).expanduser().resolve()),
+        "createdAt": uuid.uuid1().time,
+        "groups": groups,
+    }
+    _MANUAL_REVIEW_ROOT.mkdir(parents=True, exist_ok=True)
+    temporary = _MANUAL_REVIEW_ROOT / f"{scan_id}.{uuid.uuid4().hex}.tmp"
+    try:
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(_manual_review_file(scan_id))
+    finally:
+        temporary.unlink(missing_ok=True)
+    return manual_review_scan_response(payload)
+
+
+def manual_review_scan_response(payload: Mapping[str, Any]) -> dict[str, Any]:
+    groups = payload.get("groups") if isinstance(payload.get("groups"), list) else []
+    items = []
+    for group in groups:
+        if not isinstance(group, Mapping):
+            continue
+        images = group.get("images") if isinstance(group.get("images"), list) else []
+        dish_key = str(group.get("dishKey") or "")
+        items.append({
+            "dishKey": dish_key,
+            "dishName": str(group.get("dishName") or ""),
+            "displayName": str(group.get("displayName") or group.get("dishName") or ""),
+            "sourceNames": [str(name) for name in group.get("sourceNames", [])],
+            "folderCount": len(group.get("sourceFolders", [])),
+            "imageCount": len(images),
+            "previewUrls": [f"/api/canvas/asset-library/manual-review/scans/{payload['scanId']}/previews/{dish_key}/{index}" for index in range(min(4, len(images)))],
+        })
+    return {"scanId": str(payload.get("scanId") or ""), "assetRoot": str(payload.get("assetRoot") or ""), "items": items}
+
+
+def load_manual_review_scan(scan_id: str) -> dict[str, Any]:
+    path = _manual_review_file(scan_id)
+    if not path.is_file():
+        raise ValueError("人工整理扫描结果不存在或已过期")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("人工整理扫描结果无法读取") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("groups"), list):
+        raise ValueError("人工整理扫描结果格式无效")
+    return payload
+
+
+def manual_review_preview_path(scan_id: str, dish_key: str, image_index: int) -> Path:
+    payload = load_manual_review_scan(scan_id)
+    for group in payload["groups"]:
+        if str(group.get("dishKey")) != dish_key:
+            continue
+        images = group.get("images") if isinstance(group.get("images"), list) else []
+        if not isinstance(image_index, int) or image_index < 0 or image_index >= len(images):
+            break
+        path = Path(str(images[image_index])).resolve()
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
+            return path
+        break
+    raise ValueError("人工整理预览图片不存在")
+
+
+def organize_manual_asset_library(scan_id: str, target_root: str, classifications: list[Mapping[str, Any]]) -> dict[str, Any]:
+    """Copy a completely human-confirmed scan into category/dish/image folders."""
+    payload = load_manual_review_scan(scan_id)
+    groups = {str(group.get("dishKey")): group for group in payload["groups"] if isinstance(group, Mapping)}
+    if not groups:
+        raise ValueError("人工整理扫描结果为空")
+    if not isinstance(classifications, list) or len(classifications) != len(groups):
+        raise ValueError("请完成所有菜品的人工分类和冷热标记")
+    confirmed: dict[str, tuple[str, str]] = {}
+    for item in classifications:
+        if not isinstance(item, Mapping):
+            raise ValueError("人工分类结果格式无效")
+        key = str(item.get("dishKey") or "")
+        category = str(item.get("category") or "")
+        food_type = str(item.get("foodType") or "")
+        if key not in groups or key in confirmed or category not in ASSET_CATEGORIES or food_type not in FOOD_TYPES:
+            raise ValueError("人工分类结果包含无效或重复菜品")
+        confirmed[key] = (category, food_type)
+    if set(confirmed) != set(groups):
+        raise ValueError("请完成所有菜品的人工分类和冷热标记")
+    target = Path(target_root).expanduser().resolve()
+    if target == Path(payload["assetRoot"]).resolve() or Path(payload["assetRoot"]).resolve() in target.parents:
+        raise ValueError("标准素材库不能位于原始素材库内部")
+    target.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for key, group in groups.items():
+        category, _food_type = confirmed[key]
+        dish_dir = target / category / _safe_library_name(str(group.get("dishName") or "未命名菜品"))
+        dish_dir.mkdir(parents=True, exist_ok=True)
+        for source_value in group.get("images", []):
+            source = Path(str(source_value)).resolve()
+            if not source.is_file() or source.suffix.lower() not in IMAGE_EXTENSIONS:
+                raise ValueError(f"源图片不存在：{source.name}")
+            destination = _unique_destination(dish_dir / source.name)
+            shutil.copy2(source, destination)
+            copied += 1
+    return {"scanId": scan_id, "targetRoot": str(target), "dishCount": len(groups), "imageCount": copied}
+
+
+def _safe_library_name(value: str) -> str:
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", simplify_dish_name(value)).strip(" .")
+    return name or "未命名菜品"
+
+
+def _unique_destination(path: Path) -> Path:
+    if not path.exists():
+        return path
+    for index in range(2, 10000):
+        candidate = path.with_name(f"{path.stem}__{index}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise ValueError(f"图片重名过多：{path.name}")
 
 
 def _normalize_category_counts(category_counts: Mapping[str, int]) -> dict[str, int]:

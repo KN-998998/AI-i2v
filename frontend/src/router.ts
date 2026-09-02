@@ -6,7 +6,8 @@ export type WorkflowRoute =
   | "/workflow/generator"
   | "/workflow/compose"
   | "/workflow/sound"
-  | "/workflow/output";
+  | "/workflow/output"
+  | "/workflow/asset-library-review";
 
 export const workflowRoutes: Array<{ path: WorkflowRoute; label: string; step: string }> = [
   { path: "/workflow/assets", label: "素材与菜品", step: "1" },
@@ -21,6 +22,7 @@ export const workflowRoutes: Array<{ path: WorkflowRoute; label: string; step: s
 export function routeForPath(pathname: string): WorkflowRoute {
   if (pathname === "/" || pathname === "/canvas-mvp") return "/canvas-mvp";
   if (pathname === "/workflow/timeline") return "/workflow/compose";
+  if (pathname === "/workflow/asset-library-review") return "/workflow/asset-library-review";
   return workflowRoutes.some(item => item.path === pathname) ? pathname as WorkflowRoute : "/canvas-mvp";
 }
 

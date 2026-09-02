@@ -462,6 +462,27 @@ h1 { margin-top: 3px; font-size: 18px; }
 .asset-plan-item img { width: 42px; height: 56px; flex: 0 0 auto; object-fit: cover; background: #050708; }
 .asset-plan-item span { display: grid; gap: 3px; min-width: 0; }
 .asset-plan-item strong, .asset-plan-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manual-library-page { padding-bottom: 72px; }
+.manual-library-controls { display: grid; gap: 14px; }
+.manual-library-paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.manual-library-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.manual-library-actions .btn-danger { margin-left: auto; }
+.manual-review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; margin-top: 16px; }
+.manual-review-card { display: grid; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+.manual-review-card.is-complete { border-color: rgba(125,204,155,.55); background: rgba(45,80,61,.12); }
+.manual-review-head { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 9px; align-items: start; }
+.manual-review-head > span { color: var(--cyan); font-size: 11px; font-weight: 700; }
+.manual-review-head > div { display: grid; gap: 4px; min-width: 0; }
+.manual-review-head strong, .manual-review-head small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manual-review-head small { color: var(--muted); font-size: 10px; }
+.manual-review-head b { color: var(--amber); font-size: 10px; font-weight: 500; white-space: nowrap; }
+.manual-review-card.is-complete .manual-review-head b { color: var(--green); }
+.manual-review-previews { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; min-height: 74px; }
+.manual-review-previews img, .manual-review-previews span { width: 100%; height: 74px; border: 1px solid var(--line); border-radius: 4px; object-fit: cover; background: #090b0d; }
+.manual-review-previews span { display: grid; place-items: center; color: var(--muted); font-size: 11px; }
+.manual-review-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.manual-review-fields .field { gap: 5px; margin: 0; }
+.manual-review-fields .field > span { color: var(--muted); font-size: 10px; }
 
 @media (max-width: 1380px) {
   .workspace { grid-template-columns: 180px minmax(0, 1fr) 320px; }
@@ -493,6 +514,8 @@ h1 { margin-top: 3px; font-size: 18px; }
   .step-page-grid { grid-template-columns: 1fr; }
   .step-page-grid > .inspector { padding: 18px 0 0; border-top: 1px solid var(--line); }
   .batch-control-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manual-library-paths { grid-template-columns: 1fr; }
+  .manual-library-actions .btn-danger { margin-left: 0; }
   .panel-section-head { flex-wrap: wrap; }
   .image-process-preview, .image-process-preview img { min-height: 0; }
 }

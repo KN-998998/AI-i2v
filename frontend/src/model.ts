@@ -345,6 +345,22 @@ export type AssetLibraryPlan = {
   classificationWarning?: string | null;
 };
 
+export type ManualAssetReviewItem = {
+  dishKey: string;
+  dishName: string;
+  displayName: string;
+  sourceNames: string[];
+  folderCount: number;
+  imageCount: number;
+  previewUrls: string[];
+};
+
+export type ManualAssetReviewScan = {
+  scanId: string;
+  assetRoot: string;
+  items: ManualAssetReviewItem[];
+};
+
 export type ClipLibraryItem = TimelineClip & {
   filename: string;
   sourcePath: string;

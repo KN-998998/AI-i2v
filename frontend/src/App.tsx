@@ -10,6 +10,7 @@ import { navigate, routeForPath, type WorkflowRoute } from "./router";
 import { WorkflowNodeCard } from "./components/WorkflowNodeCard";
 import { BatchComposePage } from "./components/BatchComposePage";
 import { ImageProcessingPage } from "./components/ImageProcessingPage";
+import { ManualAssetLibraryPage } from "./components/ManualAssetLibraryPage";
 
 const nodeTypes = { workflow: WorkflowNodeCard };
 
@@ -63,6 +64,7 @@ function RouteContent({ path, onToast }: { path: WorkflowRoute; onToast: (messag
   if (path === "/workflow/generator") return <GeneratorPage onToast={onToast} />;
   if (path === "/workflow/compose") return <BatchComposePage onToast={onToast} />;
   if (path === "/workflow/output") return <OutputPage onToast={onToast} />;
+  if (path === "/workflow/asset-library-review") return <ManualAssetLibraryPage onToast={onToast} />;
   return <StepPage route={path} onToast={onToast} />;
 }
 

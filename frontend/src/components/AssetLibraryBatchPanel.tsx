@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createAssetLibraryPlan, fetchAssetLibraryClassifications, fetchAssetLibraryRules, pickAssetLibraryFolder, saveAssetLibraryRule, type AssetLibraryRule } from "../api";
 import type { AssetLibraryClassificationItem, AssetLibraryPlan, AssetLibraryReviewItem } from "../model";
 import { useWorkflowStore } from "../workflowStore";
+import { navigate } from "../router";
 
 const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
 const FOOD_TYPES = ["冷食", "热食"] as const;
@@ -236,7 +237,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
 
   return <section className="step-panel asset-library-batch-panel">
     <small className="muted">可选择包含多层分类目录的上级文件夹，系统会扫描实际存放图片的最深层菜品文件夹。</small>
-    <div className="panel-section-head"><div><span className="panel-label">ASSET LIBRARY AUTOMATION</span><h2>素材库批量建稿</h2><p className="muted">按“菜品文件夹名”识别菜品，随机抽图和背景，先生成待确认流程，再决定是否调用抠图与 Kling。</p></div></div>
+    <div className="panel-section-head"><div><span className="panel-label">ASSET LIBRARY AUTOMATION</span><h2>素材库批量建稿</h2><p className="muted">按“菜品文件夹名”识别菜品，随机抽图和背景，先生成待确认流程，再决定是否调用抠图与 Kling。</p></div><button type="button" className="btn" onClick={() => navigate("/workflow/asset-library-review")}>打开人工整理工作台</button></div>
     <div className="field-grid asset-library-paths"><label className="field"><span>菜品素材库路径</span><div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="例如：F:\\...\\鮨政exp" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("asset")}>{folderBusy === "asset" ? "选择中..." : "选择文件夹"}</button></div></label><label className="field"><span>背景素材库路径</span><div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="例如：F:\\...\\背景模板" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("background")}>{folderBusy === "background" ? "选择中..." : "选择文件夹"}</button></div></label></div>
     <div className="asset-category-grid">{CATEGORIES.map(category => <label className="field" key={category}><span>{category}数量</span><input className="input" type="number" min="0" max="50" value={counts[category]} onChange={event => updateCount(category, Number(event.target.value))} /></label>)}</div>
     <div className="compose-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void buildPlan()}>{busy ? "处理中..." : rulesChanged ? "按最新规则重新抽取" : "扫描并生成待确认方案"}</button><button type="button" className="btn" disabled={!plan || busy || (plan.reviewItems ?? []).length > 0} onClick={() => void applyPlan()}>应用到画布</button><button type="button" className="btn btn-danger" disabled={!createdGeneratorIds.length || busy} onClick={() => void execute()}>确认并执行抠图 + 生成</button></div>

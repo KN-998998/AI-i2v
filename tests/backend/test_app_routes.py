@@ -26,7 +26,7 @@ def test_canvas_routes_serve_react_page_only():
 
 def test_workflow_pages_use_react_spa_fallback():
     client = TestClient(create_app())
-    for step in ("assets", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output"):
+    for step in ("assets", "asset-library-review", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output"):
         response = client.get(f"/workflow/{step}")
         assert response.status_code == 200
         assert "/static/canvas-app/assets/index.js" in response.text
@@ -41,6 +41,49 @@ def test_asset_library_rules_route_lists_saved_categories(monkeypatch, tmp_path)
 
     assert response.status_code == 200
     assert response.json() == [{"dishName": "烤龙虾", "category": "主菜", "foodType": "热食"}]
+
+
+def test_manual_asset_review_routes_require_confirmation_and_copy_images(monkeypatch, tmp_path):
+    review_root = tmp_path / "review-scans"
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", review_root)
+    source_root = tmp_path / "raw" / "寿司" / "三文鱼寿司"
+    source_root.mkdir(parents=True)
+    source_image = source_root / "dish.jpg"
+    source_image.write_bytes(b"jpeg-bytes")
+    target_root = tmp_path / "图片素材库"
+    client = TestClient(create_app())
+
+    scan_response = client.post(
+        "/api/canvas/asset-library/manual-review/scans",
+        params={"asset_root": str(tmp_path / "raw")},
+    )
+
+    assert scan_response.status_code == 200
+    scan = scan_response.json()
+    item = scan["items"][0]
+    assert client.get(f"/api/canvas/asset-library/manual-review/scans/{scan['scanId']}").json() == scan
+    preview = client.get(item["previewUrls"][0])
+    assert preview.status_code == 200
+    assert preview.content == b"jpeg-bytes"
+
+    incomplete = client.post(
+        "/api/canvas/asset-library/manual-review/organize",
+        json={"scan_id": scan["scanId"], "target_root": str(target_root), "classifications": []},
+    )
+    assert incomplete.status_code == 400
+
+    organized = client.post(
+        "/api/canvas/asset-library/manual-review/organize",
+        json={
+            "scan_id": scan["scanId"],
+            "target_root": str(target_root),
+            "classifications": [{"dishKey": item["dishKey"], "category": "寿司", "foodType": "冷食"}],
+        },
+    )
+    assert organized.status_code == 200
+    assert organized.json()["imageCount"] == 1
+    assert (target_root / "寿司" / "三文鱼寿司" / "dish.jpg").is_file()
+    assert source_image.is_file()
 
 
 def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):

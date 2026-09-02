@@ -294,3 +294,32 @@ def test_asset_library_merges_simplified_and_traditional_duplicate_folders(monke
     assert plan["selected"][0]["sourceFolderCount"] == 2
     assert set(plan["selected"][0]["sourceNames"]) == {"烤鱼", "烤魚"}
     assert any("主菜 只找到 1 个不同菜品" in warning for warning in plan["warnings"])
+
+
+def test_manual_asset_review_scans_without_classification_and_organizes_after_confirmation(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
+    asset_root = tmp_path / "raw"
+    target_root = tmp_path / "图片素材库"
+    first = asset_root / "寿司" / "青花魚壽司"
+    second = asset_root / "archive" / "青花鱼寿司"
+    _write_image(first / "a.png", "#d97979")
+    _write_image(second / "b.png", "#4c4265")
+    monkeypatch.setattr(canvas_asset_library, "classify_library_names", lambda _names: (_ for _ in ()).throw(AssertionError("manual scan must not classify")))
+
+    scan = canvas_asset_library.scan_manual_asset_library(str(asset_root))
+
+    assert len(scan["items"]) == 1
+    item = scan["items"][0]
+    assert item["folderCount"] == 2
+    with pytest.raises(ValueError, match="完成所有菜品"):
+        canvas_asset_library.organize_manual_asset_library(scan["scanId"], str(target_root), [])
+
+    result = canvas_asset_library.organize_manual_asset_library(scan["scanId"], str(target_root), [{
+        "dishKey": item["dishKey"], "category": "寿司", "foodType": "冷食",
+    }])
+
+    assert result["dishCount"] == 1
+    assert result["imageCount"] == 2
+    assert (target_root / "寿司" / "青花鱼寿司" / "a.png").is_file()
+    assert (target_root / "寿司" / "青花鱼寿司" / "b.png").is_file()
+    assert (first / "a.png").is_file()

@@ -1,4 +1,4 @@
-import type { AssetLibraryPlan, BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, MediaAnalysis } from "./model";
+import type { AssetLibraryPlan, BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, ManualAssetReviewScan, MediaAnalysis } from "./model";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -133,6 +133,25 @@ export async function fetchAssetLibraryRules(): Promise<AssetLibraryRule[]> {
 export async function fetchAssetLibraryClassifications(assetRoot: string): Promise<Pick<AssetLibraryPlan, "assetRoot" | "classificationResults" | "classificationMode" | "classificationWarning">> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/classifications?asset_root=${encodeURIComponent(assetRoot)}`, { cache: "no-store" });
   return parseResponse<Pick<AssetLibraryPlan, "assetRoot" | "classificationResults" | "classificationMode" | "classificationWarning">>(response);
+}
+
+export async function scanManualAssetLibrary(assetRoot: string): Promise<ManualAssetReviewScan> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/scans?asset_root=${encodeURIComponent(assetRoot)}`, { method: "POST" });
+  return parseResponse<ManualAssetReviewScan>(response);
+}
+
+export async function fetchManualAssetReviewScan(scanId: string): Promise<ManualAssetReviewScan> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/scans/${encodeURIComponent(scanId)}`, { cache: "no-store" });
+  return parseResponse<ManualAssetReviewScan>(response);
+}
+
+export async function organizeManualAssetLibrary(scanId: string, targetRoot: string, classifications: Array<{ dishKey: string; category: string; foodType: "冷食" | "热食" }>): Promise<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/organize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scan_id: scanId, target_root: targetRoot, classifications }),
+  });
+  return parseResponse<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }>(response);
 }
 
 export async function startCanvasImageProcessing(draftId: string, nodeId: string): Promise<ImageProcessingJob> {
