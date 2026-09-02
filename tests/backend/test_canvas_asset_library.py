@@ -323,3 +323,26 @@ def test_manual_asset_review_scans_without_classification_and_organizes_after_co
     assert (target_root / "寿司" / "青花鱼寿司" / "a.png").is_file()
     assert (target_root / "寿司" / "青花鱼寿司" / "b.png").is_file()
     assert (first / "a.png").is_file()
+
+
+def test_manual_asset_review_can_exclude_non_dish_group_before_organizing(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
+    asset_root = tmp_path / "raw"
+    dish = asset_root / "寿司"
+    scenery = asset_root / "风景"
+    _write_image(dish / "dish.png", "#d97979")
+    _write_image(scenery / "scenery.png", "#4c4265")
+
+    scan = canvas_asset_library.scan_manual_asset_library(str(asset_root))
+    items = {item["dishName"]: item for item in scan["items"]}
+    result = canvas_asset_library.organize_manual_asset_library(
+        scan["scanId"],
+        str(tmp_path / "library"),
+        [{"dishKey": items["寿司"]["dishKey"], "category": "寿司", "foodType": "冷食"}],
+        [items["风景"]["dishKey"]],
+    )
+
+    assert result["dishCount"] == 1
+    assert (tmp_path / "library" / "寿司" / "寿司" / "dish.png").is_file()
+    assert not (tmp_path / "library" / "其他" / "风景" / "scenery.png").exists()
+    assert (scenery / "scenery.png").is_file()

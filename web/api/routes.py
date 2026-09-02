@@ -375,7 +375,8 @@ def organize_manual_asset_review(payload: dict[str, Any] | None = None) -> dict[
     request = payload or {}
     try:
         classifications = request.get("classifications")
-        return organize_manual_asset_library(str(request.get("scan_id") or ""), str(request.get("target_root") or ""), classifications)
+        excluded_dish_keys = request.get("excluded_dish_keys", [])
+        return organize_manual_asset_library(str(request.get("scan_id") or ""), str(request.get("target_root") or ""), classifications, excluded_dish_keys)
     except (OSError, ValueError) as exc:
         raise _json_error(str(exc), 400) from exc
 

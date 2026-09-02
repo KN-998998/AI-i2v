@@ -494,13 +494,19 @@ def manual_review_preview_path(scan_id: str, dish_key: str, image_index: int) ->
     raise ValueError("人工整理预览图片不存在")
 
 
-def organize_manual_asset_library(scan_id: str, target_root: str, classifications: list[Mapping[str, Any]]) -> dict[str, Any]:
+def organize_manual_asset_library(scan_id: str, target_root: str, classifications: list[Mapping[str, Any]], excluded_dish_keys: list[str] | None = None) -> dict[str, Any]:
     """Copy a completely human-confirmed scan into category/dish/image folders."""
     payload = load_manual_review_scan(scan_id)
     groups = {str(group.get("dishKey")): group for group in payload["groups"] if isinstance(group, Mapping)}
     if not groups:
         raise ValueError("人工整理扫描结果为空")
-    if not isinstance(classifications, list) or len(classifications) != len(groups):
+    excluded = set(excluded_dish_keys or [])
+    if not excluded.issubset(groups):
+        raise ValueError("排除的菜品不存在于当前扫描结果")
+    active_groups = {key: group for key, group in groups.items() if key not in excluded}
+    if not active_groups:
+        raise ValueError("至少保留一个素材后才能整理入库")
+    if not isinstance(classifications, list) or len(classifications) != len(active_groups):
         raise ValueError("请完成所有菜品的人工分类和冷热标记")
     confirmed: dict[str, tuple[str, str]] = {}
     for item in classifications:
@@ -509,17 +515,17 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
         key = str(item.get("dishKey") or "")
         category = str(item.get("category") or "")
         food_type = str(item.get("foodType") or "")
-        if key not in groups or key in confirmed or category not in ASSET_CATEGORIES or food_type not in FOOD_TYPES:
+        if key not in active_groups or key in confirmed or category not in ASSET_CATEGORIES or food_type not in FOOD_TYPES:
             raise ValueError("人工分类结果包含无效或重复菜品")
         confirmed[key] = (category, food_type)
-    if set(confirmed) != set(groups):
+    if set(confirmed) != set(active_groups):
         raise ValueError("请完成所有菜品的人工分类和冷热标记")
     target = Path(target_root).expanduser().resolve()
     if target == Path(payload["assetRoot"]).resolve() or Path(payload["assetRoot"]).resolve() in target.parents:
         raise ValueError("标准素材库不能位于原始素材库内部")
     target.mkdir(parents=True, exist_ok=True)
     copied = 0
-    for key, group in groups.items():
+    for key, group in active_groups.items():
         category, _food_type = confirmed[key]
         dish_dir = target / category / _safe_library_name(str(group.get("dishName") or "未命名菜品"))
         dish_dir.mkdir(parents=True, exist_ok=True)
@@ -530,7 +536,7 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
             destination = _unique_destination(dish_dir / source.name)
             shutil.copy2(source, destination)
             copied += 1
-    return {"scanId": scan_id, "targetRoot": str(target), "dishCount": len(groups), "imageCount": copied}
+    return {"scanId": scan_id, "targetRoot": str(target), "dishCount": len(active_groups), "imageCount": copied}
 
 
 def _safe_library_name(value: str) -> str:

@@ -153,11 +153,11 @@ export async function fetchManualAssetReviewScan(scanId: string): Promise<Manual
   return parseResponse<ManualAssetReviewScan>(response);
 }
 
-export async function organizeManualAssetLibrary(scanId: string, targetRoot: string, classifications: Array<{ dishKey: string; category: string; foodType: "冷食" | "热食" }>): Promise<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }> {
+export async function organizeManualAssetLibrary(scanId: string, targetRoot: string, classifications: Array<{ dishKey: string; category: string; foodType: "冷食" | "热食" }>, excludedDishKeys: string[] = []): Promise<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/organize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scan_id: scanId, target_root: targetRoot, classifications }),
+    body: JSON.stringify({ scan_id: scanId, target_root: targetRoot, classifications, excluded_dish_keys: excludedDishKeys }),
   });
   return parseResponse<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }>(response);
 }

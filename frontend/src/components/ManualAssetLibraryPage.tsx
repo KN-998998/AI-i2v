@@ -16,14 +16,14 @@ function defaultFoodType(category: string): FoodType | "" {
   return ["寿司", "刺身", "前菜/小菜", "甜品", "水果", "饮品"].includes(category) ? "冷食" : "";
 }
 
-function loadSavedState(): { scan: ManualAssetReviewScan | null; targetRoot: string; selections: Record<string, Selection> } {
+function loadSavedState(): { scan: ManualAssetReviewScan | null; targetRoot: string; selections: Record<string, Selection>; excludedDishKeys: string[] } {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { scan: null, targetRoot: DEFAULT_TARGET_ROOT, selections: {} };
-    const value = JSON.parse(raw) as Partial<{ scan: ManualAssetReviewScan; targetRoot: string; selections: Record<string, Selection> }>;
-    return { scan: value.scan ?? null, targetRoot: value.targetRoot || DEFAULT_TARGET_ROOT, selections: value.selections ?? {} };
+    if (!raw) return { scan: null, targetRoot: DEFAULT_TARGET_ROOT, selections: {}, excludedDishKeys: [] };
+    const value = JSON.parse(raw) as Partial<{ scan: ManualAssetReviewScan; targetRoot: string; selections: Record<string, Selection>; excludedDishKeys: string[] }>;
+    return { scan: value.scan ?? null, targetRoot: value.targetRoot || DEFAULT_TARGET_ROOT, selections: value.selections ?? {}, excludedDishKeys: value.excludedDishKeys ?? [] };
   } catch {
-    return { scan: null, targetRoot: DEFAULT_TARGET_ROOT, selections: {} };
+    return { scan: null, targetRoot: DEFAULT_TARGET_ROOT, selections: {}, excludedDishKeys: [] };
   }
 }
 
@@ -33,17 +33,19 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
   const [targetRoot, setTargetRoot] = useState(saved.targetRoot);
   const [scan, setScan] = useState<ManualAssetReviewScan | null>(saved.scan);
   const [selections, setSelections] = useState<Record<string, Selection>>(saved.selections);
+  const [excludedDishKeys, setExcludedDishKeys] = useState<string[]>(saved.excludedDishKeys);
   const [folderBusy, setFolderBusy] = useState<"source" | "target" | null>(null);
   const [scanning, setScanning] = useState(false);
   const [organizing, setOrganizing] = useState(false);
   const sourceFolderInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ scan, targetRoot, selections })); } catch { /* Browser storage is optional. */ }
-  }, [scan, targetRoot, selections]);
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ scan, targetRoot, selections, excludedDishKeys })); } catch { /* Browser storage is optional. */ }
+  }, [scan, targetRoot, selections, excludedDishKeys]);
 
-  const confirmedCount = useMemo(() => scan?.items.filter(item => Boolean(selections[item.dishKey]?.category && selections[item.dishKey]?.foodType)).length ?? 0, [scan, selections]);
-  const allConfirmed = Boolean(scan?.items.length && confirmedCount === scan.items.length);
+  const reviewItems = useMemo(() => scan?.items.filter(item => !excludedDishKeys.includes(item.dishKey)) ?? [], [scan, excludedDishKeys]);
+  const confirmedCount = useMemo(() => reviewItems.filter(item => Boolean(selections[item.dishKey]?.category && selections[item.dishKey]?.foodType)).length, [reviewItems, selections]);
+  const allConfirmed = Boolean(reviewItems.length && confirmedCount === reviewItems.length);
 
   const chooseFolder = async (kind: "source" | "target") => {
     if (kind === "source") {
@@ -74,6 +76,7 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
       setScan(result);
       setSourceRoot(result.assetRoot);
       setSelections({});
+      setExcludedDishKeys([]);
       onToast(`已导入并扫描 ${result.items.length} 个菜品，等待人工分类`);
     } catch (error) {
       onToast(error instanceof Error ? error.message : "文件夹导入失败");
@@ -90,6 +93,7 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
       setScan(result);
       setSourceRoot(result.assetRoot);
       setSelections({});
+      setExcludedDishKeys([]);
       onToast(`已扫描 ${result.items.length} 个菜品，等待人工分类`);
     } catch (error) {
       onToast(error instanceof Error ? error.message : "扫描失败");
@@ -105,13 +109,23 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
     });
   };
 
+  const removeItem = (dishKey: string) => {
+    setExcludedDishKeys(current => current.includes(dishKey) ? current : [...current, dishKey]);
+    onToast("已排除该素材，可在下方恢复");
+  };
+
+  const restoreItem = (dishKey: string) => {
+    setExcludedDishKeys(current => current.filter(key => key !== dishKey));
+    onToast("已恢复该素材");
+  };
+
   const organize = async () => {
     if (!scan || !allConfirmed) return onToast("请先完成所有菜品的分类和冷/热食标记");
     if (!targetRoot.trim()) return onToast("请先选择标准图片素材库目录");
     setOrganizing(true);
     try {
-      const classifications = scan.items.map(item => ({ dishKey: item.dishKey, category: selections[item.dishKey].category, foodType: selections[item.dishKey].foodType as FoodType }));
-      const result = await organizeManualAssetLibrary(scan.scanId, targetRoot.trim(), classifications);
+      const classifications = reviewItems.map(item => ({ dishKey: item.dishKey, category: selections[item.dishKey].category, foodType: selections[item.dishKey].foodType as FoodType }));
+      const result = await organizeManualAssetLibrary(scan.scanId, targetRoot.trim(), classifications, excludedDishKeys);
       onToast(`已复制 ${result.imageCount} 张图片至标准素材库`);
     } catch (error) {
       onToast(error instanceof Error ? error.message : "整理入库失败");
@@ -130,14 +144,14 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
       </div>
       <div className="manual-library-actions"><button type="button" className="btn btn-primary" disabled={scanning || organizing} onClick={() => void scanSource()}>{scanning ? "扫描中..." : "扫描待整理菜品"}</button><span className="muted">{scan ? `已确认 ${confirmedCount}/${scan.items.length} 个菜品` : "尚未扫描"}</span><button type="button" className="btn btn-danger" disabled={!allConfirmed || organizing || scanning} onClick={() => void organize()}>{organizing ? "正在复制入库..." : "全部确认并整理入库"}</button></div>
     </section>
-    {scan && <section className="manual-review-grid">{scan.items.map((item, index) => {
+    {scan && <section className="manual-review-grid">{reviewItems.map((item, index) => {
       const selection = selections[item.dishKey] ?? { category: "", foodType: "" };
       const complete = Boolean(selection.category && selection.foodType);
       return <article className={`manual-review-card ${complete ? "is-complete" : ""}`} key={item.dishKey}>
-        <div className="manual-review-head"><span>{String(index + 1).padStart(3, "0")}</span><div><strong>{item.displayName}</strong><small>{item.folderCount > 1 ? `已合并 ${item.folderCount} 个同名/简繁体文件夹` : "1 个来源文件夹"} · {item.imageCount} 张图片</small></div><b>{complete ? "已确认" : "待确认"}</b></div>
+        <div className="manual-review-head"><span>{String(index + 1).padStart(3, "0")}</span><div><strong>{item.displayName}</strong><small>{item.folderCount > 1 ? `已合并 ${item.folderCount} 个同名/简繁体文件夹` : "1 个来源文件夹"} · {item.imageCount} 张图片</small></div><b>{complete ? "已确认" : "待确认"}</b><button type="button" className="manual-review-remove" title="排除该素材" aria-label={`排除${item.displayName}`} onClick={() => removeItem(item.dishKey)}>×</button></div>
         <div className="manual-review-previews">{item.previewUrls.map((url, previewIndex) => <img key={url} src={url} alt={`${item.dishName} ${previewIndex + 1}`} loading="lazy" />)}{item.imageCount > item.previewUrls.length && <span>+{item.imageCount - item.previewUrls.length}</span>}</div>
         <div className="manual-review-fields"><label className="field"><span>菜品分类</span><select className="input" value={selection.category} onChange={event => { const category = event.target.value; updateSelection(item.dishKey, { category, foodType: defaultFoodType(category) }); }}><option value="">选择分类</option>{CATEGORIES.map(category => <option value={category} key={category}>{category}</option>)}</select></label><label className="field"><span>冷热属性</span><select className="input" value={selection.foodType} onChange={event => updateSelection(item.dishKey, { foodType: event.target.value as FoodType })} disabled={!selection.category}><option value="">选择冷/热食</option><option value="冷食">冷食</option><option value="热食">热食</option></select></label></div>
       </article>;
-    })}</section>}
+    })}{excludedDishKeys.length > 0 && <div className="manual-review-excluded"><strong>已排除 {excludedDishKeys.length} 个素材</strong>{excludedDishKeys.map(key => { const item = scan.items.find(candidate => candidate.dishKey === key); return item ? <button type="button" className="manual-review-restore" key={key} onClick={() => restoreItem(key)}>恢复「{item.displayName}」</button> : null; })}</div>}{reviewItems.length === 0 && <div className="manual-review-empty">当前没有待整理素材，请恢复需要入库的卡片。</div>}</section>}
   </main>;
 }
