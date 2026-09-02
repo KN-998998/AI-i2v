@@ -17,7 +17,7 @@ from pipeline.config import QWEN_API_KEY, QWEN_LLM_BASE_URL, QWEN_LLM_ENABLED, Q
 from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他")
+ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他")
 FOOD_TYPES = ("冷食", "热食")
 _HOT_PREPARATION_KEYWORDS = ("火炙", "炙烧", "炙烤", "炙り", "炙")
 _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
@@ -36,6 +36,7 @@ _CATEGORY_KEYWORDS = {
     # Beverage is checked before fruit so names such as grape wine are not classified as fruit.
     "饮品": ("饮品", "饮料", "酒水", "清酒", "日本酒", "啤酒", "威士忌", "葡萄酒", "红酒", "白酒", "梅酒", "烧酒", "高球", "茶饮", "绿茶", "乌龙茶", "红茶", "抹茶", "咖啡", "果汁", "汽水", "苏打", "饮用水", "ドリンク", "日本酒", "ビール", "ワイン", "焼酎", "梅酒", "ハイボール", "お茶", "抹茶", "コーヒー", "ジュース", "drink", "beverage", "sake", "beer", "wine", "coffee", "juice"),
     "水果": ("水果", "鲜果", "果盘", "草莓", "西瓜", "芒果", "葡萄", "苹果", "柠檬", "橙子", "橙", "桃", "梨", "蓝莓", "樱桃", "菠萝", "凤梨", "香蕉", "柚子", "柑橘", "いちご", "苺", "すいか", "ぶどう", "りんご", "みかん", "フルーツ", "fruit", "strawberry", "watermelon", "mango", "grape", "apple", "lemon", "orange", "peach", "banana"),
+    "套餐": ("套餐", "定食", "套餐组合", "set menu", "set meal"),
 }
 _TRADITIONAL_TO_SIMPLIFIED = str.maketrans({
     "壽": "寿", "魚": "鱼", "鮭": "鲑", "鮪": "鲔", "鯛": "鲷", "鰻": "鳗",
@@ -153,6 +154,8 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     # These describe a package or a serving format, not one dish category.
     combination_words = ("定食", "套餐", "拼盘", "拼盤", "盛合", "盛り合わせ", "组合", "組み合わせ", "set", "combo", "platter", "assortment")
     is_combination = any(_searchable_name(word) in name for word in combination_words)
+    if is_combination and len(candidates) > 1 and "套餐" in candidates:
+        candidates = [category for category in candidates if category != "套餐"]
 
     # The finished product wins over a preparation or topping word. This makes
     # 天妇罗乌冬 a staple, while 天妇罗拼盘 remains a main dish review case.

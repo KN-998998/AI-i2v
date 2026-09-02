@@ -4,7 +4,7 @@ import type { AssetLibraryClassificationItem, AssetLibraryPlan, AssetLibraryRevi
 import { useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
 
-const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
+const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他"] as const;
 const FOOD_TYPES = ["冷食", "热食"] as const;
 const ASSET_ROOT_STORAGE_KEY = "restaurant-video.asset-library.asset-root";
 const BACKGROUND_ROOT_STORAGE_KEY = "restaurant-video.asset-library.background-root";

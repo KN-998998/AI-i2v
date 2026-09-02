@@ -8,7 +8,7 @@ type FoodType = "冷食" | "热食";
 type Selection = { category: string; foodType: FoodType | "" };
 type FolderInputAttributes = InputHTMLAttributes<HTMLInputElement> & { webkitdirectory?: string; directory?: string };
 
-const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "其他"] as const;
+const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他"] as const;
 const DEFAULT_TARGET_ROOT = "E:\\图片素材库";
 const STORAGE_KEY = "restaurant-video.manual-asset-library-review";
 
@@ -142,7 +142,7 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
         <label className="field"><span>原始图片素材目录</span><div className="asset-path-control"><input className="input" value={sourceRoot} onChange={event => setSourceRoot(event.target.value)} placeholder="选择文件夹后自动导入，或手动填写目录路径" /><input ref={sourceFolderInput} className="folder-input-hidden" type="file" multiple {...({ webkitdirectory: "", directory: "" } as FolderInputAttributes)} onChange={event => void importSourceFolder(event)} /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("source")}>{folderBusy === "source" ? "导入中..." : "选择文件夹"}</button></div></label>
         <label className="field"><span>标准素材库目录</span><div className="asset-path-control"><input className="input" value={targetRoot} onChange={event => setTargetRoot(event.target.value)} /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => void chooseFolder("target")}>{folderBusy === "target" ? "选择中..." : "选择文件夹"}</button></div></label>
       </div>
-      <div className="manual-library-actions"><button type="button" className="btn btn-primary" disabled={scanning || organizing} onClick={() => void scanSource()}>{scanning ? "扫描中..." : "扫描待整理菜品"}</button><span className="muted">{scan ? `已确认 ${confirmedCount}/${scan.items.length} 个菜品` : "尚未扫描"}</span><button type="button" className="btn btn-danger" disabled={!allConfirmed || organizing || scanning} onClick={() => void organize()}>{organizing ? "正在复制入库..." : "全部确认并整理入库"}</button></div>
+      <div className="manual-library-actions"><button type="button" className="btn btn-primary" disabled={scanning || organizing} onClick={() => void scanSource()}>{scanning ? "扫描中..." : "扫描待整理菜品"}</button><span className="muted">{scan ? `已确认 ${confirmedCount}/${reviewItems.length} 个待整理菜品${excludedDishKeys.length ? `，已排除 ${excludedDishKeys.length} 个` : ""}` : "尚未扫描"}</span><button type="button" className="btn btn-danger" disabled={!allConfirmed || organizing || scanning} onClick={() => void organize()}>{organizing ? "正在复制入库..." : "全部确认并整理入库"}</button></div>
     </section>
     {scan && <section className="manual-review-grid">{reviewItems.map((item, index) => {
       const selection = selections[item.dishKey] ?? { category: "", foodType: "" };

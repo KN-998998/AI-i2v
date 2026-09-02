@@ -346,3 +346,19 @@ def test_manual_asset_review_can_exclude_non_dish_group_before_organizing(monkey
     assert (tmp_path / "library" / "寿司" / "寿司" / "dish.png").is_file()
     assert not (tmp_path / "library" / "其他" / "风景" / "scenery.png").exists()
     assert (scenery / "scenery.png").is_file()
+
+
+def test_package_category_is_available_for_manual_classification(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
+    asset_root = tmp_path / "raw" / "寿司套餐"
+    _write_image(asset_root / "dish.png", "#d97979")
+
+    scan = canvas_asset_library.scan_manual_asset_library(str(tmp_path / "raw"))
+    item = scan["items"][0]
+    result = canvas_asset_library.organize_manual_asset_library(
+        scan["scanId"], str(tmp_path / "library"),
+        [{"dishKey": item["dishKey"], "category": "套餐", "foodType": "热食"}],
+    )
+
+    assert result["dishCount"] == 1
+    assert (tmp_path / "library" / "套餐" / "寿司套餐" / "dish.png").is_file()
