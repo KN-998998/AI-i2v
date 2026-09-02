@@ -66,6 +66,18 @@ def test_category_rule_requires_food_type_except_for_dessert_and_fruit(monkeypat
     assert saved["foodType"] == "冷食"
 
 
+def test_package_rule_requires_and_infers_mixed_temperature(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", tmp_path / "rules.json")
+
+    with pytest.raises(ValueError, match="混合/多温"):
+        canvas_asset_library.save_category_rule("刺身套餐", "套餐", "热食")
+
+    saved = canvas_asset_library.save_category_rule("刺身套餐", "套餐", "混合/多温")
+    assert saved["foodType"] == "混合/多温"
+    assert canvas_asset_library.classify_library_name("刺身套餐")["foodType"] == "混合/多温"
+    assert canvas_asset_library.infer_food_type("炙烧套餐", "套餐") == "混合/多温"
+
+
 def test_legacy_category_rule_without_food_type_requires_review(monkeypatch, tmp_path):
     rules_path = tmp_path / "rules.json"
     monkeypatch.setattr(canvas_asset_library, "_RULES_PATH", rules_path)
@@ -357,7 +369,7 @@ def test_package_category_is_available_for_manual_classification(monkeypatch, tm
     item = scan["items"][0]
     result = canvas_asset_library.organize_manual_asset_library(
         scan["scanId"], str(tmp_path / "library"),
-        [{"dishKey": item["dishKey"], "category": "套餐", "foodType": "热食"}],
+        [{"dishKey": item["dishKey"], "category": "套餐", "foodType": "混合/多温"}],
     )
 
     assert result["dishCount"] == 1

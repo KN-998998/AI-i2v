@@ -1,4 +1,4 @@
-import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, resolveGeneratorNodeStatus, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, resolveGeneratorNodeStatus, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -23,6 +23,13 @@ assert(totalTimelineDuration(timeline) === 9, "timeline duration is incorrect");
 
 const pendingClip = createPendingGeneratorClip("clips", 1, "炙烤三文鱼");
 assert(pendingClip.id === "clips_clip" && pendingClip.generatorNodeId === "clips", "generator clip is not linked to node");
+assert(DISH_CATEGORY_OPTIONS.includes("套餐"), "package category is missing");
+const packagePrompt = assemblePrompt({
+  mode: "single_image", camera_move: "locked_off", camera_amplitude: "subtle", shot_size: "close_up",
+  elements: ["dish_hot", "tableware", "surface"], l1_subject: "dish_hot", l1_action_level: null,
+  l1_action_verb: null, l2_dynamics: [], speed_curve: null, seamless_loop: false, food_type: "混合/多温",
+});
+assert(packagePrompt.prompt.includes("包含冷食与热食"), "package prompt lost mixed temperature attribute");
 assert(pendingClip.status === "pending" && !pendingClip.sourcePath, "generator clip should wait for a real file");
 assert(resolveGeneratorNodeStatus("生成中", { status: "generated", sourcePath: "clip.mp4" }) === "已生成", "linked generator clip should be completed");
 assert(resolveGeneratorNodeStatus("生成中") === "待生成", "stale generator status should reset when its clip is gone");

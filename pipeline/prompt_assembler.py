@@ -56,6 +56,7 @@ class PromptConfig:
     l2_dynamics: list = field(default_factory=list)   # L2 次级动态，0..2 项
     speed_curve: Optional[str] = None    # 仅 keyframes 时非空
     seamless_loop: bool = False
+    food_type: str = ""
 
 
 @dataclass
@@ -317,6 +318,12 @@ def _l1_text(cfg: PromptConfig) -> str:
         if cfg.l1_subject == "chef":
             text += "，面部表情平静自然，五官稳定"
         return text
+    if cfg.food_type == "混合/多温" and cfg.l1_subject in ("dish_cold", "dish_hot"):
+        return (
+            "套餐整体与各组成餐品的位置和形态保持稳定，仅视角与整体高光从首帧连续过渡到尾帧"
+            if cfg.mode == "keyframes"
+            else "套餐整体与各组成餐品保持原位不动，仅餐品表面高光随镜头角度缓慢滑移"
+        )
     table = L1_KEYFRAMES if cfg.mode == "keyframes" else L1_SINGLE
     text = table.get(cfg.l1_subject, "")
     if cfg.l1_subject == "none" and cfg.mode == "keyframes":
@@ -327,6 +334,8 @@ def _l1_text(cfg: PromptConfig) -> str:
 def _build_sections(cfg: PromptConfig, locked: list) -> list:
     sections = []
     sections.append(f"【景别】{SHOT_SIZE_TEXT.get(cfg.shot_size, SHOT_SIZE_TEXT['close_up'])}。")
+    if cfg.food_type == "混合/多温":
+        sections.append("【餐品属性】当前为套餐组合，包含冷食与热食；保持整套摆盘、各组成餐品的数量、形态和相互位置稳定，不新增或替换组成餐品。")
 
     if cfg.mode == "single_image":
         # 镜头段

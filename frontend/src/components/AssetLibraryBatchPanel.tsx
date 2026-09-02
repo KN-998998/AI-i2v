@@ -5,7 +5,7 @@ import { useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
 
 const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他"] as const;
-const FOOD_TYPES = ["冷食", "热食"] as const;
+const FOOD_TYPES = ["冷食", "热食", "混合/多温"] as const;
 const ASSET_ROOT_STORAGE_KEY = "restaurant-video.asset-library.asset-root";
 const BACKGROUND_ROOT_STORAGE_KEY = "restaurant-video.asset-library.background-root";
 
@@ -26,7 +26,8 @@ function rememberPath(key: string, value: string): void {
   }
 }
 
-function defaultFoodType(category: string): "冷食" | "热食" | "" {
+function defaultFoodType(category: string): "冷食" | "热食" | "混合/多温" | "" {
+  if (category === "套餐") return "混合/多温";
   return ["甜品", "水果"].includes(category) ? "冷食" : "";
 }
 
@@ -45,7 +46,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const [busy, setBusy] = useState(false);
   const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
   const [reviewCategories, setReviewCategories] = useState<Record<string, string>>({});
-  const [reviewFoodTypes, setReviewFoodTypes] = useState<Record<string, "冷食" | "热食" | "">>({});
+  const [reviewFoodTypes, setReviewFoodTypes] = useState<Record<string, typeof FOOD_TYPES[number] | "">>({});
   const [activeReviewItem, setActiveReviewItem] = useState<string | null>(null);
   const [savingRule, setSavingRule] = useState<string | null>(null);
   const [rulesChanged, setRulesChanged] = useState(false);
@@ -53,7 +54,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const [rulesLoading, setRulesLoading] = useState(false);
   const [ruleSaving, setRuleSaving] = useState<string | null>(null);
   const [pendingRuleCategories, setPendingRuleCategories] = useState<Record<string, string>>({});
-  const [pendingRuleFoodTypes, setPendingRuleFoodTypes] = useState<Record<string, "冷食" | "热食" | "">>({});
+  const [pendingRuleFoodTypes, setPendingRuleFoodTypes] = useState<Record<string, typeof FOOD_TYPES[number] | "">>({});
 
   const plan: AssetLibraryPlan | null = savedPlan;
 
@@ -135,9 +136,9 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
 
   const confirmCategory = async (item: AssetLibraryReviewItem) => {
     const category = reviewCategories[item.dishName] ?? item.sourceCategory;
-    const foodType = reviewFoodTypes[item.dishName] || defaultFoodType(category);
+    const foodType = category === "套餐" ? "混合/多温" : reviewFoodTypes[item.dishName] || defaultFoodType(category);
     if (!foodType) {
-      onToast("请先选择冷食或热食，再保存分类规则");
+      onToast("请先选择冷食、热食或混合/多温，再保存分类规则");
       return;
     }
     setSavingRule(item.dishName);
@@ -181,10 +182,10 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
 
   const saveManagedRule = async (rule: AssetLibraryClassificationItem | AssetLibraryRule) => {
     const category = pendingRuleCategories[rule.dishName] ?? rule.category;
-    const foodType = pendingRuleFoodTypes[rule.dishName] || defaultFoodType(category);
+    const foodType = category === "套餐" ? "混合/多温" : pendingRuleFoodTypes[rule.dishName] || defaultFoodType(category);
     if (category === rule.category && foodType === (rule.foodType ?? defaultFoodType(rule.category))) return;
     if (!foodType) {
-      onToast("请先选择冷食或热食，再保存分类规则");
+      onToast("请先选择冷食、热食或混合/多温，再保存分类规则");
       return;
     }
     setRuleSaving(rule.dishName);
@@ -243,7 +244,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     <div className="compose-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void buildPlan()}>{busy ? "处理中..." : rulesChanged ? "按最新规则重新抽取" : "扫描并生成待确认方案"}</button><button type="button" className="btn" disabled={!plan || busy || (plan.reviewItems ?? []).length > 0} onClick={() => void applyPlan()}>应用到画布</button><button type="button" className="btn btn-danger" disabled={!createdGeneratorIds.length || busy} onClick={() => void execute()}>确认并执行抠图 + 生成</button></div>
     <section className="asset-category-results">
       <div className="panel-section-head"><div><span className="panel-label">FULL CLASSIFICATION REVIEW</span><h2>分类结果管理</h2><p className="muted">这里展示最近一次扫描发现的全部去重菜品，包括本地规则自动确认项和待确认项。请逐项检查分类与冷热属性，修改后点击保存即可记入人工规则。</p></div><span className="muted">{rulesLoading ? "加载中..." : `${managedItems.length} 个菜品`}</span></div>
-      <div className="asset-category-result-list">{groupedRules.map(group => <details className="asset-category-result" key={group.category} open={group.items.length > 0}><summary><span>{group.category}</span><strong>{group.items.length}</strong></summary><div className="asset-category-result-items">{group.items.length ? group.items.map(rule => { const category = pendingRuleCategories[rule.dishName] ?? rule.category; const foodType = pendingRuleFoodTypes[rule.dishName] || defaultFoodType(category); const originalFoodType = rule.foodType ?? defaultFoodType(rule.category); const unchanged = category === rule.category && foodType === originalFoodType; const classificationSource = "classificationSource" in rule ? rule.classificationSource : "人工规则"; const reviewRequired = "reviewRequired" in rule ? rule.reviewRequired : !foodType; const reason = "classificationReason" in rule ? rule.classificationReason : "已使用人工确认规则"; return <div className={`asset-rule-row ${reviewRequired ? "is-review" : ""}`} key={rule.dishName}><div className="asset-rule-name"><strong title={rule.dishName}>{rule.dishName}</strong><small>{classificationSource} · {reviewRequired ? "待确认" : "已确认"}{reason ? ` · ${reason}` : ""}</small></div><select className="input" value={category} onChange={event => { const nextCategory = event.target.value; setPendingRuleCategories(current => ({ ...current, [rule.dishName]: nextCategory })); setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: defaultFoodType(nextCategory) })); }}>{CATEGORIES.map(categoryOption => <option key={categoryOption} value={categoryOption}>{categoryOption}</option>)}</select><select className="input" value={foodType} onChange={event => setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: event.target.value as "冷食" | "热食" | "" }))}><option value="">选择冷/热食</option>{FOOD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select><button type="button" className="btn" disabled={ruleSaving !== null || unchanged || !foodType} onClick={() => void saveManagedRule(rule)}>{ruleSaving === rule.dishName ? "保存中..." : "保存"}</button></div>; }) : <small className="muted">暂无菜品</small>}</div></details>)}</div>
+      <div className="asset-category-result-list">{groupedRules.map(group => <details className="asset-category-result" key={group.category} open={group.items.length > 0}><summary><span>{group.category}</span><strong>{group.items.length}</strong></summary><div className="asset-category-result-items">{group.items.length ? group.items.map(rule => { const category = pendingRuleCategories[rule.dishName] ?? rule.category; const foodType = pendingRuleFoodTypes[rule.dishName] || defaultFoodType(category); const originalFoodType = rule.foodType ?? defaultFoodType(rule.category); const unchanged = category === rule.category && foodType === originalFoodType; const classificationSource = "classificationSource" in rule ? rule.classificationSource : "人工规则"; const reviewRequired = "reviewRequired" in rule ? rule.reviewRequired : !foodType; const reason = "classificationReason" in rule ? rule.classificationReason : "已使用人工确认规则"; return <div className={`asset-rule-row ${reviewRequired ? "is-review" : ""}`} key={rule.dishName}><div className="asset-rule-name"><strong title={rule.dishName}>{rule.dishName}</strong><small>{classificationSource} · {reviewRequired ? "待确认" : "已确认"}{reason ? ` · ${reason}` : ""}</small></div><select className="input" value={category} onChange={event => { const nextCategory = event.target.value; setPendingRuleCategories(current => ({ ...current, [rule.dishName]: nextCategory })); setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: defaultFoodType(nextCategory) })); }}>{CATEGORIES.map(categoryOption => <option key={categoryOption} value={categoryOption}>{categoryOption}</option>)}</select><select className="input" value={foodType} onChange={event => setPendingRuleFoodTypes(current => ({ ...current, [rule.dishName]: event.target.value as "冷食" | "热食" | "混合/多温" | "" }))}><option value="">选择冷/热食</option>{FOOD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select><button type="button" className="btn" disabled={ruleSaving !== null || unchanged || !foodType} onClick={() => void saveManagedRule(rule)}>{ruleSaving === rule.dishName ? "保存中..." : "保存"}</button></div>; }) : <small className="muted">暂无菜品</small>}</div></details>)}</div>
     </section>
     {plan && <div className="asset-library-plan">
       <strong>扫描结果：已抽取 {plan.selected.length} 个方案 · {plan.reviewItems?.length ?? 0} 个待确认</strong>
@@ -253,7 +254,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
         {(plan.reviewItems ?? []).map(item => <div className={`asset-review-item ${activeReviewItem === item.dishName ? "is-active" : ""}`} key={item.dishName} onClick={() => setActiveReviewItem(item.dishName)}>
           <span><strong>{item.displayName ?? item.dishName}</strong><small>{item.classificationReason} · {item.folderCount && item.folderCount > 1 ? `已归并 ${item.folderCount} 个同名/简繁体文件夹 · ` : ""}候选：{item.categoryCandidates?.join("、") || "无"}</small></span>
           <select className="input" value={reviewCategories[item.dishName] ?? item.sourceCategory} onChange={event => { const category = event.target.value; const foodType = defaultFoodType(category); setReviewCategories(current => ({ ...current, [item.dishName]: category })); setReviewFoodTypes(current => ({ ...current, [item.dishName]: foodType })); updateAssetLibraryReviewClassification(item.dishName, category, foodType || null); void saveDraft(); }}>{CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select>
-          <select className="input" value={reviewFoodTypes[item.dishName] ?? ""} onChange={event => { const foodType = event.target.value as "冷食" | "热食" | ""; setReviewFoodTypes(current => ({ ...current, [item.dishName]: foodType })); updateAssetLibraryReviewClassification(item.dishName, reviewCategories[item.dishName] ?? item.sourceCategory, foodType || null); void saveDraft(); }} disabled={["甜品", "水果"].includes(reviewCategories[item.dishName] ?? item.sourceCategory)}><option value="">选择冷/热食</option>{FOOD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
+          <select className="input" value={reviewFoodTypes[item.dishName] ?? ""} onChange={event => { const foodType = event.target.value as "冷食" | "热食" | "混合/多温" | ""; setReviewFoodTypes(current => ({ ...current, [item.dishName]: foodType })); updateAssetLibraryReviewClassification(item.dishName, reviewCategories[item.dishName] ?? item.sourceCategory, foodType || null); void saveDraft(); }} disabled={["甜品", "水果", "套餐"].includes(reviewCategories[item.dishName] ?? item.sourceCategory)}><option value="">选择冷/热食</option>{FOOD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
           <button type="button" className="btn" disabled={savingRule !== null || !(reviewFoodTypes[item.dishName] || defaultFoodType(reviewCategories[item.dishName] ?? item.sourceCategory))} onClick={() => void confirmCategory(item)}>{savingRule === item.dishName ? "保存中..." : "保存规则"}</button>
         </div>)}
       </div>}

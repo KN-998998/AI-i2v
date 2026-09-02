@@ -120,6 +120,7 @@ def _prompt_from_node(data: dict[str, Any]) -> tuple[str, str, bool]:
         l2_dynamics=dynamics,
         speed_curve=raw.get("speed_curve"),
         seamless_loop=bool(raw.get("seamless_loop", False)),
+        food_type=str(raw.get("food_type") or data.get("foodType") or ""),
     )
     result = assemble_prompt(config)
     if result.blocked:
@@ -164,6 +165,7 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
         "sourcePath": str(path.resolve()),
         "sourceUrl": f"/api/canvas/clips/library/{filename}",
         "dishCategory": category,
+        "foodType": "混合/多温" if category == "套餐" else str(job.get("food_type") or "") or None,
         "generatorNodeId": job["node_id"],
         "generationJobId": job["job_id"],
         "qualityScore": analysis.get("qualityScore", 50),
@@ -173,10 +175,11 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
     }
 
 
-def _job_context(draft_id: str, job: dict[str, Any]) -> tuple[str, str, int, str]:
+def _job_context(draft_id: str, job: dict[str, Any]) -> tuple[str, str, str, int, str]:
     """Recover metadata from the job first, then the current connected graph."""
     dish = str(job.get("dish") or "").strip()
     category = str(job.get("dish_category") or "").strip()
+    food_type = str(job.get("food_type") or "").strip()
     prompt = str(job.get("prompt") or "")
     duration_match = re.search(r"(\d+)", str(job.get("duration") or ""))
     duration = int(duration_match.group(1)) if duration_match else VIDEO_DURATION
@@ -198,6 +201,7 @@ def _job_context(draft_id: str, job: dict[str, Any]) -> tuple[str, str, int, str
             )
             dish = dish or str(related_clip.get("dish") or "").strip()
             category = category or str(related_clip.get("dishCategory") or "").strip()
+            food_type = food_type or str(related_clip.get("foodType") or "").strip()
             try:
                 input_data = _upstream_data(draft, str(job.get("node_id") or ""), "input")
             except ValueError:
@@ -215,13 +219,26 @@ def _job_context(draft_id: str, job: dict[str, Any]) -> tuple[str, str, int, str
             if prompt_data:
                 prompt, _negative_prompt, _keyframe_mode = _prompt_from_node(prompt_data)
 
+    if not food_type:
+        draft = load_draft(draft_id)
+        if draft is not None:
+            try:
+                input_data = _upstream_data(draft, str(job.get("node_id") or ""), "input")
+            except ValueError:
+                input_data = {}
+            food_type = str(input_data.get("foodType") or "").strip()
+
     if not dish:
         raise ValueError("恢复 Kling 任务缺少菜品信息，无法写入片段库")
     if not category:
         category = infer_category(dish, None)
+    if category == "套餐":
+        food_type = "混合/多温"
+    elif food_type not in {"冷食", "热食"}:
+        food_type = ""
     if duration < 3 or duration > 15:
         duration = VIDEO_DURATION
-    return dish, category, duration, prompt
+    return dish, category, food_type, duration, prompt
 
 
 def _job_output_path(job: dict[str, Any], dish: str, duration: int) -> Path:
@@ -262,8 +279,8 @@ def _run_generation_job(draft_id: str, job: dict[str, Any]) -> None:
     try:
         from pipeline.kling import session_with_retry, wait_for_video
 
-        dish, category, duration, prompt = _job_context(draft_id, job)
-        _update_job(draft_id, job, status="running", stage="恢复 Kling 任务轮询", dish=dish, dish_category=category, duration=duration, prompt=prompt)
+        dish, category, food_type, duration, prompt = _job_context(draft_id, job)
+        _update_job(draft_id, job, status="running", stage="恢复 Kling 任务轮询", dish=dish, dish_category=category, food_type=food_type, duration=duration, prompt=prompt)
         output_path = _job_output_path(job, dish, duration)
         session = session_with_retry()
         if output_path.is_file():
@@ -389,7 +406,14 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
         image_path = _uploaded_image(draft_id, input_data.get("imagePreview"))
     if image_path is None or not image_path.is_file():
         raise ValueError("请先在素材与菜品节点上传首帧图片")
-    prompt, negative_prompt, keyframe_mode = _prompt_from_node(prompt_data)
+    input_food_type = str(input_data.get("foodType") or "").strip()
+    generation_prompt_data = {**prompt_data, "foodType": input_food_type}
+    if input_food_type:
+        generation_prompt_data["promptConfig"] = {
+            **(prompt_data.get("promptConfig") if isinstance(prompt_data.get("promptConfig"), dict) else {}),
+            "food_type": input_food_type,
+        }
+    prompt, negative_prompt, keyframe_mode = _prompt_from_node(generation_prompt_data)
     tail_path = _uploaded_image(draft_id, prompt_data.get("promptEndImagePreview"))
     if keyframe_mode and (tail_path is None or not tail_path.is_file()):
         raise ValueError("首尾帧模式需要先上传尾帧图片")
@@ -402,6 +426,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
 
     input_dish = str(input_data.get("dishName") or "待配置菜品")
     category = infer_category(input_dish, input_data.get("dishCategory"))
+    food_type = "混合/多温" if category == "套餐" else input_food_type if input_food_type in {"冷食", "热食"} else ""
 
     job_id = uuid.uuid4().hex
     output_filename = f"{_safe_name(input_dish)}_{_safe_name(node_id)}_{job_id[:8]}_{duration}s.mp4"
@@ -418,6 +443,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
         "force": force,
         "dish": input_dish,
         "dish_category": category,
+        "food_type": food_type,
         "duration": duration,
         "prompt": prompt,
         "output_filename": output_filename,

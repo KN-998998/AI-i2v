@@ -18,7 +18,7 @@ from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 ASSET_CATEGORIES = ("寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他")
-FOOD_TYPES = ("冷食", "热食")
+FOOD_TYPES = ("冷食", "热食", "混合/多温")
 _HOT_PREPARATION_KEYWORDS = ("火炙", "炙烧", "炙烤", "炙り", "炙")
 _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
 _MANUAL_REVIEW_ROOT = CANVAS_BACKGROUND_ROOT.parent / "asset_library_manual_review"
@@ -97,6 +97,8 @@ def save_category_rule(dish_name: str, category: str, food_type: str | None = No
         raise ValueError("不支持的菜品分类")
     if category in {"甜品", "水果"}:
         food_type = "冷食"
+    elif category == "套餐" and food_type != "混合/多温":
+        raise ValueError("套餐必须选择混合/多温")
     elif food_type not in FOOD_TYPES:
         raise ValueError("该菜品分类必须选择冷食或热食")
     with _RULES_LOCK:
@@ -136,7 +138,7 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     if normalized_name in rules:
         rule = rules[normalized_name]
         category = str(rule["category"])
-        food_type = "热食" if _has_hot_preparation(dish_name) else rule.get("foodType") or ("冷食" if category in {"甜品", "水果"} else None)
+        food_type = "混合/多温" if category == "套餐" else "热食" if _has_hot_preparation(dish_name) else rule.get("foodType") or ("冷食" if category in {"甜品", "水果"} else None)
         reason = "人工规则中的加热工序优先" if _has_hot_preparation(dish_name) else "已使用人工确认规则" if food_type else "分类规则已确认，还需确认冷食或热食"
         return {"category": category, "foodType": food_type, "candidates": [category], "reviewRequired": food_type is None, "reason": reason}
 
@@ -175,7 +177,7 @@ def classify_library_name(dish_name: str) -> dict[str, Any]:
     if is_combination or len(candidates) > 1 or not candidates:
         suggested = candidates[0] if len(candidates) == 1 else "其他"
         reason = "组合菜名，需确认成品主体" if is_combination else "名称命中多个分类" if len(candidates) > 1 else "未匹配到分类词"
-        return {"category": suggested, "foodType": "冷食" if suggested in {"甜品", "水果"} else None, "candidates": candidates, "reviewRequired": True, "reason": reason}
+        return {"category": suggested, "foodType": "混合/多温" if suggested == "套餐" else "冷食" if suggested in {"甜品", "水果"} else None, "candidates": candidates, "reviewRequired": True, "reason": reason}
     category = candidates[0]
     return {"category": category, "foodType": "冷食" if category in {"甜品", "水果", "寿司", "刺身", "前菜/小菜"} else "热食", "candidates": candidates, "reviewRequired": False, "reason": "本地规则匹配"}
 
@@ -294,6 +296,8 @@ def infer_library_category(dish_name: str) -> str:
 
 def infer_food_type(dish_name: str, category: str) -> str:
     name = simplify_dish_name(dish_name)
+    if category == "套餐":
+        return "混合/多温"
     if _has_hot_preparation(dish_name):
         return "热食"
     if category in {"刺身", "前菜/小菜", "甜品", "水果", "饮品"} or any(word in name for word in ("刺身", "生鱼", "冷", "沙拉")):
@@ -520,6 +524,10 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
         food_type = str(item.get("foodType") or "")
         if key not in active_groups or key in confirmed or category not in ASSET_CATEGORIES or food_type not in FOOD_TYPES:
             raise ValueError("人工分类结果包含无效或重复菜品")
+        if category == "套餐" and food_type != "混合/多温":
+            raise ValueError("套餐必须选择混合/多温")
+        if category in {"甜品", "水果"} and food_type != "冷食":
+            raise ValueError("甜品和水果必须选择冷食")
         confirmed[key] = (category, food_type)
     if set(confirmed) != set(active_groups):
         raise ValueError("请完成所有菜品的人工分类和冷热标记")
@@ -634,7 +642,7 @@ def build_asset_plan(
                 "classificationReason": str(classification["reason"]),
                 "categoryCandidates": list(classification["candidates"]),
                 "suggestedCategory": str(classification["category"]),
-                "foodType": classification.get("foodType") if classification["category"] in {"甜品", "水果"} else None,
+                "foodType": classification.get("foodType") if classification["category"] in {"甜品", "水果", "套餐"} else None,
                 "folderCount": len(group["sourceFolders"]),
                 "sourceNames": list(group["sourceNames"]),
             }
@@ -649,7 +657,7 @@ def build_asset_plan(
             source = generator.choice(group["images"])
             stored_name, image_url = _copy_into_draft(source, draft_id)
             background = _copy_background(generator.choice(backgrounds))
-            app_category = category if category == "炸物" else "甜品" if category == "甜品" else "水果" if category == "水果" else "正餐"
+            app_category = category
             classification = classifications[group["dishName"]]
             food_type = str(classification.get("foodType") or infer_food_type(group["dishName"], category))
             selected.append({

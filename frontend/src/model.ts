@@ -83,8 +83,10 @@ export type CaptionTiming = {
   endSeconds: number;
 };
 
-export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "炸物", "甜品", "水果", "饮品", "其他"] as const;
+export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "炸物", "甜品", "水果", "饮品", "套餐", "寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "其他"] as const;
 export type DishCategory = typeof DISH_CATEGORY_OPTIONS[number];
+export const FOOD_TYPE_OPTIONS = ["冷食", "热食", "混合/多温"] as const;
+export type FoodType = typeof FOOD_TYPE_OPTIONS[number];
 
 export type WorkflowData = {
   kind: NodeKind;
@@ -92,7 +94,7 @@ export type WorkflowData = {
   description: string;
   status: string;
   dishName?: string;
-  foodType?: string;
+  foodType?: FoodType;
   dishCategory?: DishCategory;
   sourceLibraryCategory?: string;
   sourceLibraryPath?: string;
@@ -223,6 +225,7 @@ export type TimelineClip = {
   sourceEndSeconds?: number;
   trimConfirmed?: boolean;
   dishCategory?: DishCategory;
+  foodType?: FoodType;
   status?: "pending" | "generated";
   sourcePath?: string;
   sourceUrl?: string;
@@ -301,7 +304,7 @@ export type AssetLibraryPlanItem = {
   displayName?: string;
   sourceCategory: string;
   dishCategory: string;
-  foodType: string;
+  foodType: FoodType;
   imageName: string;
   imagePreview: string;
   sourcePath: string;
@@ -322,7 +325,7 @@ export type AssetLibraryReviewItem = {
   classificationReason: string;
   categoryCandidates: string[];
   suggestedCategory: string;
-  foodType?: "冷食" | "热食" | null;
+  foodType?: FoodType | null;
   folderCount?: number;
   sourceNames?: string[];
 };

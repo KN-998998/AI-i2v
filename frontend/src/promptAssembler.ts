@@ -11,6 +11,7 @@ export type SpeedCurve = "uniform" | "ease_in" | "ease_out";
 
 export type L2Item = { type: L2Type; target: string };
 
+export type PromptFoodType = "冷食" | "热食" | "混合/多温";
 export type PromptConfig = {
   mode: PromptMode;
   camera_move: CameraMove;
@@ -24,6 +25,7 @@ export type PromptConfig = {
   speed_curve: SpeedCurve | null;
   seamless_loop: boolean;
   endImageReady?: boolean;
+  food_type?: PromptFoodType;
 };
 
 export type PromptIssue = { code: string; message: string; field: string };
@@ -237,6 +239,11 @@ function actionText(config: PromptConfig): string {
     const text = template.replace("{S}", subject).replace("{V}", verb);
     return config.l1_subject === "chef" ? `${text}，面部表情平静自然，五官稳定` : text;
   }
+  if (config.food_type === "混合/多温" && (config.l1_subject === "dish_cold" || config.l1_subject === "dish_hot")) {
+    return config.mode === "keyframes"
+      ? "套餐整体与各组成餐品的位置和形态保持稳定，仅视角与整体高光从首帧连续过渡到尾帧"
+      : "套餐整体与各组成餐品保持原位不动，仅餐品表面高光随镜头角度缓慢滑移";
+  }
   const table = config.mode === "keyframes" ? L1_KEYFRAMES : L1_SINGLE;
   const text = table[config.l1_subject as Exclude<L1Subject, "hand" | "chef">] ?? "";
   return config.l1_subject === "none" && config.mode === "keyframes" ? text.replace("{camera}", CAMERA_OPTIONS.find(item => item.value === config.camera_move)?.text ?? "") : text;
@@ -250,6 +257,7 @@ function buildPrompt(config: PromptConfig, locked: string[]): string {
   const dynamics = dynamicText(config);
   const sections: string[] = [];
   sections.push(`【景别】${SHOT_SIZE_OPTIONS.find(item => item.value === config.shot_size)?.text ?? SHOT_SIZE_OPTIONS[0].text}。`);
+  if (config.food_type === "混合/多温") sections.push("【餐品属性】当前为套餐组合，包含冷食与热食；保持整套摆盘、各组成餐品的数量、形态和相互位置稳定，不新增或替换组成餐品。");
   if (config.mode === "single_image") {
     if (config.camera_move === "locked_off") sections.push("【镜头】固定机位不动（locked-off），画面构图保持不变。");
     else sections.push(`【镜头】${CAMERA_OPTIONS.find(item => item.value === config.camera_move)?.text ?? ""}，极慢匀速，单镜头一镜到底，${AMPLITUDE_OPTIONS.find(item => item.value === config.camera_amplitude)?.text ?? ""}。`);
@@ -309,6 +317,7 @@ type LegacyPromptData = {
   promptL2Target2?: string;
   promptSpeedCurve?: SpeedCurve | null;
   promptSeamlessLoop?: boolean;
+  foodType?: PromptFoodType;
   promptEndImageName?: string;
   promptEndImagePreview?: string;
 };
@@ -343,6 +352,7 @@ export function promptConfigFromData(data: LegacyPromptData): PromptConfig {
     speed_curve: mode === "keyframes" ? (data.promptSpeedCurve ?? "uniform") : null,
     seamless_loop: data.promptSeamlessLoop ?? false,
     endImageReady: Boolean(data.promptEndImageName || data.promptEndImagePreview),
+    food_type: data.foodType,
   };
 }
 
@@ -371,5 +381,6 @@ export function promptLegacyPatch(config: PromptConfig): PromptLegacyPatch {
     promptL2Target2: l2[1]?.target ?? "菜品",
     promptSpeedCurve: config.speed_curve,
     promptSeamlessLoop: config.seamless_loop,
+    foodType: config.food_type,
   };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, type CaptionSegment, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type WorkflowData, type WorkflowNode } from "../model";
+import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type WorkflowData, type WorkflowNode } from "../model";
 import { fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
@@ -37,14 +37,15 @@ function AssetFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const draftId = useWorkflowStore(state => state.draftId);
   const data = node.data;
   const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
+  const dishFoodType = dishCategory === "套餐" ? "混合/多温" : formatNodeValue(data.foodType, "热食");
   useEffect(() => () => {
     if (data.imagePreview?.startsWith("blob:")) URL.revokeObjectURL(data.imagePreview);
   }, [data.imagePreview]);
   return <>
     <SectionTitle>素材与菜品</SectionTitle>
     <Field label="当前菜品"><input className="input" value={formatNodeValue(data.dishName, "")} onChange={event => updateNodeData(node.id, { dishName: event.target.value })} /></Field>
-    <Field label="菜品类型"><Select value={formatNodeValue(data.foodType, "热食")} options={["冷食", "热食"]} onChange={value => updateNodeData(node.id, { foodType: value })} /></Field>
-    <Field label="菜品分类"><Select value={dishCategory} options={[...DISH_CATEGORY_OPTIONS]} onChange={value => updateNodeData(node.id, { dishCategory: value as typeof DISH_CATEGORY_OPTIONS[number] })} /></Field>
+    <Field label="菜品类型"><Select value={dishFoodType} options={[...FOOD_TYPE_OPTIONS]} onChange={value => updateNodeData(node.id, { foodType: value as FoodType })} /></Field>
+    <Field label="菜品分类"><Select value={dishCategory} options={[...DISH_CATEGORY_OPTIONS]} onChange={value => updateNodeData(node.id, { dishCategory: value as typeof DISH_CATEGORY_OPTIONS[number], foodType: value === "套餐" ? "混合/多温" : value === "甜品" || value === "水果" ? "冷食" : data.foodType })} /></Field>
     <Field label="素材模式"><Select value={formatNodeValue(data.assetMode, "单图模式")} options={["单图模式", "首尾帧模式"]} onChange={value => updateNodeData(node.id, { assetMode: value })} /></Field>
     <Field label="首帧 / 菜品图片"><input className="input" type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (!file) return; const localUrl = URL.createObjectURL(file); updateNodeData(node.id, { imageName: file.name, imagePreview: localUrl, assetAnalysis: undefined }); uploadDraftFile(draftId, file, "image", { dish: data.dishName, category: dishCategory }).then(result => { URL.revokeObjectURL(localUrl); updateNodeData(node.id, { imagePreview: result.url, assetAnalysis: result.analysis }); onToast("图片已上传并持久化"); }).catch(() => { URL.revokeObjectURL(localUrl); updateNodeData(node.id, { imagePreview: undefined, assetAnalysis: undefined }); onToast("图片上传失败"); }); }} /></Field>
     {data.assetAnalysis && <div className="media-analysis"><div><strong>图片质量 {data.assetAnalysis.qualityScore}/100</strong><Tag good={data.assetAnalysis.qualityLabel === "good"} warn={data.assetAnalysis.qualityLabel !== "good"}>{data.assetAnalysis.qualityLabel === "good" ? "可用" : data.assetAnalysis.qualityLabel === "warning" ? "建议检查" : "不建议使用"}</Tag></div><span>分类：{data.assetAnalysis.category ?? dishCategory} · 分析方式：本地规则</span>{data.assetAnalysis.qualityWarnings.map(warning => <small key={warning}>提示：{warning}</small>)}</div>}

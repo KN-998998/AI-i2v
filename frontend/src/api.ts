@@ -122,7 +122,7 @@ export async function scanManualAssetLibraryUpload(files: File[]): Promise<Manua
   return parseResponse<ManualAssetReviewScan>(response);
 }
 
-export async function saveAssetLibraryRule(dishName: string, category: string, foodType?: "冷食" | "热食"): Promise<{ dishName: string; category: string; foodType?: "冷食" | "热食" | null }> {
+export async function saveAssetLibraryRule(dishName: string, category: string, foodType?: "冷食" | "热食" | "混合/多温"): Promise<{ dishName: string; category: string; foodType?: "冷食" | "热食" | "混合/多温" | null }> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -131,7 +131,7 @@ export async function saveAssetLibraryRule(dishName: string, category: string, f
   return parseResponse<{ dishName: string; category: string }>(response);
 }
 
-export type AssetLibraryRule = { dishName: string; category: string; foodType?: "冷食" | "热食" | null };
+export type AssetLibraryRule = { dishName: string; category: string; foodType?: "冷食" | "热食" | "混合/多温" | null };
 
 export async function fetchAssetLibraryRules(): Promise<AssetLibraryRule[]> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, { cache: "no-store" });
@@ -153,7 +153,7 @@ export async function fetchManualAssetReviewScan(scanId: string): Promise<Manual
   return parseResponse<ManualAssetReviewScan>(response);
 }
 
-export async function organizeManualAssetLibrary(scanId: string, targetRoot: string, classifications: Array<{ dishKey: string; category: string; foodType: "冷食" | "热食" }>, excludedDishKeys: string[] = []): Promise<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }> {
+export async function organizeManualAssetLibrary(scanId: string, targetRoot: string, classifications: Array<{ dishKey: string; category: string; foodType: "冷食" | "热食" | "混合/多温" }>, excludedDishKeys: string[] = []): Promise<{ scanId: string; targetRoot: string; dishCount: number; imageCount: number }> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/organize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

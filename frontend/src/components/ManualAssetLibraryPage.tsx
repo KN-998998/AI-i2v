@@ -4,7 +4,7 @@ import type { ManualAssetReviewScan } from "../model";
 import { navigate } from "../router";
 
 type Props = { onToast: (message: string) => void };
-type FoodType = "冷食" | "热食";
+type FoodType = "冷食" | "热食" | "混合/多温";
 type Selection = { category: string; foodType: FoodType | "" };
 type FolderInputAttributes = InputHTMLAttributes<HTMLInputElement> & { webkitdirectory?: string; directory?: string };
 
@@ -13,6 +13,7 @@ const DEFAULT_TARGET_ROOT = "E:\\图片素材库";
 const STORAGE_KEY = "restaurant-video.manual-asset-library-review";
 
 function defaultFoodType(category: string): FoodType | "" {
+  if (category === "套餐") return "混合/多温";
   return ["寿司", "刺身", "前菜/小菜", "甜品", "水果", "饮品"].includes(category) ? "冷食" : "";
 }
 
@@ -150,7 +151,7 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
       return <article className={`manual-review-card ${complete ? "is-complete" : ""}`} key={item.dishKey}>
         <div className="manual-review-head"><span>{String(index + 1).padStart(3, "0")}</span><div><strong>{item.displayName}</strong><small>{item.folderCount > 1 ? `已合并 ${item.folderCount} 个同名/简繁体文件夹` : "1 个来源文件夹"} · {item.imageCount} 张图片</small></div><b>{complete ? "已确认" : "待确认"}</b><button type="button" className="manual-review-remove" title="排除该素材" aria-label={`排除${item.displayName}`} onClick={() => removeItem(item.dishKey)}>×</button></div>
         <div className="manual-review-previews">{item.previewUrls.map((url, previewIndex) => <img key={url} src={url} alt={`${item.dishName} ${previewIndex + 1}`} loading="lazy" />)}{item.imageCount > item.previewUrls.length && <span>+{item.imageCount - item.previewUrls.length}</span>}</div>
-        <div className="manual-review-fields"><label className="field"><span>菜品分类</span><select className="input" value={selection.category} onChange={event => { const category = event.target.value; updateSelection(item.dishKey, { category, foodType: defaultFoodType(category) }); }}><option value="">选择分类</option>{CATEGORIES.map(category => <option value={category} key={category}>{category}</option>)}</select></label><label className="field"><span>冷热属性</span><select className="input" value={selection.foodType} onChange={event => updateSelection(item.dishKey, { foodType: event.target.value as FoodType })} disabled={!selection.category}><option value="">选择冷/热食</option><option value="冷食">冷食</option><option value="热食">热食</option></select></label></div>
+        <div className="manual-review-fields"><label className="field"><span>菜品分类</span><select className="input" value={selection.category} onChange={event => { const category = event.target.value; updateSelection(item.dishKey, { category, foodType: defaultFoodType(category) }); }}><option value="">选择分类</option>{CATEGORIES.map(category => <option value={category} key={category}>{category}</option>)}</select></label><label className="field"><span>冷热属性</span><select className="input" value={selection.foodType} onChange={event => updateSelection(item.dishKey, { foodType: event.target.value as FoodType })} disabled={!selection.category || selection.category === "甜品" || selection.category === "水果" || selection.category === "套餐"}><option value="">选择冷/热食</option><option value="冷食">冷食</option><option value="热食">热食</option><option value="混合/多温">混合/多温</option></select></label></div>
       </article>;
     })}{excludedDishKeys.length > 0 && <div className="manual-review-excluded"><strong>已排除 {excludedDishKeys.length} 个素材</strong>{excludedDishKeys.map(key => { const item = scan.items.find(candidate => candidate.dishKey === key); return item ? <button type="button" className="manual-review-restore" key={key} onClick={() => restoreItem(key)}>恢复「{item.displayName}」</button> : null; })}</div>}{reviewItems.length === 0 && <div className="manual-review-empty">当前没有待整理素材，请恢复需要入库的卡片。</div>}</section>}
   </main>;

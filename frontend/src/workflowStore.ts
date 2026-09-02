@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
@@ -69,7 +69,7 @@ type WorkflowState = {
   addWorkspaceClip: (workspaceId: string, clipId: string) => void;
   setWorkspaceJob: (workspaceId: string, job: ComposeJob | null) => void;
   setAssetLibraryPlan: (plan: AssetLibraryPlan | null) => void;
-  updateAssetLibraryReviewClassification: (dishName: string, category: string, foodType: "冷食" | "热食" | null) => void;
+  updateAssetLibraryReviewClassification: (dishName: string, category: string, foodType: FoodType | null) => void;
   loadDraft: () => Promise<void>;
   saveDraft: () => Promise<void>;
 };
@@ -236,7 +236,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const primaryInput = state.nodes.find(item => item.data.kind === "input");
     const shouldSyncClipMetadata = node?.data.kind === "input"
       && primaryInput?.id === nodeId
-      && ("dishName" in patch || "dishCategory" in patch);
+      && ("dishName" in patch || "dishCategory" in patch || "foodType" in patch);
     if (!shouldSyncClipMetadata || !data) {
       const nodes = state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, ...patch } } : item);
       if (node?.data.kind !== "sound") return { nodes, revision: state.revision + 1 };
@@ -249,12 +249,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
     const dish = data.dishName || "待配置菜品";
     const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(dish) : "正餐");
-    const syncClip = (clip: TimelineClip) => clip.generatorNodeId ? { ...clip, dish, dishCategory } : clip;
+    const foodType = dishCategory === "套餐" ? "混合/多温" : data.foodType as FoodType | undefined;
+    const nextInputData = { ...data, foodType };
+    const syncClip = (clip: TimelineClip) => clip.generatorNodeId ? { ...clip, dish, dishCategory, foodType } : clip;
     const candidateClips = state.candidateClips.map(syncClip);
     const timeline = state.timeline.map(syncClip);
     const composeWorkspaces = state.composeWorkspaces.map(workspace => ({ ...workspace, clips: workspace.clips.map(syncClip) }));
+    const nodes = state.nodes.map(item => {
+      if (item.id === nodeId) return { ...item, data: nextInputData };
+      if (item.data.kind !== "prompt") return item;
+      const promptConfig = { ...(item.data.promptConfig ?? DEFAULT_PROMPT_CONFIG), food_type: foodType } as typeof DEFAULT_PROMPT_CONFIG;
+      return { ...item, data: { ...item.data, promptConfig, ...promptLegacyPatch(promptConfig) } };
+    });
     return {
-      nodes: state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, ...patch } } : item),
+      nodes,
       candidateClips,
       timeline,
       composeWorkspaces,
@@ -268,9 +276,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const input = state.nodes.find(item => item.data.kind === "input");
     const dish = input?.data.dishName || existing?.dish || "待配置菜品";
     const dishCategory = input?.data.dishCategory ?? existing?.dishCategory ?? (input?.data.dishName ? inferDishCategory(dish) : "正餐");
+    const foodType = dishCategory === "套餐" ? "混合/多温" : input?.data.foodType as FoodType | undefined;
     const clip = existing
-      ? { ...existing, dish, dishCategory, label: "生成任务", status: "pending" as const }
-      : createPendingGeneratorClip(nodeId, state.nextNodeNumber, dish, dishCategory);
+      ? { ...existing, dish, dishCategory, foodType, label: "生成任务", status: "pending" as const }
+      : { ...createPendingGeneratorClip(nodeId, state.nextNodeNumber, dish, dishCategory), foodType };
     const candidateClips = existing
       ? state.candidateClips.map(item => item.id === existing.id ? clip : item)
       : [...state.candidateClips, clip];
@@ -369,11 +378,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const promptId = `node_prompt_${base + 2}`;
         const generatorId = `node_generator_${base + 3}`;
         const cold = item.foodType === "冷食";
+        const mixed = item.foodType === "混合/多温";
         const promptConfig = {
           ...DEFAULT_PROMPT_CONFIG,
           elements: [cold ? "dish_cold" : "dish_hot", "tableware", "surface", "backdrop"],
           l1_subject: cold ? "dish_cold" : "dish_hot",
           l2_dynamics: [{ type: "specular", target: "菜品" }],
+          food_type: mixed ? "混合/多温" : item.foodType === "冷食" ? "冷食" : "热食",
         } as typeof DEFAULT_PROMPT_CONFIG;
         const input = createWorkflowNode("input", inputId, { x: 24, y });
         input.data = { ...input.data, title: item.dishName, dishName: item.dishName, sourceLibraryCategory: item.sourceCategory, sourceLibraryPath: item.sourcePath, dishCategory: item.dishCategory as typeof input.data.dishCategory, foodType: item.foodType, imageName: item.imageName, imagePreview: item.imagePreview, status: "已就绪" };

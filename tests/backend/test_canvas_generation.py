@@ -41,6 +41,23 @@ def test_generation_upstream_rejects_multiple_connected_branches():
         raise AssertionError("multiple prompt branches were silently accepted")
 
 
+def test_prompt_generation_inherits_mixed_food_type_from_input():
+    prompt, _negative, _keyframe = canvas_generation._prompt_from_node({
+        "foodType": "混合/多温",
+        "promptConfig": {
+            "mode": "single_image",
+            "camera_move": "locked_off",
+            "camera_amplitude": "subtle",
+            "elements": ["dish_hot", "tableware", "surface"],
+            "l1_subject": "dish_hot",
+            "l2_dynamics": [],
+        },
+    })
+
+    assert "【餐品属性】当前为套餐组合，包含冷食与热食" in prompt
+    assert "套餐整体与各组成餐品保持原位不动" in prompt
+
+
 def test_completed_generation_persists_clip_and_node_status(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
     draft_id = "default"
