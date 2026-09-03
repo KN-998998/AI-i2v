@@ -46,3 +46,4 @@ git reset --hard 目标提交ID
 sudo docker compose build
 sudo env APP_UID="$(id -u)" APP_GID="$(id -g)" docker compose up -d
 服务器不要直接提交业务代码；修复后在本地提交并推送 main。
+CI/CD 部署脚本会以 deploy 用户身份直接执行 docker 命令，因此必须先执行 usermod -aG docker deploy，并退出 SSH 后重新登录。
