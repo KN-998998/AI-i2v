@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 APP_UID="$(id -u)"
 APP_GID="$(id -g)"
-docker build --progress=plain --tag short-video-short-video-app:latest .
+DOCKER_BUILDKIT=0 docker build --tag short-video-short-video-app:latest .
 env APP_UID="$APP_UID" APP_GID="$APP_GID" docker compose up -d --no-build
 for attempt in $(seq 1 30); do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' short-video-app 2>/dev/null || true)"
