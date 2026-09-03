@@ -10,10 +10,12 @@ function PipelineItem({ item, active }: { item: typeof workflowRoutes[number]; a
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const candidates = useWorkflowStore(state => state.candidateClips);
   const workspaces = useWorkflowStore(state => state.composeWorkspaces);
+  const hasCurrentGeneratedClip = candidates.some(clip => Boolean(clip.generatorNodeId && clip.sourcePath && clip.isSelected !== false));
+  const hasComposedCurrentClip = workspaces.some(workspace => workspace.clips.some(clip => Boolean(clip.sourcePath && clip.isSelected !== false)));
   const stepStatus = item.path === "/workflow/generator"
-    ? (candidates.some(clip => clip.sourcePath) ? "ready" : "pending")
+    ? (hasCurrentGeneratedClip ? "ready" : "pending")
     : item.path === "/workflow/compose"
-      ? (workspaces.some(workspace => workspace.clips.some(clip => clip.sourcePath)) ? "ready" : "pending")
+      ? (hasComposedCurrentClip ? "ready" : "pending")
       : item.path === "/workflow/sound"
         ? (workspaces.some(workspace => workspace.job?.status === "done") ? "ready" : "pending")
         : item.path === "/workflow/output"
