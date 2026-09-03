@@ -99,6 +99,44 @@ def test_completed_generation_persists_clip_and_node_status(monkeypatch, tmp_pat
     assert saved["composeWorkspaces"][0]["clips"][0]["sourcePath"] == "C:/clips/test.mp4"
 
 
+def test_regeneration_keeps_previous_clip_version_and_switches_current_reference(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    monkeypatch.setattr(canvas_generation, "CANVAS_CLIP_ROOT", tmp_path / "clips")
+    first = {
+        "id": "clip_v1",
+        "clipId": "clip_v1",
+        "assetId": "asset_sushi",
+        "clipVersion": 1,
+        "isSelected": True,
+        "dish": "寿司",
+        "label": "生成片段",
+        "tone": "#355e62",
+        "timelineDuration": 2.5,
+        "status": "generated",
+        "sourcePath": "C:/clips/sushi-v1.mp4",
+        "generatorNodeId": "clips",
+        "generationJobId": "job-1",
+    }
+    canvas_state.save_draft("default", {
+        "nodes": [{"id": "clips", "data": {"kind": "generator", "status": "已生成", "assetId": "asset_sushi", "selectedClipId": "clip_v1"}}],
+        "edges": [],
+        "timeline": [first],
+        "candidateClips": [first],
+        "composeWorkspaces": [{"id": "compose_1", "title": "成片 1", "clips": [first], "job": None}],
+    })
+    second = {**first, "id": "clip_v2", "clipId": "clip_v2", "clipVersion": 2, "generationJobId": "job-2", "sourcePath": "C:/clips/sushi-v2.mp4"}
+
+    canvas_generation._persist_generated_clip("default", "clips", second)
+
+    saved = canvas_state.load_draft("default")
+    versions = saved["candidateClips"]
+    assert [item["id"] for item in versions] == ["clip_v1", "clip_v2"]
+    assert versions[0]["isSelected"] is False
+    assert versions[1]["isSelected"] is True
+    assert saved["nodes"][0]["data"]["selectedClipId"] == "clip_v2"
+    assert saved["composeWorkspaces"][0]["clips"][0]["id"] == "clip_v2"
+
+
 def test_startup_recovery_polls_task_downloads_and_persists_clip(monkeypatch, tmp_path):
     draft_root = tmp_path / "drafts"
     clip_root = tmp_path / "clips"

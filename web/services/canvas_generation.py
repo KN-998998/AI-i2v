@@ -176,12 +176,38 @@ def _append_manifest(record: dict[str, Any]) -> None:
         temporary.replace(path)
 
 
+def _manifest_records() -> list[dict[str, Any]]:
+    path = CANVAS_CLIP_ROOT / "manifest.json"
+    if not path.is_file():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [item for item in payload if isinstance(item, dict)] if isinstance(payload, list) else []
+
+
+def _next_clip_version(asset_id: str) -> int:
+    versions = [
+        int(item.get("clipVersion"))
+        for item in _manifest_records()
+        if item.get("assetId") == asset_id and str(item.get("clipVersion", "")).isdigit()
+    ]
+    return max(versions, default=0) + 1
+
+
 def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> dict[str, Any]:
     analysis = analyze_video(path, dish, category)
     duration = float(analysis.get("durationSeconds") or VIDEO_DURATION)
     filename = path.name
+    asset_id = str(job.get("asset_id") or f"asset_{job.get('node_id', 'generator')}")
+    clip_version = int(job.get("clip_version") or _next_clip_version(asset_id))
     return {
-        "id": f"clip_canvas_{filename}",
+        "id": f"clip_canvas_{job.get('job_id') or filename}",
+        "clipId": f"clip_canvas_{job.get('job_id') or filename}",
+        "assetId": asset_id,
+        "clipVersion": clip_version,
+        "isSelected": True,
         "filename": filename,
         "dish": dish,
         "label": "生成片段",
@@ -412,19 +438,28 @@ def _persist_generator_status(draft_id: str, node_id: str, status: str) -> None:
 
 
 def _persist_generated_clip(draft_id: str, node_id: str, clip: dict[str, Any]) -> None:
-    """Replace the node's pending clip in the draft with the downloaded MP4."""
+    """Persist a new version and replace only the node's pending/current composition reference."""
     draft = load_draft(draft_id)
     if draft is None:
         return
 
     candidates = list(draft.get("candidateClips") or draft.get("timeline") or [])
-    existing = next((item for item in candidates if item.get("generatorNodeId") == node_id), None)
-    persisted_clip = {**clip, "id": existing.get("id", clip["id"]) if existing else clip["id"]}
-
-    if existing is None:
-        candidates.append(persisted_clip)
+    linked = [item for item in candidates if item.get("generatorNodeId") == node_id]
+    existing_pending = next((item for item in linked if item.get("status") == "pending"), None)
+    persisted_clip = {
+        **clip,
+        "id": existing_pending.get("id", clip["id"]) if existing_pending else clip["id"],
+        "isSelected": True,
+    }
+    if existing_pending is not None:
+        candidates = [persisted_clip if item.get("id") == existing_pending.get("id") else item for item in candidates]
     else:
-        candidates = [persisted_clip if item.get("generatorNodeId") == node_id else item for item in candidates]
+        candidates = [
+            {**item, "isSelected": False}
+            if item.get("generatorNodeId") == node_id else item
+            for item in candidates
+        ]
+        candidates.append(persisted_clip)
 
     def replace_linked(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [
@@ -441,6 +476,8 @@ def _persist_generated_clip(draft_id: str, node_id: str, clip: dict[str, Any]) -
     for node in draft.get("nodes", []):
         if node.get("id") == node_id and node.get("data", {}).get("kind") == "generator":
             node["data"]["status"] = "已生成"
+            node["data"]["selectedClipId"] = persisted_clip["id"]
+            node["data"]["assetId"] = persisted_clip.get("assetId")
             break
     save_draft(draft_id, draft)
 
@@ -479,6 +516,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
     input_dish = str(input_data.get("dishName") or "待配置菜品")
     category = infer_category(input_dish, input_data.get("dishCategory"))
     food_type = "混合/多温" if category == "套餐" else input_food_type if input_food_type in {"冷食", "热食"} else ""
+    asset_id = str(input_data.get("assetId") or f"asset_{node_id}")
 
     job_id = uuid.uuid4().hex
     output_filename = f"{_safe_name(input_dish)}_{_safe_name(node_id)}_{job_id[:8]}_{duration}s.mp4"
@@ -500,6 +538,8 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
         "duration": duration,
         "prompt": prompt,
         "output_filename": output_filename,
+        "asset_id": asset_id,
+        "clip_version": _next_clip_version(asset_id),
     }
     with _JOB_LOCK:
         _save_job(draft_id, job)

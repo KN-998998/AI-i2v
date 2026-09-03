@@ -96,6 +96,10 @@ export type WorkflowData = {
   description: string;
   status: string;
   dishName?: string;
+  /** Stable link shared by the source asset and every generated clip version. */
+  assetId?: string;
+  /** The clip version currently used by composition for this generator node. */
+  selectedClipId?: string;
   foodType?: FoodType;
   visualSubjectType?: VisualSubjectType;
   dishCategory?: DishCategory;
@@ -220,6 +224,10 @@ export type WorkflowNode = Node<WorkflowData, "workflow">;
 
 export type TimelineClip = {
   id: string;
+  clipId?: string;
+  assetId?: string;
+  clipVersion?: number;
+  isSelected?: boolean;
   dish: string;
   label: string;
   tone: string;
@@ -630,9 +638,10 @@ export function createWorkflowNode(kind: NodeKind, id: string, position: { x: nu
   return { id, type: "workflow", position, data: dataFor(kind) };
 }
 
-export function createPendingGeneratorClip(nodeId: string, _nodeNumber: number, dish = "待配置菜品", dishCategory: DishCategory = "正餐"): TimelineClip {
+export function createPendingGeneratorClip(nodeId: string, _nodeNumber: number, dish = "待配置菜品", dishCategory: DishCategory = "正餐", assetId = `asset_${nodeId}`): TimelineClip {
   return {
     id: `${nodeId}_clip`,
+    assetId,
     dish,
     label: "生成任务",
     tone: "#355e62",

@@ -157,11 +157,25 @@ def _clip_thumbnail(clip_path: Path, at_seconds: float) -> Path | None:
     return thumbnail_path
 
 
+def _clip_manifest_record(filename: str) -> dict[str, Any]:
+    manifest_path = CANVAS_CLIP_ROOT / "manifest.json"
+    if not manifest_path.is_file():
+        return {}
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    records = payload if isinstance(payload, list) else []
+    matches = [item for item in records if isinstance(item, dict) and item.get("filename") == filename]
+    return matches[-1] if matches else {}
+
+
 def _canvas_clip_payload(clip_path: Path) -> dict[str, Any] | None:
     analysis = analyze_video(clip_path, _canvas_clip_dish(clip_path.name))
     duration = analysis.get("durationSeconds") or _read_video_duration_seconds(clip_path)
     if duration is None:
         return None
+    manifest = _clip_manifest_record(clip_path.name)
     return {
         "id": f"clip_canvas_{clip_path.name}",
         "filename": clip_path.name,
@@ -182,6 +196,7 @@ def _canvas_clip_payload(clip_path: Path) -> dict[str, Any] | None:
         "qualityWarnings": analysis.get("qualityWarnings", []),
         "analysisMode": analysis.get("analysisMode", "technical_rules"),
         "dishCategory": analysis.get("category", "其他"),
+        **{key: manifest[key] for key in ("clipId", "assetId", "clipVersion", "isSelected", "generatorNodeId", "generationJobId", "foodType", "visualSubjectType", "prompt", "videoTaskId") if key in manifest},
     }
 
 
