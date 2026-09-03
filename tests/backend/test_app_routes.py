@@ -86,6 +86,27 @@ def test_manual_asset_review_routes_require_confirmation_and_copy_images(monkeyp
     assert source_image.is_file()
 
 
+def test_manual_asset_review_state_route_survives_reload(monkeypatch, tmp_path):
+    review_root = tmp_path / "review-scans"
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", review_root)
+    source_root = tmp_path / "raw" / "寿司" / "三文鱼寿司"
+    source_root.mkdir(parents=True)
+    (source_root / "dish.jpg").write_bytes(b"jpeg-bytes")
+    client = TestClient(create_app())
+
+    scan = client.post("/api/canvas/asset-library/manual-review/scans", params={"asset_root": str(tmp_path / "raw")}).json()
+    item = scan["items"][0]
+    state_response = client.put(
+        f"/api/canvas/asset-library/manual-review/scans/{scan['scanId']}/state",
+        json={"selections": {item["dishKey"]: {"category": "寿司", "foodType": "冷食", "visualSubjectType": "菜品主体"}}, "excluded_dish_keys": []},
+    )
+
+    assert state_response.status_code == 200
+    reloaded = client.get(f"/api/canvas/asset-library/manual-review/scans/{scan['scanId']}")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["reviewState"]["selections"][item["dishKey"]]["category"] == "寿司"
+
+
 def test_manual_asset_review_upload_route_preserves_folder_structure(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
     response = TestClient(create_app()).post(

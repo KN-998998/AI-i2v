@@ -370,6 +370,10 @@ export type ManualAssetReviewScan = {
   scanId: string;
   assetRoot: string;
   items: ManualAssetReviewItem[];
+  reviewState?: {
+    selections: Record<string, { category: string; foodType: "冷食" | "热食" | "混合/多温" | ""; visualSubjectType: VisualSubjectType }>;
+    excludedDishKeys: string[];
+  };
 };
 
 export type ClipLibraryItem = TimelineClip & {

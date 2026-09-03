@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type InputHTMLAttributes } from "react";
-import { organizeManualAssetLibrary, pickAssetLibraryFolder, scanManualAssetLibrary, scanManualAssetLibraryUpload } from "../api";
+import { fetchManualAssetReviewScan, organizeManualAssetLibrary, pickAssetLibraryFolder, saveManualAssetReviewState, scanManualAssetLibrary, scanManualAssetLibraryUpload } from "../api";
 import { VISUAL_SUBJECT_TYPE_OPTIONS, type ManualAssetReviewScan, type VisualSubjectType } from "../model";
 import { navigate } from "../router";
 
@@ -7,6 +7,7 @@ type Props = { onToast: (message: string) => void };
 type FoodType = "冷食" | "热食" | "混合/多温";
 type Selection = { category: string; foodType: FoodType | ""; visualSubjectType: VisualSubjectType };
 type FolderInputAttributes = InputHTMLAttributes<HTMLInputElement> & { webkitdirectory?: string; directory?: string };
+type StoredReviewState = { scanId?: string | null; assetRoot?: string | null; selections?: Record<string, Selection>; excludedDishKeys?: string[] };
 
 const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他"] as const;
 const DEFAULT_TARGET_ROOT = "E:\\图片素材库";
@@ -24,12 +25,20 @@ function loadSavedState(): { scan: ManualAssetReviewScan | null; targetRoot: str
   try {
     const legacy = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "null") as Partial<{ scan: ManualAssetReviewScan; targetRoot: string; selections: Record<string, Selection>; excludedDishKeys: string[] }> | null;
     const scan = JSON.parse(window.localStorage.getItem(SCAN_STORAGE_KEY) || "null") as Partial<{ scan: ManualAssetReviewScan; targetRoot: string }> | null;
-    const state = JSON.parse(window.localStorage.getItem(STATE_STORAGE_KEY) || "null") as Partial<{ selections: Record<string, Selection>; excludedDishKeys: string[] }> | null;
+    const state = JSON.parse(window.localStorage.getItem(STATE_STORAGE_KEY) || "null") as StoredReviewState | null;
+    const savedScan = scan?.scan ?? legacy?.scan ?? null;
+    // Old state did not have a scanId, so allow it once and bind it to the saved scan below.
+    const savedRoot = savedScan?.assetRoot;
+    const stateBelongsToSavedScan = !state?.scanId || !savedScan || state.scanId === savedScan.scanId;
+    const stateBelongsToSavedRoot = Boolean(state?.assetRoot && savedRoot && state.assetRoot === savedRoot);
+    const compatibleState = stateBelongsToSavedScan || stateBelongsToSavedRoot ? state : null;
+    const selections = state ? compatibleState?.selections ?? {} : legacy?.selections ?? {};
+    const excludedDishKeys = state ? compatibleState?.excludedDishKeys ?? [] : legacy?.excludedDishKeys ?? [];
     return {
-      scan: scan?.scan ?? legacy?.scan ?? null,
+      scan: savedScan,
       targetRoot: scan?.targetRoot || legacy?.targetRoot || DEFAULT_TARGET_ROOT,
-      selections: state?.selections ?? legacy?.selections ?? {},
-      excludedDishKeys: state?.excludedDishKeys ?? legacy?.excludedDishKeys ?? [],
+      selections,
+      excludedDishKeys,
     };
   } catch {
     return { scan: null, targetRoot: DEFAULT_TARGET_ROOT, selections: {}, excludedDishKeys: [] };
@@ -48,8 +57,17 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
   const [organizing, setOrganizing] = useState(false);
   const [page, setPage] = useState(1);
   const [expandedPreviewKeys, setExpandedPreviewKeys] = useState<Set<string>>(new Set());
+  const [reviewHydrated, setReviewHydrated] = useState(!saved.scan);
   const sourceFolderInput = useRef<HTMLInputElement>(null);
-  const saveTimer = useRef<number | null>(null);
+  const reviewStateRef = useRef<StoredReviewState>({
+    scanId: saved.scan?.scanId ?? null,
+    assetRoot: saved.scan?.assetRoot ?? null,
+    selections: saved.selections,
+    excludedDishKeys: saved.excludedDishKeys,
+  });
+  const hydratedScanIdRef = useRef<string | null>(null);
+  const pendingMigrationStateRef = useRef<StoredReviewState | null>(null);
+  const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
     try {
@@ -59,13 +77,56 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
   }, [scan, targetRoot]);
 
   useEffect(() => {
-    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      try { window.localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify({ selections, excludedDishKeys })); } catch { /* Browser storage is optional. */ }
-      saveTimer.current = null;
-    }, 250);
-    return () => { if (saveTimer.current !== null) window.clearTimeout(saveTimer.current); };
-  }, [selections, excludedDishKeys]);
+    const nextState: StoredReviewState = { scanId: scan?.scanId ?? null, assetRoot: scan?.assetRoot ?? null, selections, excludedDishKeys };
+    reviewStateRef.current = nextState;
+    if (!reviewHydrated || !scan?.scanId) return;
+    try {
+      window.localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(nextState));
+    } catch { /* Browser storage is optional. */ }
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => saveManualAssetReviewState(scan.scanId, selections, excludedDishKeys).then(() => undefined))
+      .catch(() => undefined);
+  }, [scan?.scanId, selections, excludedDishKeys, reviewHydrated]);
+
+  useEffect(() => {
+    const scanId = scan?.scanId;
+    if (!scanId || hydratedScanIdRef.current === scanId) return;
+    hydratedScanIdRef.current = scanId;
+    let active = true;
+    void fetchManualAssetReviewScan(scanId).then(latestScan => {
+      if (!active) return;
+      const serverState = latestScan.reviewState;
+      const serverHasState = Boolean(serverState && (Object.keys(serverState.selections).length || serverState.excludedDishKeys.length));
+      const localState = pendingMigrationStateRef.current ?? reviewStateRef.current;
+      pendingMigrationStateRef.current = null;
+      const localStateMatches = localState.scanId === scanId || localState.assetRoot === latestScan.assetRoot;
+      const validKeys = new Set(latestScan.items.map(item => item.dishKey));
+      const localSelections = Object.fromEntries(Object.entries(localState.selections ?? {}).filter(([key]) => validKeys.has(key)));
+      const localExcluded = (localState.excludedDishKeys ?? []).filter(key => validKeys.has(key));
+      const nextSelections = serverHasState ? serverState!.selections : localStateMatches ? localSelections : {};
+      const nextExcluded = serverHasState ? serverState!.excludedDishKeys : localStateMatches ? localExcluded : [];
+      setScan(latestScan);
+      setSelections(nextSelections);
+      setExcludedDishKeys(nextExcluded);
+      setReviewHydrated(true);
+    }).catch(() => {
+      if (active) setReviewHydrated(true);
+    });
+    return () => { active = false; };
+  }, [scan?.scanId]);
+
+  useEffect(() => {
+    const flushReviewState = () => {
+      try { window.localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(reviewStateRef.current)); } catch { /* Browser storage is optional. */ }
+    };
+    window.addEventListener("pagehide", flushReviewState);
+    window.addEventListener("beforeunload", flushReviewState);
+    return () => {
+      window.removeEventListener("pagehide", flushReviewState);
+      window.removeEventListener("beforeunload", flushReviewState);
+    };
+  }, []);
 
   const reviewItems = useMemo(() => scan?.items.filter(item => !excludedDishKeys.includes(item.dishKey)) ?? [], [scan, excludedDishKeys]);
   const confirmedCount = useMemo(() => reviewItems.filter(item => Boolean(selections[item.dishKey]?.category && selections[item.dishKey]?.foodType)).length, [reviewItems, selections]);
@@ -101,7 +162,9 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
     if (!files.length) return;
     setFolderBusy("source");
     try {
+      pendingMigrationStateRef.current = reviewStateRef.current;
       const result = await scanManualAssetLibraryUpload(files);
+      setReviewHydrated(false);
       setScan(result);
       setSourceRoot(result.assetRoot);
       setSelections({});
@@ -120,7 +183,9 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
     if (!sourceRoot.trim()) return onToast("请先选择待整理的原始图片素材目录");
     setScanning(true);
     try {
+      pendingMigrationStateRef.current = reviewStateRef.current;
       const result = await scanManualAssetLibrary(sourceRoot.trim());
+      setReviewHydrated(false);
       setScan(result);
       setSourceRoot(result.assetRoot);
       setSelections({});
@@ -165,8 +230,22 @@ export function ManualAssetLibraryPage({ onToast }: Props) {
     if (!targetRoot.trim()) return onToast("请先选择标准图片素材库目录");
     setOrganizing(true);
     try {
-      const classifications = reviewItems.map(item => ({ dishKey: item.dishKey, category: selections[item.dishKey].category, foodType: selections[item.dishKey].foodType as FoodType, visualSubjectType: selections[item.dishKey].visualSubjectType ?? "菜品主体" }));
-      const result = await organizeManualAssetLibrary(scan.scanId, targetRoot.trim(), classifications, excludedDishKeys);
+      // Re-read the scan before copying so a long review session cannot submit an old card list.
+      const latestScan = await fetchManualAssetReviewScan(scan.scanId);
+      const latestReviewItems = latestScan.items.filter(item => !excludedDishKeys.includes(item.dishKey));
+      const incomplete = latestReviewItems.filter(item => {
+        const selection = selections[item.dishKey];
+        return !selection?.category || !selection.foodType;
+      });
+      if (incomplete.length) {
+        throw new Error(`仍有 ${incomplete.length} 个菜品缺少分类或冷热属性，请检查最新扫描结果`);
+      }
+      setScan(latestScan);
+      const classifications = latestReviewItems.map(item => {
+        const selection = selections[item.dishKey];
+        return { dishKey: item.dishKey, category: selection.category, foodType: selection.foodType as FoodType, visualSubjectType: selection.visualSubjectType ?? "菜品主体" };
+      });
+      const result = await organizeManualAssetLibrary(latestScan.scanId, targetRoot.trim(), classifications, excludedDishKeys);
       onToast(`已复制 ${result.imageCount} 张图片至标准素材库`);
     } catch (error) {
       onToast(error instanceof Error ? error.message : "整理入库失败");

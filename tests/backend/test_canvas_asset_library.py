@@ -337,6 +337,36 @@ def test_manual_asset_review_scans_without_classification_and_organizes_after_co
     assert (first / "a.png").is_file()
 
 
+def test_manual_asset_review_state_is_persisted_in_scan_manifest(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
+    asset_root = tmp_path / "raw" / "寿司" / "三文鱼寿司"
+    _write_image(asset_root / "dish.png", "#d97979")
+
+    scan = canvas_asset_library.scan_manual_asset_library(str(tmp_path / "raw"))
+    item = scan["items"][0]
+    saved = canvas_asset_library.save_manual_review_state(
+        scan["scanId"],
+        {item["dishKey"]: {"category": "寿司", "foodType": "冷食", "visualSubjectType": "菜品主体"}},
+        [],
+    )
+
+    loaded = canvas_asset_library.manual_review_scan_response(canvas_asset_library.load_manual_review_scan(scan["scanId"]))
+    assert loaded["reviewState"] == saved["reviewState"]
+    assert loaded["reviewState"]["selections"][item["dishKey"]]["category"] == "寿司"
+
+
+def test_manual_asset_review_state_can_persist_exclusions(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
+    _write_image(tmp_path / "raw" / "寿司" / "寿司" / "dish.png", "#d97979")
+    _write_image(tmp_path / "raw" / "风景" / "view.png", "#4c4265")
+
+    scan = canvas_asset_library.scan_manual_asset_library(str(tmp_path / "raw"))
+    scenery_key = next(item["dishKey"] for item in scan["items"] if item["dishName"] == "风景")
+    saved = canvas_asset_library.save_manual_review_state(scan["scanId"], {}, [scenery_key])
+
+    assert saved["reviewState"]["excludedDishKeys"] == [scenery_key]
+
+
 def test_manual_asset_review_can_exclude_non_dish_group_before_organizing(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
     asset_root = tmp_path / "raw"

@@ -521,7 +521,16 @@ def manual_review_scan_response(payload: Mapping[str, Any]) -> dict[str, Any]:
             "visualSubjectType": str(group.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE),
             "previewUrls": [f"/api/canvas/asset-library/manual-review/scans/{payload['scanId']}/previews/{dish_key}/{index}" for index in range(min(4, len(images)))],
         })
-    return {"scanId": str(payload.get("scanId") or ""), "assetRoot": str(payload.get("assetRoot") or ""), "items": items}
+    review_state = payload.get("reviewState") if isinstance(payload.get("reviewState"), Mapping) else {}
+    return {
+        "scanId": str(payload.get("scanId") or ""),
+        "assetRoot": str(payload.get("assetRoot") or ""),
+        "items": items,
+        "reviewState": {
+            "selections": review_state.get("selections") if isinstance(review_state.get("selections"), Mapping) else {},
+            "excludedDishKeys": review_state.get("excludedDishKeys") if isinstance(review_state.get("excludedDishKeys"), list) else [],
+        },
+    }
 
 
 def load_manual_review_scan(scan_id: str) -> dict[str, Any]:
@@ -535,6 +544,41 @@ def load_manual_review_scan(scan_id: str) -> dict[str, Any]:
     if not isinstance(payload, dict) or not isinstance(payload.get("groups"), list):
         raise ValueError("人工整理扫描结果格式无效")
     return payload
+
+
+def save_manual_review_state(scan_id: str, selections: Mapping[str, Any], excluded_dish_keys: list[str]) -> dict[str, Any]:
+    """Persist the human review state with its scan manifest, independent of browser storage."""
+    payload = load_manual_review_scan(scan_id)
+    groups = {str(group.get("dishKey")) for group in payload["groups"] if isinstance(group, Mapping)}
+    if not isinstance(selections, Mapping) or not isinstance(excluded_dish_keys, list):
+        raise ValueError("人工整理状态格式无效")
+    excluded = [str(key) for key in excluded_dish_keys]
+    if len(excluded) != len(set(excluded)) or not set(excluded).issubset(groups):
+        raise ValueError("排除的菜品不存在于当前扫描结果")
+    normalized: dict[str, dict[str, str]] = {}
+    for key, value in selections.items():
+        key = str(key)
+        if key not in groups or not isinstance(value, Mapping):
+            raise ValueError("人工分类状态包含无效菜品")
+        category = str(value.get("category") or "")
+        food_type = str(value.get("foodType") or "")
+        visual_subject_type = str(value.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE)
+        if category and category not in ASSET_CATEGORIES:
+            raise ValueError("人工分类状态包含无效菜品分类")
+        if food_type and food_type not in FOOD_TYPES:
+            raise ValueError("人工分类状态包含无效冷热属性")
+        if visual_subject_type not in VISUAL_SUBJECT_TYPES:
+            raise ValueError("人工分类状态包含无效画面主体类型")
+        normalized[key] = {"category": category, "foodType": food_type, "visualSubjectType": visual_subject_type}
+    payload["reviewState"] = {"selections": normalized, "excludedDishKeys": excluded}
+    path = _manual_review_file(scan_id)
+    temporary = path.with_name(f"{path.stem}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return manual_review_scan_response(payload)
 
 
 def manual_review_preview_path(scan_id: str, dish_key: str, image_index: int) -> Path:
@@ -579,7 +623,8 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
     if not active_groups:
         raise ValueError("至少保留一个素材后才能整理入库")
     if not isinstance(classifications, list) or len(classifications) != len(active_groups):
-        raise ValueError("请完成所有菜品的人工分类和冷热标记")
+        received = len(classifications) if isinstance(classifications, list) else 0
+        raise ValueError(f"请完成所有菜品的人工分类和冷热标记（需要 {len(active_groups)} 个，收到 {received} 个）")
     confirmed: dict[str, tuple[str, str, str]] = {}
     for item in classifications:
         if not isinstance(item, Mapping):
@@ -598,7 +643,8 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
             raise ValueError("人工分类结果包含无效的画面主体类型")
         confirmed[key] = (category, food_type, visual_subject_type)
     if set(confirmed) != set(active_groups):
-        raise ValueError("请完成所有菜品的人工分类和冷热标记")
+        missing = len(set(active_groups) - set(confirmed))
+        raise ValueError(f"请完成所有菜品的人工分类和冷热标记（缺少 {missing} 个）")
     target = Path(target_root).expanduser().resolve()
     if target == Path(payload["assetRoot"]).resolve() or Path(payload["assetRoot"]).resolve() in target.parents:
         raise ValueError("标准素材库不能位于原始素材库内部")
