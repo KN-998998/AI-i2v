@@ -39,7 +39,7 @@ jobs:
       - name: Backend compile
         run: python -m compileall -q web pipeline
       - name: Backend test
-        run: python -m pytest
+        run: mkdir -p .tmp && python -m pytest
   deploy:
     name: Deploy to ECS
     needs: verify
