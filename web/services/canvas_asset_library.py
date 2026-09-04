@@ -653,7 +653,8 @@ def organize_manual_asset_library(scan_id: str, target_root: str, classification
     metadata: dict[str, dict[str, str]] = {}
     for key, group in active_groups.items():
         category, food_type, visual_subject_type = confirmed[key]
-        dish_dir = target / category / _safe_library_name(str(group.get("dishName") or "未命名菜品"))
+        category_dir = _safe_library_name(category)
+        dish_dir = target / category_dir / _safe_library_name(str(group.get("dishName") or "未命名菜品"))
         dish_dir.mkdir(parents=True, exist_ok=True)
         for source_value in group.get("images", []):
             source = Path(str(source_value)).resolve()
