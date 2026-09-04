@@ -24,6 +24,8 @@ function normalise(value: number, setting: ImageProcessSetting) {
 }
 
 export function ImageProcessControlFields({ data, update }: { data: WorkflowData; update: (patch: Partial<WorkflowData>) => void }) {
+  const preserveOriginal = data.processingMode === "preserve_original" || data.visualSubjectType === "手部" || data.visualSubjectType === "厨师上半身" || data.visualSubjectType === "手部+厨师上半身";
+  if (preserveOriginal) return <div className="preview-box"><strong>保留原图动作路线</strong><span>该素材包含{data.visualSubjectType}，生成时会保留人物、手部和原始环境，不执行 GoodsMatting，也不替换背景模板。请在提示词节点选择具体动作。</span></div>;
   const setValue = (setting: ImageProcessSetting, rawValue: number) => {
     const value = Number.isFinite(rawValue) ? normalise(rawValue, setting) : setting.fallback;
     update({ [setting.key]: value } as Partial<WorkflowData>);

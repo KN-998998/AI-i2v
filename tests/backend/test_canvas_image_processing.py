@@ -99,6 +99,42 @@ def test_image_processing_composites_and_persists_result(monkeypatch, tmp_path):
         assert image.size == (1080, 1920)
 
 
+def test_image_processing_preserves_action_material_without_matting(monkeypatch, tmp_path):
+    draft_root = tmp_path / "drafts"
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", draft_root)
+    monkeypatch.setattr(
+        canvas_image_processing,
+        "_goods_matting",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("action material must not be matted")),
+    )
+    files = draft_root / "default" / "files"
+    files.mkdir(parents=True)
+    (files / "action.png").write_bytes(_png_bytes((240, 120, 80, 255)))
+    canvas_state.save_draft("default", {
+        "nodes": [
+            {"id": "assets", "data": {"kind": "input", "dishName": "手托寿司", "visualSubjectType": "手部", "imagePreview": "/api/canvas/drafts/default/files/action.png"}},
+            {"id": "image_process", "data": {"kind": "image_process", "backgroundTemplateId": "unused-background.jpg"}},
+        ],
+        "edges": [{"source": "assets", "target": "image_process"}],
+        "timeline": [],
+    })
+
+    job = canvas_image_processing.start_image_processing("default", "image_process")
+    for _ in range(40):
+        current = canvas_image_processing.get_image_processing_job("default", job["job_id"])
+        if current and current["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+
+    assert current["status"] == "done", current.get("error")
+    assert current["processingMode"] == "preserve_original"
+    assert current["cutout_name"] is None
+    with Image.open(BytesIO(TestClient(create_app()).get(current["result_url"]).content)) as image:
+        assert image.size == (240, 320)
+    process_data = canvas_state.load_draft("default")["nodes"][1]["data"]
+    assert process_data["processedImageMode"] == "preserve_original"
+
+
 def test_startup_recovery_finishes_persisted_image_job(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
     monkeypatch.setattr(canvas_image_processing, "_goods_matting", lambda source, destination, _draft_id: destination.write_bytes(Path(source).read_bytes()))

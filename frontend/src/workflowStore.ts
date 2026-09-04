@@ -77,10 +77,16 @@ type WorkflowState = {
 
 const protectedNodeIds = new Set(["assets", "image_process", "prompt", "clips", "output", "sound"]);
 
+function normalizedVisualSubjectType(value: string | undefined) {
+  return value === "手部" || value === "厨师上半身" || value === "手部+厨师上半身" ? value : "菜品主体";
+}
+
+function imageProcessingModeForVisualSubject(value: string | undefined): "matting_composite" | "preserve_original" {
+  return normalizedVisualSubjectType(value) === "菜品主体" ? "matting_composite" : "preserve_original";
+}
+
 function promptConfigForVisualSubject(config: typeof DEFAULT_PROMPT_CONFIG, visualSubjectType: string | undefined) {
-  const visual = visualSubjectType === "手部" || visualSubjectType === "厨师上半身" || visualSubjectType === "手部+厨师上半身"
-    ? visualSubjectType
-    : "菜品主体";
+  const visual = normalizedVisualSubjectType(visualSubjectType);
   if (visual === "菜品主体") return { ...config, visual_subject_type: visual } as typeof DEFAULT_PROMPT_CONFIG;
   const required = visual === "手部" ? ["hand"] : visual === "厨师上半身" ? ["chef"] : ["hand", "chef"];
   const elements = [...config.elements];
@@ -112,6 +118,20 @@ function migrateImageProcessNode(nodes: WorkflowNode[], edges: Edge[]): { nodes:
       { id: `image-process-${prompt.id}`, source: processNode.id, target: prompt.id, type: "smoothstep" },
     ],
   };
+}
+
+function syncImageProcessStrategies(nodes: WorkflowNode[], edges: Edge[]): WorkflowNode[] {
+  const inputById = new Map(nodes.filter(node => node.data.kind === "input").map(node => [node.id, node]));
+  return nodes.map(node => {
+    if (node.data.kind !== "image_process") return node;
+    const sourceId = edges.find(edge => edge.target === node.id)?.source;
+    const input = sourceId ? inputById.get(sourceId) : undefined;
+    if (!input) return node;
+    const visualSubjectType = normalizedVisualSubjectType(input.data.visualSubjectType);
+    const processingMode = imageProcessingModeForVisualSubject(visualSubjectType);
+    if (node.data.visualSubjectType === visualSubjectType && node.data.processingMode === processingMode) return node;
+    return { ...node, data: { ...node.data, imagePreview: input.data.imagePreview, visualSubjectType, processingMode } };
+  });
 }
 
 function sameClipList(left: TimelineClip[], right: TimelineClip[]): boolean {
@@ -450,7 +470,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const assetId = `asset_${item.storedName || item.imageName || base}`.replace(/[^A-Za-z0-9_-]+/g, "_");
         input.data = { ...input.data, assetId, title: item.dishName, dishName: item.dishName, sourceLibraryCategory: item.sourceCategory, sourceLibraryPath: item.sourcePath, dishCategory: item.dishCategory as typeof input.data.dishCategory, foodType: item.foodType, visualSubjectType: item.visualSubjectType, imageName: item.imageName, imagePreview: item.imagePreview, status: "已就绪" };
         const process = createWorkflowNode("image_process", processId, { x: 286, y });
-        process.data = { ...process.data, backgroundTemplateId: item.background.id, backgroundTemplateName: item.background.name, backgroundPreview: item.background.url, status: "待处理" };
+        const visualSubjectType = normalizedVisualSubjectType(item.visualSubjectType);
+        process.data = {
+          ...process.data,
+          imagePreview: item.imagePreview,
+          visualSubjectType,
+          processingMode: imageProcessingModeForVisualSubject(visualSubjectType),
+          backgroundTemplateId: item.background.id,
+          backgroundTemplateName: item.background.name,
+          backgroundPreview: item.background.url,
+          status: "待处理",
+        };
         const prompt = createWorkflowNode("prompt", promptId, { x: 548, y });
         prompt.data = { ...prompt.data, title: `${item.dishName} 提示词`, promptConfig, ...promptLegacyPatch(promptConfig) };
         const generator = createWorkflowNode("generator", generatorId, { x: 810, y });
@@ -701,7 +731,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
     const migrated = migrateImageProcessNode(draft.nodes as WorkflowNode[], draft.edges);
     const normalizedCandidates = (draft.candidateClips ?? draft.timeline).map(normalizeTimelineClip);
-    const normalizedNodes = migrated.nodes.map(node => node.data.kind === "input" && !node.data.dishCategory
+    const strategyNodes = syncImageProcessStrategies(migrated.nodes, migrated.edges);
+    const normalizedNodes = strategyNodes.map(node => node.data.kind === "input" && !node.data.dishCategory
         ? { ...node, data: { ...node.data, dishCategory: node.data.dishName ? inferDishCategory(node.data.dishName) : "正餐" } }
         : node);
     const nodes = syncGeneratorNodeStatuses(normalizedNodes, normalizedCandidates);

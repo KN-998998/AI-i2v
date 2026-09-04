@@ -124,6 +124,8 @@ export type WorkflowData = {
   processedImageName?: string;
   processedImagePreview?: string;
   processedImageAnalysis?: MediaAnalysis;
+  /** Planned strategy; differs from processedImageMode, which records a completed job. */
+  processingMode?: "matting_composite" | "preserve_original";
   processedImageMode?: "matting_composite" | "preserve_original";
   imageProcessingJobId?: string;
   duration?: string;
@@ -403,7 +405,7 @@ export type NodeCatalogItem = Pick<WorkflowData, "title" | "status" | "descripti
 
 export const nodeCatalog: Record<NodeKind, NodeCatalogItem> = {
   input: { kicker: "INPUT", title: "素材与菜品", status: "已就绪", description: "提供菜品图片、首帧或尾帧素材。" },
-  image_process: { kicker: "IMAGE PROCESS", title: "图片处理", status: "待处理", description: "商品抠图、背景模板合成并输出视频首帧。" },
+  image_process: { kicker: "IMAGE PROCESS", title: "图片处理", status: "待处理", description: "按素材主体类型执行抠图合成或保留原图。" },
   prompt: { kicker: "PROMPT", title: "槽位化提示词", status: "可生成", description: "装配并校验图生视频提示词。" },
   generator: { kicker: "KLING 3.0", title: "3 秒视频片段", status: "待生成", description: "按当前提示词生成视频片段。" },
   output: { kicker: "OUTPUT", title: "成片合成", status: "草稿", description: "先将视频片段合成为无声成片。" },
@@ -704,7 +706,7 @@ export const clips: TimelineClip[] = [
 export function dataFor(kind: NodeKind): WorkflowData {
   const base = { kind, ...nodeCatalog[kind] };
   if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", dishCategory: "正餐", assetMode: "单图模式", imageName: "当前素材" };
-  if (kind === "image_process") return { ...base, backgroundBlur: 4, backgroundBrightness: 0.72, subjectScale: 0.68, subjectX: 0.5, subjectY: 0.58 };
+  if (kind === "image_process") return { ...base, processingMode: "matting_composite", backgroundBlur: 4, backgroundBrightness: 0.72, subjectScale: 0.68, subjectX: 0.5, subjectY: 0.58 };
   if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
   if (kind === "output") return { ...base, outputTarget: "5-6 道菜", outputDuration: "12-15s", outputAspect: "9:16" };

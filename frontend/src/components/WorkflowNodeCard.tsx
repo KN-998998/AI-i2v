@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { inferDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
-import { assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData, SHOT_SIZE_OPTIONS } from "../promptAssembler";
+import { ACTION_VERB_OPTIONS, assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData, SHOT_SIZE_OPTIONS } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
 import { ActionButton, Footer, formatNodeValue, Row, Tag } from "./ui";
@@ -20,6 +20,10 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const promptConfig = kind === "prompt" ? promptConfigFromData(data) : null;
   const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
   const soundConfig = activeWorkspace?.soundConfig;
+  const preserveOriginal = data.processingMode === "preserve_original" || data.visualSubjectType === "手部" || data.visualSubjectType === "厨师上半身" || data.visualSubjectType === "手部+厨师上半身";
+  const actionLabel = promptConfig && (promptConfig.l1_subject === "hand" || promptConfig.l1_subject === "chef")
+    ? ACTION_VERB_OPTIONS.find(item => item.value === promptConfig.l1_action_verb)?.label ?? "动作待选择"
+    : null;
 
   const action = (nextPanel?: Panel) => {
     setSelection(id);
@@ -48,16 +52,16 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <Footer><ActionButton onClick={() => action()}>编辑素材</ActionButton></Footer>
     </>,
     image_process: <>
-      <div className="dish-preview"><div className="dish-image-fallback">{data.processedImagePreview ? <img src={data.processedImagePreview} alt="处理后首帧" /> : data.backgroundPreview ? <img src={data.backgroundPreview} alt="背景模板" /> : "待处理"}</div></div>
-      <Row label="处理方式" value={data.visualSubjectType && data.visualSubjectType !== "菜品主体" ? "保留原图" : "GoodsMatting 抠图"} />
-      <Row label="背景" value={formatNodeValue(data.backgroundTemplateName, "未选择") } />
+      <div className="dish-preview"><div className="dish-image-fallback">{data.processedImagePreview ? <img src={data.processedImagePreview} alt="处理后首帧" /> : preserveOriginal && data.imagePreview ? <img src={data.imagePreview} alt="原始动作素材" /> : data.backgroundPreview ? <img src={data.backgroundPreview} alt="背景模板" /> : "待处理"}</div></div>
+      <Row label="处理方式" value={preserveOriginal ? "保留原图（动作素材）" : "GoodsMatting 抠图"} />
+      <Row label={preserveOriginal ? "画面主体" : "背景"} value={preserveOriginal ? `${formatNodeValue(data.visualSubjectType, "动作主体")} · 保留原环境` : formatNodeValue(data.backgroundTemplateName, "未选择")} />
       <Row label="输出" value={formatNodeValue(data.processedImageName, "尚未生成") } />
       <Footer><ActionButton primary onClick={() => { setSelection(id); navigate("/workflow/image-processing"); }}>编辑图片处理</ActionButton></Footer>
     </>,
     prompt: <>
       <Row label="L0 画面元素" value={`${promptConfig?.elements.length ?? 0} / 8 项`} />
       <Row label="景别" value={SHOT_SIZE_OPTIONS.find(item => item.value === promptConfig?.shot_size)?.label ?? "特写"} />
-      <Row label="L1 主运动" value={promptConfig?.l1_subject === "none" ? "无（纯运镜）" : ELEMENT_OPTIONS.find(item => item.id === promptConfig?.l1_subject)?.label ?? "待配置"} />
+      <Row label="L1 主运动" value={promptConfig?.l1_subject === "none" ? "无（纯运镜）" : `${ELEMENT_OPTIONS.find(item => item.id === promptConfig?.l1_subject)?.label ?? "待配置"}${actionLabel ? ` · ${actionLabel}` : ""}`} />
       <Row label="L2 次级动态" value={`${promptConfig?.l2_dynamics.length ?? 0} / 2 项`} />
       <div className="tag-list"><Tag good={!promptResult?.blocked} warn={Boolean(promptResult?.blocked)}>{promptResult?.blocked ? `阻断 ${promptResult.errors[0]?.code ?? ""}` : "校验通过"}</Tag>{promptResult?.warnings.slice(0, 1).map(warning => <Tag warn key={warning.code}>{warning.code}</Tag>)}</div>
       <Footer><ActionButton onClick={() => action("prompt")}>编辑槽位</ActionButton><ActionButton primary onClick={() => updateNodeData(id, { status: "已装配" })}>实时装配</ActionButton></Footer>
