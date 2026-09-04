@@ -54,6 +54,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
     image_process: <>
       <div className="dish-preview"><div className="dish-image-fallback">{data.processedImagePreview ? <img src={data.processedImagePreview} alt="处理后首帧" /> : preserveOriginal && data.imagePreview ? <img src={data.imagePreview} alt="原始动作素材" /> : data.backgroundPreview ? <img src={data.backgroundPreview} alt="背景模板" /> : "待处理"}</div></div>
       <Row label="处理方式" value={preserveOriginal ? "保留原图（动作素材）" : "GoodsMatting 抠图"} />
+      {preserveOriginal && <Row label="抠图 / 背景" value="已跳过 / 未应用" />}
       <Row label={preserveOriginal ? "画面主体" : "背景"} value={preserveOriginal ? `${formatNodeValue(data.visualSubjectType, "动作主体")} · 保留原环境` : formatNodeValue(data.backgroundTemplateName, "未选择")} />
       <Row label="输出" value={formatNodeValue(data.processedImageName, "尚未生成") } />
       <Footer><ActionButton primary onClick={() => { setSelection(id); navigate("/workflow/image-processing"); }}>编辑图片处理</ActionButton></Footer>

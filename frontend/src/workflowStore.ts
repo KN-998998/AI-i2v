@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
@@ -78,7 +78,7 @@ type WorkflowState = {
 
 const protectedNodeIds = new Set(["assets", "image_process", "prompt", "clips", "output", "sound"]);
 
-function normalizedVisualSubjectType(value: string | undefined) {
+function normalizedVisualSubjectType(value: string | undefined): VisualSubjectType {
   return value === "手部" || value === "厨师上半身" || value === "手部+厨师上半身" ? value : "菜品主体";
 }
 
@@ -344,6 +344,43 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   updateNodeData: (nodeId, patch) => set(state => {
     const node = state.nodes.find(item => item.id === nodeId);
     const data = node ? { ...node.data, ...patch } : null;
+    if (node?.data.kind === "input" && "visualSubjectType" in patch && data) {
+      const visualSubjectType = normalizedVisualSubjectType(data.visualSubjectType);
+      const processingMode = imageProcessingModeForVisualSubject(visualSubjectType);
+      const processIds = new Set(state.edges
+        .filter(edge => edge.source === nodeId && state.nodes.find(item => item.id === edge.target)?.data.kind === "image_process")
+        .map(edge => edge.target));
+      const promptIds = new Set(state.edges
+        .filter(edge => processIds.has(edge.source) && state.nodes.find(item => item.id === edge.target)?.data.kind === "prompt")
+        .map(edge => edge.target));
+      const nodes = state.nodes.map(item => {
+        if (item.id === nodeId) return { ...item, data: { ...data, visualSubjectType } };
+        if (processIds.has(item.id)) {
+          return {
+            ...item,
+            data: {
+              ...item.data,
+              status: nodeCatalog.image_process.status,
+              imagePreview: data.imagePreview,
+              visualSubjectType,
+              processingMode,
+              processedImagePreview: undefined,
+              processedImageName: undefined,
+              processedImageAnalysis: undefined,
+              processedImageMode: undefined,
+              imageProcessingJobId: undefined,
+            },
+          };
+        }
+        if (!promptIds.has(item.id)) return item;
+        const promptConfig = promptConfigForVisualSubject({
+          ...(item.data.promptConfig ?? DEFAULT_PROMPT_CONFIG),
+          food_type: data.foodType,
+        } as typeof DEFAULT_PROMPT_CONFIG, visualSubjectType);
+        return { ...item, data: { ...item.data, promptConfig, ...promptLegacyPatch(promptConfig) } };
+      });
+      return { nodes, revision: state.revision + 1 };
+    }
     const primaryInput = state.nodes.find(item => item.data.kind === "input");
     const shouldSyncClipMetadata = node?.data.kind === "input"
       && primaryInput?.id === nodeId
