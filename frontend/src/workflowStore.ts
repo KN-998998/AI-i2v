@@ -43,6 +43,7 @@ type WorkflowState = {
   generateNode: (nodeId: string) => Promise<GenerationJob>;
   processImageNode: (nodeId: string) => Promise<ImageProcessingJob>;
   addNode: (kind: NodeKind) => void;
+  arrangeWorkflowNodes: () => void;
   createBatchWorkflows: (items: AssetLibraryPlanItem[]) => string[];
   runBatchGeneration: (generatorIds: string[]) => Promise<void>;
   deleteNode: (nodeId: string) => void;
@@ -230,6 +231,61 @@ function removeNodeArtifacts(state: Pick<WorkflowState, "candidateClips" | "comp
   }));
   const timeline = composeWorkspaces[0]?.clips ?? state.timeline.filter(clip => !clip.generatorNodeId || !nodeIds.has(clip.generatorNodeId));
   return { candidateClips, composeWorkspaces, timeline };
+}
+
+function arrangedWorkflowNodes(nodes: WorkflowNode[], edges: Edge[]): WorkflowNode[] {
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const outgoing = new Map<string, string[]>();
+  edges.forEach(edge => {
+    const targets = outgoing.get(edge.source) ?? [];
+    targets.push(edge.target);
+    outgoing.set(edge.source, targets);
+  });
+  const firstTargetOfKind = (sourceId: string, kind: NodeKind) => (outgoing.get(sourceId) ?? [])
+    .map(id => nodeById.get(id))
+    .find(node => node?.data.kind === kind);
+  const rows = nodes
+    .filter(node => node.data.kind === "input")
+    .map(input => {
+      const imageProcess = firstTargetOfKind(input.id, "image_process");
+      const prompt = imageProcess && firstTargetOfKind(imageProcess.id, "prompt");
+      const generator = prompt && firstTargetOfKind(prompt.id, "generator");
+      return { input, imageProcess, prompt, generator };
+    })
+    .sort((left, right) => left.input.position.y - right.input.position.y || left.input.position.x - right.input.position.x);
+  const positions = new Map<string, { x: number; y: number }>();
+  const columns: Record<NodeKind, number> = {
+    input: 40,
+    image_process: 330,
+    prompt: 620,
+    generator: 910,
+    output: 1210,
+    sound: 1210,
+    custom: 40,
+  };
+  const rowHeight = 280;
+  rows.forEach((row, index) => {
+    const y = 40 + index * rowHeight;
+    positions.set(row.input.id, { x: columns.input, y });
+    if (row.imageProcess) positions.set(row.imageProcess.id, { x: columns.image_process, y });
+    if (row.prompt) positions.set(row.prompt.id, { x: columns.prompt, y });
+    if (row.generator) positions.set(row.generator.id, { x: columns.generator, y });
+  });
+  const outputNodes = nodes.filter(node => node.data.kind === "output");
+  const outputY = rows.length > 1 ? 40 + ((rows.length - 1) * rowHeight) / 2 : 40;
+  outputNodes.forEach((node, index) => positions.set(node.id, { x: columns.output, y: outputY + index * 180 }));
+  nodes.filter(node => node.data.kind === "sound").forEach((node, index) => {
+    positions.set(node.id, { x: columns.sound, y: outputY + 260 + index * 180 });
+  });
+  const remaining = nodes
+    .filter(node => !positions.has(node.id))
+    .sort((left, right) => left.position.y - right.position.y || left.position.x - right.position.x);
+  const remainingY = Math.max(40 + rows.length * rowHeight + 80, outputY + 460);
+  remaining.forEach((node, index) => positions.set(node.id, { x: columns.custom + (index % 4) * 290, y: remainingY + Math.floor(index / 4) * 220 }));
+  return nodes.map(node => {
+    const position = positions.get(node.id);
+    return position ? { ...node, position } : node;
+  });
 }
 
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
@@ -443,6 +499,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       revision: state.revision + 1,
     };
   }),
+  arrangeWorkflowNodes: () => set(state => ({
+    nodes: arrangedWorkflowNodes(state.nodes, state.edges),
+    revision: state.revision + 1,
+  })),
   createBatchWorkflows: items => {
     const createdIds: string[] = [];
     set(state => {
