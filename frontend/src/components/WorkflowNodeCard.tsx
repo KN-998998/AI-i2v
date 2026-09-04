@@ -87,8 +87,8 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   };
 
   return <article className={`workflow-node-card ${selected ? "selected" : ""}`}>
-    {kind !== "input" && <Handle type="target" position={Position.Left} className="workflow-handle" />}
-    {kind !== "sound" && <Handle type="source" position={Position.Right} className="workflow-handle" />}
+    {kind !== "input" && <Handle type="target" position={Position.Left} className="workflow-handle workflow-handle-target" data-port="输入" aria-label="输入连接点" title="拖入连接" />}
+    {kind !== "sound" && <Handle type="source" position={Position.Right} className="workflow-handle workflow-handle-source" data-port="输出" aria-label="输出连接点" title="从这里拖出连接" />}
     <div className="node-head"><div><div className="node-kicker">{nodeCatalog[kind].kicker}</div><div className="node-title">{data.title}</div></div><span className="node-status">{data.status}</span></div>
     <div className="node-body">{body[kind]}</div>
   </article>;

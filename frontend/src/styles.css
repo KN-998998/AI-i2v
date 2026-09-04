@@ -287,10 +287,22 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
 .react-flow__controls-button { width: 30px; height: 30px; border-bottom: 1px solid var(--line); background: var(--panel-2); fill: var(--muted); }
 .react-flow__controls-button:hover { background: var(--cyan-soft); }
 .react-flow__minimap { width: 108px; height: 70px; border: 1px solid rgba(113,212,209,.22); background: rgba(21,25,28,.28); opacity: .56; }
-.react-flow__edge-path { stroke: #718287; stroke-width: 2; }
-.react-flow__edge.selected .react-flow__edge-path, .react-flow__edge:hover .react-flow__edge-path { stroke: var(--cyan); stroke-width: 3; }
-.react-flow__handle { width: 13px; height: 13px; border: 2px solid var(--cyan); background: #111719; }
-.react-flow__handle:hover { background: var(--cyan); }
+.react-flow__edge-path { stroke: #718287; stroke-width: 2; transition: stroke .18s ease, stroke-width .18s ease, filter .18s ease; }
+.react-flow__edge.selected .react-flow__edge-path, .react-flow__edge:hover .react-flow__edge-path { stroke: var(--cyan); stroke-width: 3; filter: drop-shadow(0 0 4px rgba(123,216,208,.45)); }
+.react-flow__edge.edge-fresh .react-flow__edge-path { stroke: #9bece4; stroke-width: 3; stroke-dasharray: 8 5; filter: drop-shadow(0 0 7px rgba(123,216,208,.72)); animation: workflow-edge-flow .58s linear infinite; }
+.react-flow__connection-path { filter: drop-shadow(0 0 5px rgba(142,229,220,.55)); animation: workflow-edge-flow .58s linear infinite; }
+.react-flow__handle.workflow-handle { width: 17px; height: 17px; border: 2px solid #98e3dc; border-radius: 50%; background: #10191b; box-shadow: 0 0 0 3px rgba(13,20,22,.94), 0 0 0 4px rgba(123,216,208,.18); cursor: crosshair; transition: transform .16s ease, background .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.react-flow__handle.workflow-handle::before { content: ""; position: absolute; inset: 3px; border-radius: inherit; background: currentColor; opacity: .72; }
+.react-flow__handle.workflow-handle::after { content: attr(data-port); position: absolute; top: 50%; color: #d5f5f1; font-size: 10px; font-weight: 700; letter-spacing: 0; opacity: 0; pointer-events: none; transform: translateY(-50%) scale(.92); transition: opacity .16s ease, transform .16s ease; }
+.react-flow__handle-target { color: #e7b86d; border-color: #e7b86d !important; }
+.react-flow__handle-target::after { right: 22px; }
+.react-flow__handle-source { color: #98e3dc; }
+.react-flow__handle-source::after { left: 22px; }
+.workflow-node-card:hover .react-flow__handle.workflow-handle, .react-flow__handle.workflow-handle:hover, .react-flow__handle.workflow-handle.connecting, .react-flow__handle.workflow-handle.valid { transform: scale(1.18); }
+.workflow-node-card:hover .react-flow__handle.workflow-handle::after, .react-flow__handle.workflow-handle:hover::after, .flow-overview.is-connecting .react-flow__handle.workflow-handle::after { opacity: 1; transform: translateY(-50%) scale(1); }
+.react-flow__handle.workflow-handle:hover, .react-flow__handle.workflow-handle.connecting { background: rgba(123,216,208,.24); box-shadow: 0 0 0 3px rgba(13,20,22,.94), 0 0 14px rgba(123,216,208,.48); }
+.react-flow__handle.workflow-handle.valid { background: rgba(125,204,155,.34); border-color: var(--green) !important; box-shadow: 0 0 0 3px rgba(13,20,22,.94), 0 0 16px rgba(125,204,155,.62); }
+@keyframes workflow-edge-flow { to { stroke-dashoffset: -13; } }
 .workflow-node-card { position: relative; width: 224px; border: 1px solid rgba(123,216,208,.2); border-radius: 9px; overflow: visible; color: #f2f4f5; background: #172124; box-shadow: var(--shadow); }
 .workflow-node-card.selected { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(113,212,209,.2), var(--shadow); }
 .node-head { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 11px 12px; border-bottom: 1px solid rgba(123,216,208,.12); background: rgba(123,216,208,.035); }
