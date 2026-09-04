@@ -31,6 +31,13 @@ function defaultFoodType(category: string): "冷食" | "热食" | "混合/多温
   return ["甜品", "水果"].includes(category) ? "冷食" : "";
 }
 
+function normalizeCategoryCounts(source: Record<string, unknown> | null | undefined): Record<string, number> {
+  return Object.fromEntries(CATEGORIES.map(category => {
+    const value = Number(source?.[category] ?? 0);
+    return [category, Number.isFinite(value) ? Math.max(0, Math.min(50, Math.round(value))) : 0];
+  }));
+}
+
 export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string) => void }) {
   const draftId = useWorkflowStore(state => state.draftId);
   const saveDraft = useWorkflowStore(state => state.saveDraft);
@@ -41,7 +48,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const runBatchGeneration = useWorkflowStore(state => state.runBatchGeneration);
   const [assetRoot, setAssetRoot] = useState(() => rememberedPath(ASSET_ROOT_STORAGE_KEY));
   const [backgroundRoot, setBackgroundRoot] = useState(() => rememberedPath(BACKGROUND_ROOT_STORAGE_KEY));
-  const [counts, setCounts] = useState<Record<string, number>>(() => Object.fromEntries(CATEGORIES.map(category => [category, 0])));
+  const [counts, setCounts] = useState<Record<string, number>>(() => normalizeCategoryCounts(null));
   const [createdGeneratorIds, setCreatedGeneratorIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
@@ -82,7 +89,7 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     if (!plan) return;
     setAssetRoot(current => current || plan.assetRoot);
     setBackgroundRoot(current => current || plan.backgroundRoot);
-    setCounts(current => Object.values(current).some(value => value > 0) ? current : { ...current, ...plan.categoryCounts });
+    setCounts(current => Object.values(current).some(value => value > 0) ? normalizeCategoryCounts(current) : normalizeCategoryCounts(plan.categoryCounts));
     setReviewCategories(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
     setReviewFoodTypes(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.suggestedCategory ?? item.sourceCategory)])));
     setReviewVisualSubjects(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.visualSubjectType ?? "菜品主体"])));
@@ -121,10 +128,12 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
 
   const buildPlan = async () => {
     if (!assetRoot.trim() || !backgroundRoot.trim()) return onToast("请填写菜品素材库和背景素材库路径");
-    if (!Object.values(counts).some(value => value > 0)) return onToast("请至少填写一个分类数量");
+    const normalizedCounts = normalizeCategoryCounts(counts);
+    if (!Object.values(normalizedCounts).some(value => value > 0)) return onToast("请至少填写一个分类数量");
     setBusy(true);
     try {
-      const next = await createAssetLibraryPlan(draftId, assetRoot.trim(), backgroundRoot.trim(), counts);
+      const next = await createAssetLibraryPlan(draftId, assetRoot.trim(), backgroundRoot.trim(), normalizedCounts);
+      setCounts(normalizedCounts);
       setAssetLibraryPlan(next);
       setReviewCategories(Object.fromEntries((next.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
       setReviewFoodTypes(Object.fromEntries((next.reviewItems ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.suggestedCategory ?? item.sourceCategory)])));

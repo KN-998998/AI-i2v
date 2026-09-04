@@ -43,6 +43,33 @@ def test_asset_library_rules_route_lists_saved_categories(monkeypatch, tmp_path)
     assert response.json() == [{"dishName": "烤龙虾", "category": "主菜", "foodType": "热食"}]
 
 
+def test_asset_library_plan_route_ignores_legacy_unknown_category_keys(monkeypatch):
+    captured = {}
+
+    def build_plan(draft_id, asset_root, background_root, category_counts):
+        captured.update({
+            "draft_id": draft_id,
+            "asset_root": asset_root,
+            "background_root": background_root,
+            "category_counts": category_counts,
+        })
+        return {"selected": []}
+
+    monkeypatch.setattr(api_routes, "build_asset_plan", build_plan)
+    response = TestClient(create_app()).post(
+        "/api/canvas/asset-library/plan",
+        params={"draft_id": "default"},
+        json={
+            "asset_root": "F:\\assets",
+            "background_root": "F:\\backgrounds",
+            "category_counts": {"寿司": 1, "å¯¿å¸": 3},
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["category_counts"] == {"寿司": 1}
+
+
 def test_manual_asset_review_routes_require_confirmation_and_copy_images(monkeypatch, tmp_path):
     review_root = tmp_path / "review-scans"
     monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", review_root)

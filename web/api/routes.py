@@ -302,9 +302,9 @@ def create_asset_library_plan(draft_id: str, payload: dict[str, Any] | None = No
     counts = request.get("category_counts") or {}
     if not isinstance(counts, dict):
         raise _json_error("分类数量必须是对象")
-    unknown = set(counts) - set(ASSET_CATEGORIES)
-    if unknown:
-        raise _json_error(f"不支持的素材分类：{', '.join(sorted(unknown))}")
+    # Drafts created by older clients may retain obsolete or mojibake category
+    # keys. Keep the supported selections and ignore the legacy residue.
+    counts = {str(category): value for category, value in counts.items() if str(category) in ASSET_CATEGORIES}
     try:
         return build_asset_plan(
             draft_id,
