@@ -1,3 +1,4 @@
+import re
 import shutil
 from pathlib import Path
 
@@ -10,16 +11,20 @@ from web.services import canvas_asset_library
 from web.api import routes as api_routes
 
 
+def assert_react_entry(page: str) -> None:
+    assert re.search(r'/static/canvas-app/assets/index-[^" ]+\.js', page)
+
+
 def test_canvas_routes_serve_react_page_only():
     client = TestClient(create_app())
 
     root_page = client.get("/")
     assert root_page.status_code == 200
-    assert "/static/canvas-app/assets/index.js" in root_page.text
+    assert_react_entry(root_page.text)
 
     react_page = client.get("/canvas-mvp")
     assert react_page.status_code == 200
-    assert "/static/canvas-app/assets/index.js" in react_page.text
+    assert_react_entry(react_page.text)
 
     assert client.get("/canvas-mvp-legacy").status_code == 404
 
@@ -29,7 +34,7 @@ def test_workflow_pages_use_react_spa_fallback():
     for step in ("assets", "asset-library-review", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output"):
         response = client.get(f"/workflow/{step}")
         assert response.status_code == 200
-        assert "/static/canvas-app/assets/index.js" in response.text
+        assert_react_entry(response.text)
     assert client.get("/workflow/unknown").status_code == 404
 
 

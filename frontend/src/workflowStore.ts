@@ -263,7 +263,9 @@ function arrangedWorkflowNodes(nodes: WorkflowNode[], edges: Edge[]): WorkflowNo
     sound: 1210,
     custom: 40,
   };
-  const rowHeight = 280;
+  // Image-bearing input and processing cards can grow to about 300px. Keep
+  // enough vertical clearance so separate workflow branches never overlap.
+  const rowHeight = 420;
   rows.forEach((row, index) => {
     const y = 40 + index * rowHeight;
     positions.set(row.input.id, { x: columns.input, y });
