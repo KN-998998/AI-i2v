@@ -4,6 +4,7 @@ import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategor
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
+import { browserDraftId } from "./draftIdentity";
 
 type WorkflowState = {
   nodes: WorkflowNode[];
@@ -311,7 +312,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   composeJob: null,
   assetLibraryPlan: null,
   nextNodeNumber: 1,
-  draftId: "default",
+  draftId: browserDraftId(),
   hydrated: false,
   saving: false,
   lastSavedAt: null,

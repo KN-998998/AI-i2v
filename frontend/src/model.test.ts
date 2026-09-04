@@ -1,9 +1,16 @@
 import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
+import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+
+const draftStorage = new Map<string, string>();
+const draftId = browserDraftId({ getItem: key => draftStorage.get(key) ?? null, setItem: (key, value) => draftStorage.set(key, value) });
+assert(/^draft_[A-Za-z0-9_-]{1,58}$/.test(draftId), "browser draft id is invalid");
+assert(draftStorage.get(DRAFT_ID_STORAGE_KEY) === draftId, "browser draft id was not persisted");
+assert(browserDraftId({ getItem: key => draftStorage.get(key) ?? null, setItem: (key, value) => draftStorage.set(key, value) }) === draftId, "browser draft id was not reused");
 
 assert(connectWouldCycle(initialEdges, "sound", "assets") === true, "cycle connection was accepted");
 assert(connectWouldCycle(initialEdges, "assets", "sound") === false, "acyclic connection was rejected");
