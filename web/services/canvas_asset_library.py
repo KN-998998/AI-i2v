@@ -893,6 +893,7 @@ def build_asset_plan(
                 "sourceCategory": category,
                 "dishCategory": app_category,
                 "foodType": food_type,
+                "visualSubjectType": str(classification.get("visualSubjectType") or DEFAULT_VISUAL_SUBJECT_TYPE),
                 "imageName": source.name,
                 "imagePreview": image_url,
                 "sourcePath": str(source),

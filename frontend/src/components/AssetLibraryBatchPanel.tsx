@@ -171,10 +171,21 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
       onToast("请先完成所有菜品分类确认，再应用到画布");
       return;
     }
-    const ids = createBatchWorkflows(plan.selected);
+    const selectedItems = plan.selected.map(item => ({
+      ...item,
+      visualSubjectType: item.visualSubjectType
+        ?? plan.classificationResults?.find(result => result.dishName === item.dishName)?.visualSubjectType
+        ?? "菜品主体",
+    }));
+    const planWithResolvedSubjects = { ...plan, selected: selectedItems };
+    setAssetLibraryPlan(planWithResolvedSubjects);
+    const ids = createBatchWorkflows(selectedItems);
     setCreatedGeneratorIds(ids);
     await saveDraft();
-    onToast(`已创建 ${ids.length} 条流程，请先检查节点信息`);
+    const skipped = plan.selected.length - ids.length;
+    onToast(ids.length
+      ? `已创建 ${ids.length} 条流程${skipped ? `，已同步 ${skipped} 个已有素材` : ""}`
+      : "所选素材均已有流程，已同步素材标签");
   };
 
   const saveManagedRule = async (rule: AssetLibraryClassificationItem) => {

@@ -315,6 +315,7 @@ def test_standardized_library_metadata_skips_qwen_for_scan_and_selection(monkeyp
     assert tea_cup["classificationSource"] == "素材库标签"
     assert tea_cup["foodType"] == "热食"
     assert tea_cup["visualSubjectType"] == "手部"
+    assert next(item for item in plan["selected"] if item["dishName"] == "茶碗蒸し")["visualSubjectType"] == "手部"
     assert plan["classificationWarning"] is None
     assert plan["reviewItems"] == []
     assert {item["sourceCategory"] for item in plan["selected"]} == {"寿司", "前菜/小菜"}

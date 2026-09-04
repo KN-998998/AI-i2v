@@ -547,11 +547,60 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set(state => {
       const nodes = [...state.nodes];
       const edges = [...state.edges];
+      const existingAssetIds = new Set(nodes
+        .filter(node => node.data.kind === "input")
+        .map(node => node.data.assetId)
+        .filter((assetId): assetId is string => Boolean(assetId)));
       let nextNodeNumber = state.nextNodeNumber;
-      items.forEach((item, index) => {
+      items.forEach(item => {
+        const assetId = `asset_${item.storedName || item.imageName || nextNodeNumber}`.replace(/[^A-Za-z0-9_-]+/g, "_");
+        if (existingAssetIds.has(assetId)) {
+          const visualSubjectType = normalizedVisualSubjectType(item.visualSubjectType);
+          const processingMode = imageProcessingModeForVisualSubject(visualSubjectType);
+          const existingInputIds = new Set(nodes
+            .filter(node => node.data.kind === "input" && node.data.assetId === assetId)
+            .map(node => node.id));
+          const processIds = new Set(edges
+            .filter(edge => existingInputIds.has(edge.source) && nodes.find(node => node.id === edge.target)?.data.kind === "image_process")
+            .map(edge => edge.target));
+          const promptIds = new Set(edges
+            .filter(edge => processIds.has(edge.source) && nodes.find(node => node.id === edge.target)?.data.kind === "prompt")
+            .map(edge => edge.target));
+          nodes.forEach((node, index) => {
+            if (existingInputIds.has(node.id)) {
+              nodes[index] = { ...node, data: { ...node.data, visualSubjectType } };
+              return;
+            }
+            if (processIds.has(node.id) && (node.data.visualSubjectType !== visualSubjectType || node.data.processingMode !== processingMode)) {
+              nodes[index] = {
+                ...node,
+                data: {
+                  ...node.data,
+                  status: nodeCatalog.image_process.status,
+                  visualSubjectType,
+                  processingMode,
+                  processedImagePreview: undefined,
+                  processedImageName: undefined,
+                  processedImageAnalysis: undefined,
+                  processedImageMode: undefined,
+                  imageProcessingJobId: undefined,
+                },
+              };
+              return;
+            }
+            if (!promptIds.has(node.id)) return;
+            const promptConfig = promptConfigForVisualSubject({
+              ...(node.data.promptConfig ?? DEFAULT_PROMPT_CONFIG),
+              food_type: item.foodType,
+            } as typeof DEFAULT_PROMPT_CONFIG, visualSubjectType);
+            nodes[index] = { ...node, data: { ...node.data, promptConfig, ...promptLegacyPatch(promptConfig) } };
+          });
+          return;
+        }
+        existingAssetIds.add(assetId);
         const base = nextNodeNumber;
         nextNodeNumber += 4;
-        const y = 520 + index * 250;
+        const y = 520 + createdIds.length * 250;
         const inputId = `node_input_${base}`;
         const processId = `node_image_process_${base + 1}`;
         const promptId = `node_prompt_${base + 2}`;
@@ -566,7 +615,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           food_type: mixed ? "混合/多温" : item.foodType === "冷食" ? "冷食" : "热食",
         } as typeof DEFAULT_PROMPT_CONFIG, item.visualSubjectType);
         const input = createWorkflowNode("input", inputId, { x: 24, y });
-        const assetId = `asset_${item.storedName || item.imageName || base}`.replace(/[^A-Za-z0-9_-]+/g, "_");
         input.data = { ...input.data, assetId, title: item.dishName, dishName: item.dishName, sourceLibraryCategory: item.sourceCategory, sourceLibraryPath: item.sourcePath, dishCategory: item.dishCategory as typeof input.data.dishCategory, foodType: item.foodType, visualSubjectType: item.visualSubjectType, imageName: item.imageName, imagePreview: item.imagePreview, status: "已就绪" };
         const process = createWorkflowNode("image_process", processId, { x: 286, y });
         const visualSubjectType = normalizedVisualSubjectType(item.visualSubjectType);
