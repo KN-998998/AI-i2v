@@ -83,6 +83,19 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
 .overview-help { display: flex; gap: 10px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: var(--panel); font-size: 11px; }
 .overview-help strong { color: var(--cyan); }
 .overview-help span { color: var(--muted); }
+
+/* Keep the graph workspace inside the desktop viewport; React Flow owns panning and zooming. */
+@media (min-width: 721px) {
+  body:has(.canvas-main) { overflow-y: hidden; }
+  .app-shell:has(.canvas-main) { height: 100vh; overflow: hidden; }
+  .workspace:has(.canvas-main) { min-height: 0; height: calc(100vh - 78px); overflow: hidden; align-items: stretch; }
+  .workspace:has(.canvas-main) .pipeline { min-height: 0; height: calc(100vh - 78px); overflow-y: auto; }
+  .main-column.canvas-main { display: flex; min-height: 0; height: calc(100vh - 78px); flex-direction: column; overflow: hidden; padding: 18px 30px 12px; }
+  .canvas-main .canvas-toolbar { flex: 0 0 auto; margin-bottom: 10px; }
+  .canvas-main .flow-shell.flow-overview { min-height: 0; height: auto; flex: 1 1 0; }
+  .canvas-main .overview-help { flex: 0 0 auto; margin-top: 10px; }
+  .workspace:has(.canvas-main) > .inspector { min-height: 0; height: calc(100vh - 78px); overflow-y: auto; }
+}
 .step-main { min-width: 0; padding: 30px 38px 72px; overflow: visible; }
 .step-breadcrumb { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 11px; }
 .step-breadcrumb strong { color: #f2f4f5; }
