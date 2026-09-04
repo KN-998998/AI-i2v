@@ -58,7 +58,10 @@ export async function fetchTTSOptions(): Promise<TTSOptions> {
 
 export type CaptionSplitResponse = {
   source: string;
+  /** Screen copy: commas and sentence stops used as split markers are omitted. */
   segments: string[];
+  /** Original copy for matching TTS narration and natural pauses. */
+  voice_segments: string[];
   mode: "local" | "local_fallback" | "qwen";
   used_llm: boolean;
   warning: string | null;

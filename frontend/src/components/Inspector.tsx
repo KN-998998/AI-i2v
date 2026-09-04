@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
 import { fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
@@ -21,15 +21,25 @@ function stylePresetValue(style: OverlayStyle) {
   return preset?.label ?? "自定义";
 }
 
+function AutoGrowingTextarea({ value, placeholder }: { value: string; placeholder: string }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.max(84, textarea.scrollHeight)}px`;
+  }, [value]);
+  return <textarea ref={textareaRef} className="input textarea prompt-preview" readOnly rows={1} value={value} placeholder={placeholder} />;
+}
+
 function BasicFields({ node }: { node: WorkflowNode }) {
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const update = (patch: Partial<WorkflowData>) => updateNodeData(node.id, patch);
-  return <>
+  return <div className="basic-fields">
     <SectionTitle>基本信息</SectionTitle>
-    <Field label="节点类型"><select className="input" value={node.data.kind} onChange={event => { const kind = event.target.value as NodeKind; update({ kind, title: node.data.title === nodeCatalog[node.data.kind].title ? nodeCatalog[kind].title : node.data.title, description: nodeCatalog[kind].description, status: nodeCatalog[kind].status }); }}><option value="input">素材输入</option><option value="image_process">图片处理</option><option value="prompt">槽位化提示词</option><option value="generator">3 秒视频片段</option><option value="output">成片合成</option><option value="sound">声音与文字</option><option value="custom">自定义处理</option></select></Field>
-    <Field label="节点名称"><input className="input" value={node.data.title} onChange={event => update({ title: event.target.value })} /></Field>
-    <Field label="节点说明"><textarea className="input textarea" value={node.data.description} onChange={event => update({ description: event.target.value })} /></Field>
-  </>;
+    <div className="basic-fields-left"><Field label="节点类型"><select className="input" value={node.data.kind} onChange={event => { const kind = event.target.value as NodeKind; update({ kind, title: node.data.title === nodeCatalog[node.data.kind].title ? nodeCatalog[kind].title : node.data.title, description: nodeCatalog[kind].description, status: nodeCatalog[kind].status }); }}><option value="input">素材输入</option><option value="image_process">图片处理</option><option value="prompt">槽位化提示词</option><option value="generator">3 秒视频片段</option><option value="output">成片合成</option><option value="sound">声音与文字</option><option value="custom">自定义处理</option></select></Field><Field label="节点名称"><input className="input" value={node.data.title} onChange={event => update({ title: event.target.value })} /></Field></div>
+    <div className="basic-fields-description"><Field label="节点说明"><textarea className="input textarea" value={node.data.description} onChange={event => update({ description: event.target.value })} /></Field></div>
+  </div>;
 }
 
 function AssetFields({ node, onToast }: { node: WorkflowNode; onToast: (message: string) => void }) {
@@ -99,23 +109,24 @@ function PromptFields({ node, onToast }: { node: WorkflowNode; onToast: (message
     });
   };
   const formatIssue = (item: { code: string; message: string }) => `${item.code}：${item.message}`;
-  return <>
+  return <div className="prompt-fields-compact">
     <SectionTitle>提示词槽位</SectionTitle>
+    <div className="prompt-control-grid">
     <Field label="模式"><Select value={config.mode === "keyframes" ? "首尾帧模式" : "单图模式"} options={["单图模式", "首尾帧模式"]} onChange={value => commit({ mode: value === "首尾帧模式" ? "keyframes" : "single_image" })} /></Field>
-    <Field label={`L0 · 画面元素（${config.elements.length}/8）`}><div className="check-grid">{ELEMENT_OPTIONS.map(item => <label className={`check ${config.elements.includes(item.id) ? "checked" : ""}`} key={item.id}><input type="checkbox" checked={config.elements.includes(item.id)} onChange={event => commit({ elements: event.target.checked ? [...config.elements, item.id] : config.elements.filter(value => value !== item.id) })} />{item.label}</label>)}</div></Field>
     <Field label="镜头运动"><Select value={CAMERA_OPTIONS.find(item => item.value === config.camera_move)?.label ?? CAMERA_OPTIONS[0].label} options={CAMERA_OPTIONS.map(item => item.label)} onChange={value => commit({ camera_move: CAMERA_OPTIONS.find(item => item.label === value)!.value })} /></Field>
     <Field label="幅度"><Select value={AMPLITUDE_OPTIONS.find(item => item.value === config.camera_amplitude)?.label ?? AMPLITUDE_OPTIONS[0].label} options={AMPLITUDE_OPTIONS.map(item => item.label)} onChange={value => commit({ camera_amplitude: AMPLITUDE_OPTIONS.find(item => item.label === value)!.value })} /></Field>
     <Field label="景别"><Select value={SHOT_SIZE_OPTIONS.find(item => item.value === config.shot_size)?.label ?? SHOT_SIZE_OPTIONS[0].label} options={SHOT_SIZE_OPTIONS.map(item => item.label)} onChange={value => commit({ shot_size: SHOT_SIZE_OPTIONS.find(item => item.label === value)!.value })} /></Field>
     <Field label="L1 · 主运动对象"><Select value={subjectLabel} options={[...l1Options.map(item => item.label), "无（纯运镜）"]} onChange={value => commit({ l1_subject: value === "无（纯运镜）" ? "none" : l1Options.find(item => item.label === value)!.id as PromptConfig["l1_subject"] })} /></Field>
     {["hand", "chef"].includes(config.l1_subject) && <><Field label="动作幅度"><Select value={ACTION_LEVEL_OPTIONS.find(item => item.value === (config.l1_action_level ?? 1))!.label} options={ACTION_LEVEL_OPTIONS.map(item => item.label)} onChange={value => commit({ l1_action_level: ACTION_LEVEL_OPTIONS.find(item => item.label === value)!.value })} /></Field>{[2, 3].includes(config.l1_action_level ?? 0) && <Field label="具体动作"><Select value={ACTION_VERB_OPTIONS.find(item => item.value === config.l1_action_verb)?.label ?? ACTION_VERB_OPTIONS[0].label} options={ACTION_VERB_OPTIONS.map(item => item.label)} onChange={value => commit({ l1_action_verb: ACTION_VERB_OPTIONS.find(item => item.label === value)!.value as ActionVerb })} /></Field>}</>}
-    {[0, 1].map(index => { const item = config.l2_dynamics[index]; const typeLabel = item ? L2_OPTIONS.find(option => option.value === item.type)?.label ?? "" : "无"; const target = item?.target ?? targetOptions[0] ?? "主体"; return <div className="field" key={index}><span>{`L2 · 动态 ${index + 1}`}</span><div className="field-grid"><Select value={typeLabel} options={["无", ...L2_OPTIONS.map(option => option.label)]} onChange={value => selectL2(index, value === "无" ? null : L2_OPTIONS.find(option => option.label === value)!.value)} />{item && <Select value={targetOptions.includes(target) ? target : "其他"} options={targetOptions} onChange={value => updateL2Target(index, value === "其他" ? "" : value)} />}</div>{item && (!targetOptions.includes(target) || target === "") && <input className="input prompt-target-input" value={target} placeholder="填写1-8字名词" onChange={event => updateL2Target(index, event.target.value)} />}</div>; })}
+    </div>
+    <Field label={`L0 · 画面元素（${config.elements.length}/8）`}><div className="check-grid">{ELEMENT_OPTIONS.map(item => <label className={`check ${config.elements.includes(item.id) ? "checked" : ""}`} key={item.id}><input type="checkbox" checked={config.elements.includes(item.id)} onChange={event => commit({ elements: event.target.checked ? [...config.elements, item.id] : config.elements.filter(value => value !== item.id) })} />{item.label}</label>)}</div></Field>
+    <div className="prompt-l2-grid">{[0, 1].map(index => { const item = config.l2_dynamics[index]; const typeLabel = item ? L2_OPTIONS.find(option => option.value === item.type)?.label ?? "" : "无"; const target = item?.target ?? targetOptions[0] ?? "主体"; return <div className="field" key={index}><span>{`L2 · 动态 ${index + 1}`}</span><div className="field-grid"><Select value={typeLabel} options={["无", ...L2_OPTIONS.map(option => option.label)]} onChange={value => selectL2(index, value === "无" ? null : L2_OPTIONS.find(option => option.label === value)!.value)} />{item && <Select value={targetOptions.includes(target) ? target : "其他"} options={targetOptions} onChange={value => updateL2Target(index, value === "其他" ? "" : value)} />}</div>{item && (!targetOptions.includes(target) || target === "") && <input className="input prompt-target-input" value={target} placeholder="填写1-8字名词" onChange={event => updateL2Target(index, event.target.value)} />}</div>; })}</div>
     {config.mode === "keyframes" && <><Field label="尾帧图片"><div className="upload-row"><input className="input" type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) uploadEndImage(file); }} /><span>{data.promptEndImageName || "未上传"}</span></div></Field><Field label="速度曲线"><Select value={SPEED_CURVE_OPTIONS.find(item => item.value === config.speed_curve)?.label ?? SPEED_CURVE_OPTIONS[0].label} options={SPEED_CURVE_OPTIONS.map(item => item.label)} onChange={value => commit({ speed_curve: SPEED_CURVE_OPTIONS.find(item => item.label === value)!.value as SpeedCurve })} /></Field></>}
     <label className={`check ${config.seamless_loop ? "checked" : ""}`}><input type="checkbox" checked={config.seamless_loop} onChange={event => commit({ seamless_loop: event.target.checked })} />启用无缝循环</label>
     <div className={`prompt-validation ${result.blocked ? "prompt-validation-error" : "prompt-validation-ready"}`}><strong>{result.blocked ? "当前配置阻断生成" : "当前配置可生成"}</strong>{result.errors.map(item => <span key={`${item.code}-${item.field}`}>{formatIssue(item)}</span>)}{result.warnings.map(item => <span key={`${item.code}-${item.field}`}>提示 {formatIssue(item)}</span>)}{result.warnings.some(item => item.code === "W2") && <button type="button" className="btn" onClick={() => commit({ mode: "keyframes" })}>切换到首尾帧模式</button>}</div>
-    <Field label="正向提示词"><textarea className="input textarea prompt-preview" readOnly value={result.prompt} placeholder="修正阻断项后生成" /></Field>
-    <Field label="负向提示词"><textarea className="input textarea prompt-preview" readOnly value={result.negative_prompt} placeholder="修正阻断项后生成" /></Field>
+    <div className="prompt-preview-grid"><Field label="正向提示词"><AutoGrowingTextarea value={result.prompt} placeholder="修正阻断项后生成" /></Field><Field label="负向提示词"><AutoGrowingTextarea value={result.negative_prompt} placeholder="修正阻断项后生成" /></Field></div>
     <div className="preview-box">L0 {config.elements.length} 项 · L2 {config.l2_dynamics.length}/2 项 · cfg_scale {result.cfg_scale}</div>
-  </>;
+  </div>;
 }
 
 function VoiceModelSelectors({ item, options, update }: { item: VoiceItem; options: TTSVoiceOption[]; update: (patch: Partial<VoiceItem>) => void }) {
@@ -132,6 +143,7 @@ function VoiceModelSelectors({ item, options, update }: { item: VoiceItem; optio
       voiceId: nextOption?.voice_id ?? "none",
       voiceName: nextOption?.label ?? "无",
       enabled: nextOption ? item.enabled !== false : false,
+      ttsDisabledByUser: !nextOption,
     });
   };
   const selectVoice = (voiceId: string) => {
@@ -142,6 +154,7 @@ function VoiceModelSelectors({ item, options, update }: { item: VoiceItem; optio
       voiceId: option?.voice_id ?? "none",
       voiceName: option?.label ?? "无",
       enabled: Boolean(option),
+      ttsDisabledByUser: !option,
     });
   };
   return <div className="field-grid voice-selector-grid">
@@ -166,9 +179,12 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   useEffect(() => {
     fetchTTSOptions().then(result => setTtsOptions(result.voices)).catch(() => setTtsOptions([]));
   }, []);
-  const [bulkCaptionText, setBulkCaptionText] = useState("");
   const [captionSplitBusy, setCaptionSplitBusy] = useState(false);
   const data = node.data.kind === "sound" ? { ...node.data, ...(activeWorkspace?.soundConfig ?? {}) } : node.data;
+  const [bulkCaptionText, setBulkCaptionText] = useState(data.captionSourceText ?? "");
+  useEffect(() => {
+    setBulkCaptionText(data.captionSourceText ?? "");
+  }, [node.id, activeWorkspace?.id, data.captionSourceText]);
   const captionSegments = captionSegmentsFromData(data);
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>(() => Object.fromEntries(captionSegments.flatMap((segment, index) => [[segment.overlay.id, index > 0], [segment.voice.id, index > 0]])));
   useEffect(() => {
@@ -195,14 +211,20 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
     try {
       const result = await splitCaptionText(source, useLlm);
       const timestamp = Date.now();
+      const voiceTemplate = captionSegments
+        .map(segment => segment.voice)
+        .find(voice => !voice.placeholder && voice.voiceId !== "none") ?? captionSegments[0]?.voice;
       const nextSegments = result.segments.map((text, index) => {
         const current = captionSegments[index];
         const currentOverlay = current?.overlay;
         const currentVoice = current?.voice;
-        const start = currentOverlay?.startSeconds ?? currentVoice?.startSeconds ?? index * 2.5;
-        const end = currentOverlay?.endSeconds ?? currentVoice?.endSeconds ?? start + 2.5;
+        // A new split is a new timing plan. Reusing old ranges leaves stale
+        // overlaps behind when the number of sentences changes.
+        const start = index * 2.5;
+        const end = start + 2.5;
         const voiceId = currentVoice && !currentVoice.id.startsWith("voice_for_") ? currentVoice.id : `voice_${timestamp}_${index}`;
         const overlayId = currentOverlay && !currentOverlay.id.startsWith("overlay_for_") ? currentOverlay.id : `overlay_${timestamp}_${index}`;
+        const voiceBase = currentVoice?.voiceId !== "none" ? currentVoice : voiceTemplate;
         return {
           id: voiceId,
           overlay: {
@@ -215,16 +237,16 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
             syncVoiceId: voiceId,
           },
           voice: {
-            ...(currentVoice ?? { provider: "qwen", model: "", voiceId: "none", voiceName: "none", volume: 85, enabled: false }),
+            ...(voiceBase ?? { provider: "qwen", model: "", voiceId: "none", voiceName: "none", volume: 85, enabled: false }),
             id: voiceId,
-            text,
+            text: result.voice_segments[index] ?? text,
             placeholder: false,
             startSeconds: start,
             endSeconds: Math.max(start + 0.1, end),
           },
         };
       });
-      commitSegments(nextSegments);
+      updateNodeData(node.id, { ...captionSegmentsPatch(nextSegments), captionSourceText: source });
       onToast(result.warning ?? (result.used_llm ? `Qwen 已优化并生成 ${result.segments.length} 段文案` : `已按本地规则拆分为 ${result.segments.length} 段`));
     } catch (error) {
       onToast(error instanceof Error ? error.message : "文案拆分失败");
@@ -234,8 +256,10 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   };
   const updateOverlay = (id: string, patch: Partial<OverlayItem>) => commitSegments(captionSegments.map(segment => {
     if (segment.overlay.id !== id) return segment;
-     const overlay = { ...segment.overlay, ...patch };
-    return { ...segment, overlay };
+    const overlay = { ...segment.overlay, ...patch };
+    const linked = overlay.syncVoiceId !== "";
+    const voice = linked ? { ...segment.voice, ...(patch.startSeconds === undefined ? {} : { startSeconds: patch.startSeconds }), ...(patch.endSeconds === undefined ? {} : { endSeconds: patch.endSeconds }) } : segment.voice;
+    return { ...segment, overlay, voice };
   }));
   const updateOverlayStyle = (id: string, patch: Partial<OverlayStyle>) => {
     const item = overlayItems.find(candidate => candidate.id === id);
@@ -255,7 +279,9 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const updateVoice = (id: string, patch: Partial<(typeof voiceItems)[number]>) => commitSegments(captionSegments.map(segment => {
     if (segment.voice.id !== id) return segment;
     const voice = { ...segment.voice, ...patch };
-    return { ...segment, voice };
+    const linked = segment.overlay.syncVoiceId !== "";
+    const overlay = linked ? { ...segment.overlay, ...(patch.startSeconds === undefined ? {} : { startSeconds: patch.startSeconds }), ...(patch.endSeconds === undefined ? {} : { endSeconds: patch.endSeconds }) } : segment.overlay;
+    return { ...segment, voice, overlay };
   }));
   const removeVoice = (id: string) => commitSegments(captionSegments.filter(segment => segment.voice.id !== id));
   const addVoice = addOverlay;
@@ -265,10 +291,10 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
     {activePanel === "overlay" ? <>
       <div className="panel-section-head"><SectionTitle>文案段</SectionTitle><button type="button" className="btn" onClick={addOverlay}>＋ 添加文案段</button></div>
       <div className="caption-bulk-tools">
-        <div className="caption-bulk-heading"><strong>整段文案拆分</strong><span>粘贴长文案，自动生成多个文字段</span></div>
-        <textarea className="input textarea caption-bulk-input" rows={3} value={bulkCaptionText} placeholder="粘贴一整段引流文案" onChange={event => setBulkCaptionText(event.target.value)} />
+        <div className="caption-bulk-heading"><strong>整段文案拆分</strong><span>按语义生成对应的画面文字与 TTS 人声段</span></div>
+        <textarea className="input textarea caption-bulk-input" rows={3} value={bulkCaptionText} placeholder="粘贴一整段引流文案" onChange={event => { const value = event.target.value; setBulkCaptionText(value); updateNodeData(node.id, { captionSourceText: value }); }} />
         <div className="caption-bulk-actions"><button type="button" className="btn" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(false)}>本地规则拆分</button><button type="button" className="btn btn-primary" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(true)}>{captionSplitBusy ? "拆分中..." : "AI 优化拆分"}</button></div>
-        <small className="caption-bulk-hint">本地规则免费且默认推荐；AI 优化只在点击后调用 Qwen。生成后仍可逐段修改。</small>
+        <small className="caption-bulk-hint">逗号、句号用于拆分且默认不显示在画面；人声保留原文停顿。引号、破折号、省略号等表达符号会保留。AI 优化只在点击后调用 Qwen。</small>
       </div>
       <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面；绑定人声可选择自动匹配、不绑定或指定某一段人声。</span></div>
       <div className="overlay-editor-list" onClick={event => { const target = event.target as HTMLElement; if (target.closest(".clip-remove")) return; const header = target.closest(".overlay-editor-head"); if (!header) return; const index = Array.from(event.currentTarget.querySelectorAll(".overlay-editor-head")).indexOf(header); const item = overlayItems[index]; if (item) toggleCard(item.id); }}>{overlayItems.map((item, index) => { const style = overlayStyleFromItem(item); const collapsed = Boolean(collapsedCards[item.id]); return <div className={`overlay-editor-item ${collapsed ? "is-collapsed" : ""}`} key={item.id}>
@@ -288,7 +314,7 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
         <div className="overlay-collapse-summary">{item.text.trim() || "未填写人声文案"}</div>
          <div className="overlay-editor-head"><div><strong>文案段人声 {index + 1}</strong><small>{item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s · {bindingLabel}</small></div><button type="button" className="clip-remove" aria-label={`删除文案段 ${index + 1}`} onClick={() => removeVoice(item.id)}>×</button></div>
         <textarea className="input textarea" value={item.text} placeholder="输入这一段人声文案" onChange={event => updateVoice(item.id, { text: event.target.value })} />
-         <label className={`check ${item.enabled !== false && item.voiceId !== "none" ? "checked" : ""}`}><input type="checkbox" checked={item.enabled !== false && item.voiceId !== "none"} onChange={event => { if (event.target.checked && item.voiceId === "none") { onToast("请先选择具体音色，再启用人声"); return; } updateVoice(item.id, { enabled: event.target.checked }); }} />启用人声</label>
+         <label className={`check ${item.enabled !== false && item.voiceId !== "none" ? "checked" : ""}`}><input type="checkbox" checked={item.enabled !== false && item.voiceId !== "none"} onChange={event => { if (event.target.checked && item.voiceId === "none") { onToast("请先选择具体音色，再启用人声"); return; } updateVoice(item.id, { enabled: event.target.checked, ttsDisabledByUser: !event.target.checked }); }} />启用人声</label>
          <small className="voice-toggle-hint">{item.voiceId === "none" ? "当前为“无”，不会生成 TTS；选择音色后即可启用。" : item.enabled === false ? "当前已关闭，仅保留这段文字。" : "当前已启用，将生成这段 TTS。"}</small>
         <div className="field-grid"><label className="field"><span>开始（秒）</span><input className="input" type="number" min="0" step="0.1" value={item.startSeconds} onChange={event => updateVoice(item.id, { startSeconds: Math.max(0, Number(event.target.value) || 0) })} /></label><label className="field"><span>结束（秒）</span><input className="input" type="number" min="0.1" step="0.1" value={item.endSeconds} onChange={event => updateVoice(item.id, { endSeconds: Math.max(item.startSeconds + 0.1, Number(event.target.value) || item.startSeconds + 0.1) })} /></label></div>
         <VoiceModelSelectors item={item} options={ttsOptions} update={patch => updateVoice(item.id, patch)} />
@@ -315,15 +341,18 @@ function TypeFields({ node, onToast }: { node: WorkflowNode; onToast: (message: 
   return <><SectionTitle>自定义处理</SectionTitle><div className="preview-box">{data.description}</div></>;
 }
 
-export function Inspector({ onToast }: { onToast: (message: string) => void }) {
+export function Inspector({ onToast, nodeId, embedded = false }: { onToast: (message: string) => void; nodeId?: string | null; embedded?: boolean }) {
   const nodes = useWorkflowStore(state => state.nodes);
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
   const selectedEdgeId = useWorkflowStore(state => state.selectedEdgeId);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const deleteSelected = useWorkflowStore(state => state.deleteSelected);
   const duplicateSelected = useWorkflowStore(state => state.duplicateSelected);
-  const node = nodes.find(item => item.id === selectedNodeId);
-  if (selectedEdgeId) return <aside className="inspector"><div className="inspector-head"><div><h2>连接线</h2><p>选中后可删除当前连接</p></div></div><button type="button" className="btn btn-danger full" onClick={() => { deleteSelected(); onToast("连接线已删除"); }}>删除连接</button></aside>;
-  if (!node) return <aside className="inspector"><div className="empty-state">选择节点查看可编辑属性</div></aside>;
-  return <aside className="inspector"><div className="inspector-head"><div><h2>节点属性</h2><p>{node.data.title} · 可编辑</p></div><Tag>{node.data.kind}</Tag></div><BasicFields node={node} /><TypeFields node={node} onToast={onToast} /><div className="inspector-actions"><button type="button" className="btn btn-primary full" onClick={() => onToast("节点修改已同步到画布")}>保存节点</button><button type="button" className="btn full" onClick={() => { duplicateSelected(); onToast("节点已复制"); }}>复制节点</button><button type="button" className="btn btn-danger full" onClick={() => { deleteSelected(); setSelection(null); onToast("节点已删除"); }}>删除节点</button></div></aside>;
+  const resolvedNodeId = nodeId ?? selectedNodeId;
+  const node = nodes.find(item => item.id === resolvedNodeId);
+  const className = `inspector${embedded ? " inspector-embedded" : ""}`;
+  if (!nodeId && selectedEdgeId) return <aside className={className}><div className="inspector-head"><div><h2>连接线</h2><p>选中后可删除当前连接</p></div></div><button type="button" className="btn btn-danger full" onClick={() => { deleteSelected(); onToast("连接线已删除"); }}>删除连接</button></aside>;
+  if (!node) return <aside className={className}><div className="empty-state">选择节点查看可编辑属性</div></aside>;
+  const selectCurrentNode = () => setSelection(node.id);
+  return <aside className={className}><div className="inspector-head"><div><h2>节点属性</h2><p>{node.data.title} · 可编辑</p></div><Tag>{node.data.kind}</Tag></div><BasicFields node={node} /><TypeFields node={node} onToast={onToast} /><div className="inspector-actions"><button type="button" className="btn btn-primary full" onClick={() => onToast("节点修改已同步到画布")}>保存节点</button><button type="button" className="btn full" onClick={() => { selectCurrentNode(); duplicateSelected(); onToast("节点已复制"); }}>复制节点</button><button type="button" className="btn btn-danger full" onClick={() => { selectCurrentNode(); deleteSelected(); setSelection(null); onToast("节点已删除"); }}>删除节点</button></div></aside>;
 }

@@ -23,6 +23,49 @@ _ALLOWED_EXTENSIONS = {
     "audio": {".mp3", ".wav", ".m4a", ".aac", ".ogg"},
 }
 _BACKGROUND_EXTENSIONS = _ALLOWED_EXTENSIONS["image"]
+_MIXED_MOJIBAKE_REPLACEMENTS = {
+    "Â·": "·",
+    "â€“": "–",
+    "â€”": "—",
+    "â€¦": "…",
+    "â€œ": "“",
+    "â€": "”",
+    "â€˜": "‘",
+    "â€™": "’",
+}
+
+
+def _contains_cjk(value: str) -> bool:
+    return any("\u4e00" <= character <= "\u9fff" for character in value)
+
+
+def _repair_mojibake(value: Any) -> Any:
+    """Restore UTF-8 text accidentally decoded as a Western single-byte encoding."""
+    if isinstance(value, str):
+        for broken, repaired in _MIXED_MOJIBAKE_REPLACEMENTS.items():
+            value = value.replace(broken, repaired)
+        if _contains_cjk(value):
+            return value
+        for encoding in ("latin-1", "cp1252"):
+            try:
+                repaired = value.encode(encoding).decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                continue
+            if _contains_cjk(repaired):
+                return repaired
+        # Some old sound labels lost only the first byte of a UTF-8 separator.
+        # Decode each label segment independently, keeping the readable separator.
+        if " · " in value:
+            repaired_parts = [_repair_mojibake(part) for part in value.split(" · ")]
+            repaired_value = " · ".join(repaired_parts)
+            if repaired_value != value:
+                return repaired_value
+        return value
+    if isinstance(value, list):
+        return [_repair_mojibake(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _repair_mojibake(item) for key, item in value.items()}
+    return value
 
 
 def _validate_draft_id(draft_id: str) -> str:
@@ -49,7 +92,7 @@ def load_draft(draft_id: str) -> dict[str, Any] | None:
             payload = json.load(stream)
     if not isinstance(payload, dict) or payload.get("version") != DRAFT_VERSION:
         raise ValueError("草稿版本不受支持")
-    return payload
+    return _repair_mojibake(payload)
 
 
 def _stable_json(value: Any, *, drop_timing: bool = False) -> str:
@@ -117,6 +160,7 @@ def _merge_compose_jobs(payload: dict[str, Any], existing: dict[str, Any] | None
 
 
 def save_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    payload = _repair_mojibake(payload)
     if not isinstance(payload.get("nodes"), list) or not isinstance(payload.get("edges"), list):
         raise ValueError("草稿必须包含 nodes 和 edges 数组")
     if not isinstance(payload.get("timeline"), list):

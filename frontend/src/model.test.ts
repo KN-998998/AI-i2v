@@ -1,4 +1,4 @@
-import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveDishCategory, resolveGeneratorNodeStatus, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 
 function assert(condition, message) {
@@ -54,6 +54,8 @@ const animatedOverlay = overlayItemsFromData({ overlayItems: [{ id: "typed", tex
 assert(animatedOverlay.animation === "typewriter" && animatedOverlay.syncVoiceId === "voice_1", "overlay animation binding was not persisted");
 const defaultOverlayStyle = overlayStyleFromItem({ style: {} });
 assert(defaultOverlayStyle.singleLine === true && defaultOverlayStyle.textBoxWidth === 0.84, "overlay text layout defaults are incorrect");
+const savedCaptionSource = soundConfigFromData({ captionSourceText: "完整引流文案" });
+assert(savedCaptionSource.captionSourceText === "完整引流文案", "caption source text was not persisted in sound config");
 
 const legacyVoice = voiceItemsFromData({ voiceText: "legacy voice", voiceName: "voice", voiceVolume: "85" });
 assert(legacyVoice.length === 1 && legacyVoice[0].startSeconds === 0 && legacyVoice[0].endSeconds === 4, "legacy voice fields were not migrated");
@@ -66,6 +68,8 @@ const segmentedVoice = voiceItemsFromData({
 assert(segmentedVoice.length === 2 && segmentedVoice[1].startSeconds === 10 && segmentedVoice[1].endSeconds === 15, "voice segment timing was not preserved");
 const qwenVoice = voiceItemsFromData({ voiceText: "qwen", voiceName: "女声 · 温暖自然", voiceVolume: "85" });
 assert(qwenVoice[0].voiceId === "Cherry" && qwenVoice[0].provider === "qwen", "legacy voice was not migrated to Qwen");
+const repairedVoiceLabel = voiceItemsFromData({ voiceItems: [{ id: "voice_mojibake", text: "测试", voiceId: "Chelsie", voiceName: "å¥³å£° · Chelsie · æ´»æ³¼æ¸æ°", startSeconds: 0, endSeconds: 2 }] });
+assert(repairedVoiceLabel[0].voiceName === "女声 · Chelsie · 活泼清晰", "segmented voice label mojibake was not repaired");
 const noVoice = voiceItemsFromData({ voiceText: "", voiceName: "无", voiceVolume: "85" });
 assert(noVoice.length === 0, "default no-voice state should not create a TTS segment");
 const disabledExplicitVoice = voiceItemsFromData({ voiceItems: [{ id: "voice_none", text: "只显示文字", voiceId: "none", enabled: true, startSeconds: 0, endSeconds: 2 }] });
@@ -99,6 +103,35 @@ const textOnlyPatch = captionSegmentsPatch(captionSegmentsFromData({
   overlayItems: [{ id: "overlay_text_only", text: "仅显示文字", startSeconds: 0, endSeconds: 2, position: "upper" }],
 }));
 assert(textOnlyPatch.voiceItems?.length === 0, "text-only placeholder voice should not be persisted");
+const repairedCaptionVoices = repairCaptionVoiceSegments({
+  overlayItems: [
+    { id: "overlay_1", text: "第一段", startSeconds: 0, endSeconds: 2, position: "upper" },
+    { id: "overlay_2", text: "第二段", startSeconds: 2, endSeconds: 4, position: "upper" },
+    { id: "overlay_3", text: "第三段", startSeconds: 4, endSeconds: 6, position: "upper" },
+  ],
+  voiceItems: [
+    { id: "voice_1", text: "第一段", voiceId: "Cherry", voiceName: "女声", enabled: true, startSeconds: 0, endSeconds: 2 },
+    { id: "voice_2", text: "第二段", voiceId: "Cherry", voiceName: "女声", enabled: true, startSeconds: 2, endSeconds: 4 },
+  ],
+});
+assert(repairedCaptionVoices?.voiceItems?.length === 3, "missing caption voice was not restored");
+assert(repairedCaptionVoices?.overlayItems?.every(item => Boolean(item.syncVoiceId)), "repaired captions were not bound to voices");
+const repairedDisabledVoices = repairCaptionVoiceSegments({
+  overlayItems: [
+    { id: "overlay_enabled", text: "已有声音", syncVoiceId: "voice_enabled", startSeconds: 0, endSeconds: 2, position: "upper" },
+    { id: "overlay_disabled", text: "错误无声段", syncVoiceId: "voice_disabled", startSeconds: 2, endSeconds: 4, position: "upper" },
+  ],
+  voiceItems: [
+    { id: "voice_enabled", text: "已有声音", voiceId: "Cherry", enabled: true, startSeconds: 0, endSeconds: 2 },
+    { id: "voice_disabled", text: "错误无声段", voiceId: "none", enabled: false, startSeconds: 2, endSeconds: 4 },
+  ],
+});
+assert(repairedDisabledVoices?.voiceItems?.length === 2 && repairedDisabledVoices.voiceItems.some(item => item.id === "voice_repaired_overlay_disabled" && item.voiceId === "Cherry"), "bound no-voice segment was not repaired");
+const textOnlyCaption = repairCaptionVoiceSegments({
+  overlayItems: [{ id: "overlay_text_only", text: "只显示文字", syncVoiceId: "voice_text_only", startSeconds: 0, endSeconds: 2, position: "upper" }],
+  voiceItems: [{ id: "voice_text_only", text: "只显示文字", voiceId: "none", enabled: false, ttsDisabledByUser: true, startSeconds: 0, endSeconds: 2 }],
+});
+assert(textOnlyCaption === null, "explicit text-only caption unexpectedly gained a voice");
 assert(overlayItemsFromData({ overlayItems: [{ id: "overlay_for_voice_old", text: "历史占位", startSeconds: 0, endSeconds: 2, position: "upper" }] })[0].placeholder === true, "legacy overlay placeholder was not recognized");
 assert(overlayItemsFromData({ overlayItems: [{ id: "overlay_stale_binding", text: "失效绑定", syncVoiceId: "voice_for_overlay_old", startSeconds: 0, endSeconds: 2, position: "upper" }] })[0].syncVoiceId === "", "stale generated binding was not cleared");
 assert(voiceItemsFromData({ voiceItems: [{ id: "voice_for_overlay_old", text: "历史占位", voiceId: "none", startSeconds: 0, endSeconds: 2 }] })[0].placeholder === true, "legacy voice placeholder was not recognized");

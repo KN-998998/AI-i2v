@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getCanvasComposeStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
-import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, nodeCatalog, totalTimelineDuration, type ComposeJob, type NodeKind, type TimelineClip, type WorkflowNode } from "../model";
+import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, nodeCatalog, repairCaptionVoiceSegments, totalTimelineDuration, type ComposeJob, type NodeKind, type TimelineClip, type WorkflowNode } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
@@ -25,6 +25,9 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
     if (panel) setActivePanel(panel);
   }, [nodeId, panel, setActivePanel, setSelection]);
 
+  if (route === "/workflow/prompts") return <StepFrame route={route} title={title} description={description} onToast={onToast}>
+    <div className="prompt-step-layout"><PromptNodeWorkspace onToast={onToast} /><div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div>
+  </StepFrame>;
   return <StepFrame route={route} title={title} description={description} onToast={onToast}>
     <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}{route === "/workflow/sound" && <><SoundTextPreview /><SoundComposePanel onToast={onToast} /></>}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div><Inspector onToast={onToast} /></div>
   </StepFrame>;
@@ -43,6 +46,28 @@ function resolveStepNodeId(kind: ManagedNodeKind | null, nodes: WorkflowNode[], 
   const selectedNode = nodes.find(node => node.id === selectedNodeId && node.data.kind === kind);
   if (selectedNode) return selectedNode.id;
   return kind === "input" ? "assets" : kind === "prompt" ? "prompt" : kind === "sound" ? "sound" : "output";
+}
+
+function PromptNodeWorkspace({ onToast }: { onToast: (message: string) => void }) {
+  const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === "prompt");
+  const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
+  const setSelection = useWorkflowStore(state => state.setSelection);
+  const addNode = useWorkflowStore(state => state.addNode);
+  return <section className="prompt-node-workspace">
+    <div className="panel-section-head"><div><span className="panel-label">PROMPT NODES</span><h2>提示词节点 · {nodes.length} 个</h2><p className="muted">每个节点独立配置 L0/L1/L2、镜头与动作；点击节点卡片展开对应编辑区。</p></div><button type="button" className="btn btn-primary" onClick={() => { addNode("prompt"); onToast("已新增提示词节点"); }}>＋ 新增提示词节点</button></div>
+    <div className="prompt-node-list">{nodes.map((node, index) => {
+      const expanded = selectedNodeId === node.id;
+      return <article className={`prompt-node-card ${expanded ? "is-expanded" : ""}`} key={node.id}>
+        <div className="prompt-node-card-head" onClick={() => setSelection(node.id)}>
+          <span className="node-record-index">{String(index + 1).padStart(2, "0")}</span>
+          <div><strong>{node.data.title}</strong><small>{node.data.description || "配置画面元素、镜头和动作"}</small></div>
+          <div className="prompt-node-card-meta"><span className="node-status">{node.data.status}</span><span>L0 {node.data.promptL0?.length ?? 0}</span></div>
+          <button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(expanded ? null : node.id); }}>{expanded ? "收起编辑" : "编辑节点"}</button>
+        </div>
+        {expanded && <div className="prompt-node-editor"><Inspector nodeId={node.id} embedded onToast={onToast} /></div>}
+      </article>;
+    })}</div>
+  </section>;
 }
 
 function LegacyNodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (message: string) => void }) {
@@ -136,11 +161,19 @@ function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void 
 function StepSummary({ route, nodeId }: { route: WorkflowRoute; nodeId: string | null }) {
   const timeline = useWorkflowStore(state => state.timeline);
   const nodes = useWorkflowStore(state => state.nodes);
+  const composeWorkspaces = useWorkflowStore(state => state.composeWorkspaces);
+  const activeComposeWorkspaceId = useWorkflowStore(state => state.activeComposeWorkspaceId);
   const node = nodeId ? nodes.find(item => item.id === nodeId)?.data : undefined;
+  const activeWorkspace = composeWorkspaces.find(workspace => workspace.id === activeComposeWorkspaceId);
+  // Workspace sound config is authoritative: legacy node fields can be stale in old drafts.
+  const soundData = node?.kind === "sound" ? { ...node, ...(activeWorkspace?.soundConfig ?? {}) } : undefined;
+  const soundSegments = soundData ? captionSegmentsFromData(soundData) : [];
+  const firstVoice = soundSegments.find(segment => segment.voice.enabled !== false && segment.voice.voiceId !== "none")?.voice;
+  const firstOverlay = soundSegments.find(segment => segment.overlay.enabled !== false)?.overlay;
   const summaries: Record<string, string> = {
     "/workflow/assets": `${node?.dishName || "未选择菜品"} · 素材待确认`,
     "/workflow/prompts": `已选择 ${node?.promptL0?.length ?? 0} 个 L0 画面元素`,
-    "/workflow/sound": `${node?.voiceName || "未配置音色"} · ${node?.overlayMain || "未配置画面文字"}`,
+    "/workflow/sound": `${firstVoice?.voiceName || "未配置音色"} · ${firstOverlay?.text || "未配置画面文字"}`,
     "/workflow/output": `${timeline.length} 个片段 · ${totalTimelineDuration(timeline).toFixed(1)}s 时间线`,
   };
   return <div className="step-summary"><span className="panel-label">CURRENT DATA</span><strong>{summaries[route] || "当前草稿"}</strong><p>本页修改会自动保存到同一份画布草稿。</p></div>;
@@ -170,6 +203,11 @@ function SoundTextPreview() {
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const clearBgm = useWorkflowStore(state => state.clearBgm);
+  useEffect(() => {
+    if (!soundNode || !sound) return;
+    const repairPatch = repairCaptionVoiceSegments(sound);
+    if (repairPatch) updateNodeData(soundNode.id, repairPatch);
+  }, [activeWorkspaceId, soundNode, sound, updateNodeData]);
   const captionSegments = captionSegmentsFromData(sound ?? {});
   const allOverlayItems = captionSegments.map(segment => segment.overlay);
   const allVoiceItems = captionSegments.map(segment => segment.voice);
@@ -178,12 +216,15 @@ function SoundTextPreview() {
   const updateOverlayTimeline = (id: string, patch: Partial<(typeof overlayItems)[number]>) => {
     if (!soundNode) return;
     const next = allOverlayItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const target = allOverlayItems.find(item => item.id === id);
+    const linkedVoiceId = target?.syncVoiceId === "" ? null : target?.syncVoiceId ?? captionSegments.find(segment => segment.overlay.id === id)?.voice.id;
+    const nextVoices = linkedVoiceId ? allVoiceItems.map(item => item.id === linkedVoiceId ? { ...item, ...(patch.startSeconds === undefined ? {} : { startSeconds: patch.startSeconds }), ...(patch.endSeconds === undefined ? {} : { endSeconds: patch.endSeconds }) } : item) : allVoiceItems;
     const visible = next.filter(item => item.enabled !== false);
     const first = visible[0];
     const cta = visible.find(item => item.id === "overlay_cta") ?? visible.at(-1);
     updateNodeData(soundNode.id, {
       overlayItems: next,
-      voiceItems: allVoiceItems,
+      voiceItems: nextVoices,
       overlayMain: first?.text ?? "",
       overlayCta: cta?.text ?? "",
       overlayPosition: first ? (first.position === "top" ? "上方品牌区" : first.position === "upper" ? "中上钩子区" : first.position === "center" ? "画面中央" : first.position === "bottom" ? "底部安全区" : "自定义位置") : "中上钩子区",
@@ -194,11 +235,13 @@ function SoundTextPreview() {
   const updateVoiceTimeline = (id: string, patch: Partial<(typeof voiceItems)[number]>) => {
     if (!soundNode) return;
     const next = allVoiceItems.map(item => item.id === id ? { ...item, ...patch } : item);
+    const linkedOverlay = captionSegments.find(segment => segment.voice.id === id)?.overlay;
+    const nextOverlays = linkedOverlay && linkedOverlay.syncVoiceId !== "" ? allOverlayItems.map(item => item.id === linkedOverlay.id ? { ...item, ...(patch.startSeconds === undefined ? {} : { startSeconds: patch.startSeconds }), ...(patch.endSeconds === undefined ? {} : { endSeconds: patch.endSeconds }) } : item) : allOverlayItems;
     const enabled = next.filter(item => item.enabled !== false);
     const first = enabled[0];
     updateNodeData(soundNode.id, {
       voiceItems: next,
-      overlayItems: allOverlayItems,
+      overlayItems: nextOverlays,
       voiceText: first?.text ?? "",
       voiceName: first?.voiceName ?? "女声 · 温暖自然",
       voiceVolume: String(first?.volume ?? 85),

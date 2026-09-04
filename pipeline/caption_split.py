@@ -18,6 +18,7 @@ _BRACKETS = {"(": ")", "[": "]", "{": "}", "（": "）", "【": "】", "「": "�
 _QUOTES = {"\"": "\"", "'": "'", "“": "”", "‘": "’"}
 _STRONG_ENDINGS = set("。！？!?；;\n")
 _SOFT_ENDINGS = set("，,、：:")
+_DISPLAY_HIDDEN_PUNCTUATION = set("，,。")
 _ASCII_WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@/#:+-]*")
 
 
@@ -89,6 +90,27 @@ def _merge_short_segments(segments: list[str]) -> list[str]:
         result[-2] += result[-1]
         result.pop()
     return result
+
+
+def caption_display_text(text: str) -> str:
+    """Remove punctuation used only as a visual caption split marker.
+
+    Voice copy must remain verbatim so TTS can preserve natural pauses.  On-screen
+    restaurant short-video captions usually omit commas and sentence stops, while
+    expressive marks such as quotes, dashes, exclamation marks and ellipses remain.
+    """
+    result: list[str] = []
+    units = _tokenize(text)
+    for index, unit in enumerate(units):
+        if unit in _DISPLAY_HIDDEN_PUNCTUATION:
+            continue
+        # Tokenization keeps ASCII words, quoted groups, decimals and version
+        # numbers intact. A standalone dot is a sentence stop, except when it
+        # is part of an ASCII ellipsis.
+        if unit == "." and not any(candidate == "." for candidate in units[max(0, index - 2):index] + units[index + 1:index + 3]):
+            continue
+        result.append(unit)
+    return "".join(result).strip()
 
 
 def split_caption_text_local(text: str) -> list[str]:
@@ -164,14 +186,17 @@ def _parse_llm_segments(content: str, source: str) -> list[str]:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as exc:
         raise CaptionSplitError("Qwen returned invalid JSON") from exc
-    return validate_caption_segments(source, payload.get("segments") if isinstance(payload, dict) else payload)
+    if isinstance(payload, dict):
+        return validate_caption_segments(source, payload.get("voice_segments") or payload.get("segments"))
+    return validate_caption_segments(source, payload)
 
 
 def _split_with_qwen(source: str) -> list[str]:
     system_prompt = (
         "You split Chinese promotional copy for short vertical videos. "
-        "Return JSON only: {\"segments\":[\"...\"]}. "
-        "Keep the original text exactly, in the same order, with no additions or deletions. "
+        "Return JSON only: {\"voice_segments\":[\"...\"]}. "
+        "Keep voice_segments as the original text exactly, in the same order, with no additions or deletions. "
+        "Keep each comma or sentence stop at the end of its preceding voice segment. "
         "Target 8-10 Chinese characters per segment, prefer natural punctuation, "
         "and never split English words, numbers, brand names, or bracketed/quoted text."
     )
@@ -201,15 +226,16 @@ def _split_with_qwen(source: str) -> list[str]:
 
 
 def split_caption_text(text: str, use_llm: bool = False) -> dict[str, Any]:
-    """Split locally, optionally replacing it with a validated Qwen result."""
+    """Split voice copy and derive matching, punctuation-clean display copy."""
     source = text.strip()
-    local_segments = split_caption_text_local(source)
+    local_voice_segments = split_caption_text_local(source)
+    local_segments = [caption_display_text(segment) for segment in local_voice_segments]
     if not use_llm:
-        return {"source": source, "segments": local_segments, "mode": "local", "used_llm": False, "warning": None}
+        return {"source": source, "segments": local_segments, "voice_segments": local_voice_segments, "mode": "local", "used_llm": False, "warning": None}
     if not QWEN_LLM_ENABLED or not QWEN_API_KEY:
-        return {"source": source, "segments": local_segments, "mode": "local_fallback", "used_llm": False, "warning": "Qwen 未配置，已使用本地规则拆分"}
+        return {"source": source, "segments": local_segments, "voice_segments": local_voice_segments, "mode": "local_fallback", "used_llm": False, "warning": "Qwen 未配置，已使用本地规则拆分"}
     try:
-        segments = _split_with_qwen(source)
+        voice_segments = _split_with_qwen(source)
     except CaptionSplitError:
-        return {"source": source, "segments": local_segments, "mode": "local_fallback", "used_llm": False, "warning": "Qwen 拆分未通过校验，已回退本地规则"}
-    return {"source": source, "segments": segments, "mode": "qwen", "used_llm": True, "warning": None}
+        return {"source": source, "segments": local_segments, "voice_segments": local_voice_segments, "mode": "local_fallback", "used_llm": False, "warning": "Qwen 拆分未通过校验，已回退本地规则"}
+    return {"source": source, "segments": [caption_display_text(segment) for segment in voice_segments], "voice_segments": voice_segments, "mode": "qwen", "used_llm": True, "warning": None}

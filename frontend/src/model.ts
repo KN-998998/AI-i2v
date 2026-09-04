@@ -45,6 +45,8 @@ export type VoiceItem = {
   id: string;
   text: string;
   enabled?: boolean;
+  /** Explicit user choice to keep this caption segment silent. */
+  ttsDisabledByUser?: boolean;
   /** Runtime-only marker for the counterpart generated when a track is independent. */
   placeholder?: boolean;
   startSeconds: number;
@@ -57,6 +59,8 @@ export type VoiceItem = {
 };
 
 export type SoundConfig = {
+  /** Original copy used to generate the current caption and voice segments. */
+  captionSourceText?: string;
   voiceText?: string;
   voiceName?: string;
   voiceVolume?: string;
@@ -146,6 +150,8 @@ export type WorkflowData = {
   outputTarget?: string;
   outputDuration?: string;
   outputAspect?: string;
+  /** Original full copy kept for later caption re-splitting. */
+  captionSourceText?: string;
   voiceText?: string;
   voiceName?: string;
   voiceVolume?: string;
@@ -160,11 +166,12 @@ export type WorkflowData = {
 };
 
 export function soundConfigFromData(
-  data: Pick<WorkflowData, "voiceText" | "voiceName" | "voiceVolume" | "voiceItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd" | "overlayItems" | "bgmVolume">,
+  data: Pick<WorkflowData, "captionSourceText" | "voiceText" | "voiceName" | "voiceVolume" | "voiceItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd" | "overlayItems" | "bgmVolume">,
   bgmName = "",
   bgmUrl = "",
 ): SoundConfig {
   const config: SoundConfig = { bgmName, bgmUrl };
+  if (data.captionSourceText !== undefined) config.captionSourceText = data.captionSourceText;
   if (data.voiceText !== undefined) config.voiceText = data.voiceText;
   if (data.voiceName !== undefined) config.voiceName = data.voiceName;
   if (data.voiceVolume !== undefined) config.voiceVolume = data.voiceVolume;
@@ -477,8 +484,22 @@ export function overlayItemsFromData(data: Pick<WorkflowData, "overlayItems" | "
   return items;
 }
 
+export function repairDisplayText(value: string): string {
+  const repairPart = (part: string) => {
+    if (!/[\u00c0-\u00ff]/.test(part) || /[\u4e00-\u9fff]/.test(part)) return part;
+    try {
+      const bytes = Uint8Array.from([...part].map(character => character.charCodeAt(0)));
+      const repaired = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      return /[\u4e00-\u9fff]/.test(repaired) ? repaired : part;
+    } catch {
+      return part;
+    }
+  };
+  return value.replace(/Â·/g, "·").split(" · ").map(repairPart).join(" · ");
+}
+
 export function voiceItemsFromData(data: Pick<WorkflowData, "voiceItems" | "voiceText" | "voiceName" | "voiceVolume">): VoiceItem[] {
-  const defaultVoice = data.voiceName?.trim() || "无";
+  const defaultVoice = repairDisplayText(data.voiceName?.trim() || "无");
   const defaultVolume = clampNumber(Number(data.voiceVolume), 0, 100, 85);
   if (data.voiceItems) {
     return uniqueById(data.voiceItems.map((item, index) => {
@@ -489,13 +510,14 @@ export function voiceItemsFromData(data: Pick<WorkflowData, "voiceItems" | "voic
         id: item.id || `voice_${index + 1}`,
         text: item.text || "",
         enabled: item.enabled !== false && voiceId !== "none",
+        ttsDisabledByUser: item.ttsDisabledByUser === true,
         placeholder: item.placeholder === true || item.id.startsWith("voice_for_"),
         startSeconds: start,
         endSeconds: end,
         provider: item.provider || "qwen",
         model: item.model || "",
         voiceId,
-        voiceName: item.voiceName || defaultVoice,
+        voiceName: repairDisplayText(item.voiceName || defaultVoice),
         volume: clampNumber(Number(item.volume), 0, 100, defaultVolume),
       };
     }));
@@ -580,6 +602,62 @@ export function captionSegmentsPatch(segments: CaptionSegment[]): Partial<Workfl
     voiceName: firstVoice?.voiceName ?? "none",
     voiceVolume: String(firstVoice?.volume ?? 85),
   };
+}
+
+/**
+ * Repairs drafts created before caption splitting produced a voice item for every
+ * text item. An explicitly unbound overlay remains text-only.
+ */
+export function repairCaptionVoiceSegments(data: Pick<WorkflowData, "overlayItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd" | "voiceItems" | "voiceText" | "voiceName" | "voiceVolume">): Partial<WorkflowData> | null {
+  const overlays = overlayItemsFromData(data).filter(item => !item.placeholder);
+  const voices = voiceItemsFromData(data).filter(item => !item.placeholder);
+  const voiceNamesRepaired = (data.voiceItems ?? []).some(item => {
+    const normalized = voices.find(voice => voice.id === item.id);
+    return Boolean(normalized && item.voiceName && normalized.voiceName !== item.voiceName);
+  });
+  const isUsableVoice = (item: VoiceItem) => item.enabled !== false && item.voiceId !== "none";
+  const template = voices.find(isUsableVoice);
+  if (!template || overlays.length === 0) return null;
+
+  const claimedVoiceIds = new Set<string>();
+  const replacedVoiceIds = new Set<string>();
+  const additions: VoiceItem[] = [];
+  let changed = false;
+  const repairedOverlays = overlays.map((overlay, index) => {
+    if (overlay.syncVoiceId === "") return overlay;
+    const boundVoice = overlay.syncVoiceId ? voices.find(voice => voice.id === overlay.syncVoiceId) : undefined;
+    if (boundVoice?.ttsDisabledByUser) return overlay;
+    const matchedVoice = overlay.syncVoiceId
+      ? voices.find(voice => voice.id === overlay.syncVoiceId && isUsableVoice(voice))
+      : voices[index] && isUsableVoice(voices[index]) && !claimedVoiceIds.has(voices[index].id)
+        ? voices[index]
+        : voices.find(voice => isUsableVoice(voice) && !claimedVoiceIds.has(voice.id));
+    if (matchedVoice) {
+      claimedVoiceIds.add(matchedVoice.id);
+      if (overlay.syncVoiceId === matchedVoice.id) return overlay;
+      changed = true;
+      return { ...overlay, syncVoiceId: matchedVoice.id };
+    }
+
+    const staleVoice = boundVoice;
+    if (staleVoice) replacedVoiceIds.add(staleVoice.id);
+    const id = `voice_repaired_${overlay.id}`;
+    additions.push({
+      ...template,
+      id,
+      text: overlay.text,
+      enabled: true,
+      placeholder: false,
+      startSeconds: overlay.startSeconds,
+      endSeconds: overlay.endSeconds,
+    });
+    changed = true;
+    return { ...overlay, syncVoiceId: id };
+  });
+  if (!changed && !voiceNamesRepaired) return null;
+  const voiceItems = [...voices.filter(voice => !replacedVoiceIds.has(voice.id)), ...additions];
+  const firstVoice = voiceItems.find(isUsableVoice);
+  return { overlayItems: changed ? repairedOverlays : overlays, voiceItems, voiceName: firstVoice?.voiceName ?? "none" };
 }
 
 function uniqueById<T extends { id: string }>(items: T[]): T[] {

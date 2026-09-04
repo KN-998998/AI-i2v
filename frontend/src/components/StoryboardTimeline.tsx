@@ -178,12 +178,12 @@ export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOver
     const index = overlayItems.findIndex(candidate => candidate.id === item.id);
     const active = activeOverlays.some(activeItem => activeItem.id === item.id);
     const paired = Boolean(item.syncVoiceId && resolvedVoiceItems.some(voice => voice.id === item.syncVoiceId));
-    return <TimelineRangeBlock key={item.id} className={"storyboard-overlay-item overlay-" + item.position + (active ? " is-active" : "")} total={total} locked={paired} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), ...overlayTrackStyle(item) }} label={"文字 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步人声" : "")} removeLabel={`删除文字 ${index + 1}`} onRemove={onRemoveOverlay ? () => onRemoveOverlay(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "overlay", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "overlay", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "overlay", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onOverlayFocus?.(item.id); }} />;
+    return <TimelineRangeBlock key={item.id} className={"storyboard-overlay-item overlay-" + item.position + (active ? " is-active" : "")} total={total} locked={false} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), ...overlayTrackStyle(item) }} label={"文字 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步人声" : "")} removeLabel={`删除文字 ${index + 1}`} onRemove={onRemoveOverlay ? () => onRemoveOverlay(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "overlay", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "overlay", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "overlay", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onOverlayFocus?.(item.id); }} />;
   };
   const renderVoiceItem = (item: VoiceItem) => {
     const index = resolvedVoiceItems.findIndex(candidate => candidate.id === item.id);
     const paired = overlayItems.some(overlay => overlay.syncVoiceId === item.id);
-    return <TimelineRangeBlock key={item.id} className="storyboard-range-audio voice-track-block" tone="voice" total={total} locked={paired} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), top: "6px", bottom: "6px" }} label={"人声 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步文字" : "")} removeLabel={`删除人声 ${index + 1}`} onRemove={onRemoveVoice ? () => onRemoveVoice(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "voice", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "voice", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "voice", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onVoiceFocus?.(item.id); }} />;
+    return <TimelineRangeBlock key={item.id} className="storyboard-range-audio voice-track-block" tone="voice" total={total} locked={false} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), top: "6px", bottom: "6px" }} label={"人声 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步文字" : "")} removeLabel={`删除人声 ${index + 1}`} onRemove={onRemoveVoice ? () => onRemoveVoice(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "voice", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "voice", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "voice", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onVoiceFocus?.(item.id); }} />;
   };
 
   return <section className={`storyboard-editor ${showSoundTracks ? "" : "storyboard-editor-clip"}`}>
@@ -308,7 +308,7 @@ function previewOverlayText(item: OverlayItem, playhead: number) {
 }
 
 function roundSeconds(value: number) {
-  return Math.round(value * 10) / 10;
+  return Math.round(value * 20) / 20;
 }
 
 function roundClipSeconds(value: number) {
