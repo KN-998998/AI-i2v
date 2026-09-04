@@ -337,7 +337,10 @@ def _classification_results(
         dish_name = str(group["dishName"])
         classification = classifications[dish_name]
         normalized_name = _searchable_name(dish_name)
-        if normalized_name in rules:
+        explicit_source = str(classification.get("source") or "")
+        if explicit_source:
+            source = explicit_source
+        elif normalized_name in rules:
             source = "人工规则"
         elif str(classification.get("reason") or "").startswith("Qwen"):
             source = "Qwen"
@@ -361,21 +364,121 @@ def _classification_results(
     return results
 
 
+def _metadata_for_dish_name(metadata: dict[str, dict[str, str]], dish_name: str) -> dict[str, str]:
+    """Find human-confirmed metadata regardless of the on-disk category spelling."""
+    normalized_name = _searchable_name(dish_name)
+    matches = [
+        value
+        for key, value in metadata.items()
+        if _searchable_name(key.rsplit("/", 1)[-1]) == normalized_name
+    ]
+    if not matches:
+        return {}
+    categories = {str(item.get("category") or "") for item in matches}
+    if len(categories) != 1:
+        return {}
+    return matches[0]
+
+
+def _category_from_library_folder_name(name: str) -> str | None:
+    normalized = _searchable_name(name)
+    for category in ASSET_CATEGORIES:
+        if normalized in {_searchable_name(category), _searchable_name(_safe_library_name(category))}:
+            return category
+    return None
+
+
+def _category_from_standardized_folders(root: Path, group: Mapping[str, Any]) -> str | None:
+    """Recognize a category ancestor in the category/dish/image library layout."""
+    categories: set[str] = set()
+    for source_folder in group.get("sourceFolders", []):
+        try:
+            relative = Path(source_folder).resolve().relative_to(root)
+        except ValueError:
+            continue
+        for part in relative.parts[:-1]:
+            category = _category_from_library_folder_name(part)
+            if category:
+                categories.add(category)
+    return next(iter(categories)) if len(categories) == 1 else None
+
+
+def _confirmed_library_classification(
+    category: str,
+    dish_name: str,
+    *,
+    food_type: str | None,
+    visual_subject_type: str | None,
+    reason: str,
+    source: str,
+) -> dict[str, Any]:
+    return {
+        "category": category,
+        "foodType": food_type if food_type in FOOD_TYPES else infer_food_type(dish_name, category),
+        "visualSubjectType": visual_subject_type if visual_subject_type in VISUAL_SUBJECT_TYPES else DEFAULT_VISUAL_SUBJECT_TYPE,
+        "candidates": [category],
+        "reviewRequired": False,
+        "reason": reason,
+        "source": source,
+    }
+
+
+def _classify_library_dish_groups(
+    root: Path,
+    dish_groups: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], str, str | None]:
+    """Use confirmed library data first; ask Qwen only about genuinely unknown dishes."""
+    metadata = _load_asset_metadata(root)
+    classifications: dict[str, dict[str, Any]] = {}
+    unresolved_names: list[str] = []
+    confirmed_sources: set[str] = set()
+
+    for group in dish_groups:
+        dish_name = str(group["dishName"])
+        confirmed = _metadata_for_dish_name(metadata, dish_name)
+        if confirmed:
+            classifications[dish_name] = _confirmed_library_classification(
+                str(confirmed["category"]),
+                dish_name,
+                food_type=confirmed.get("foodType"),
+                visual_subject_type=confirmed.get("visualSubjectType"),
+                reason="素材库人工确认标签",
+                source="素材库标签",
+            )
+            confirmed_sources.add("metadata")
+            continue
+        category = _category_from_standardized_folders(root, group)
+        if category:
+            classifications[dish_name] = _confirmed_library_classification(
+                category,
+                dish_name,
+                food_type=None,
+                visual_subject_type=None,
+                reason="标准素材库目录分类",
+                source="目录分类",
+            )
+            confirmed_sources.add("directory")
+            continue
+        unresolved_names.append(dish_name)
+
+    if unresolved_names:
+        unresolved, mode, warning = classify_library_names(unresolved_names)
+        classifications.update(unresolved)
+        return classifications, mode, warning
+    if confirmed_sources == {"metadata"}:
+        return classifications, "library_metadata", None
+    if confirmed_sources == {"directory"}:
+        return classifications, "standardized_library", None
+    return classifications, "library_confirmed", None
+
+
 def scan_asset_classifications(asset_root: str) -> dict[str, Any]:
     """Scan and classify all deduplicated dish folders without copying files."""
     root = Path(asset_root).expanduser().resolve()
     if not root.is_dir():
         raise ValueError("菜品素材库路径不存在或不是文件夹")
     dish_groups = _merge_duplicate_dish_directories(_dish_directories(root))
-    classifications, classification_mode, classification_warning = classify_library_names([
-        group["dishName"] for group in dish_groups
-    ])
-    asset_metadata = _load_asset_metadata(root)
-    for group in dish_groups:
-        classification = classifications[group["dishName"]]
-        metadata = _metadata_for_dish(asset_metadata, str(classification["category"]), group["dishName"])
-        if metadata:
-            classification["visualSubjectType"] = metadata["visualSubjectType"]
+    classifications, classification_mode, classification_warning = _classify_library_dish_groups(root, dish_groups)
     results = _classification_results(dish_groups, classifications)
     return {
         "assetRoot": str(root),
@@ -737,21 +840,15 @@ def build_asset_plan(
         raise ValueError("背景素材库路径不存在或不是文件夹")
     counts = _normalize_category_counts(category_counts)
     generator = rng or random.Random()
-    asset_metadata = _load_asset_metadata(root)
     grouped: dict[str, list[dict[str, Any]]] = {category: [] for category in ASSET_CATEGORIES}
     raw_dish_images = _dish_directories(root)
     dish_groups = _merge_duplicate_dish_directories(raw_dish_images)
-    classifications, classification_mode, classification_warning = classify_library_names([
-        group["dishName"] for group in dish_groups
-    ])
+    classifications, classification_mode, classification_warning = _classify_library_dish_groups(root, dish_groups)
     warnings: list[str] = []
     if classification_warning:
         warnings.append(f"{classification_warning}，已回退本地规则")
     for group in dish_groups:
         classification = classifications[group["dishName"]]
-        metadata = _metadata_for_dish(asset_metadata, str(classification["category"]), group["dishName"])
-        if metadata:
-            classification["visualSubjectType"] = metadata["visualSubjectType"]
         if classification["category"] in grouped:
             grouped[str(classification["category"])].append(group)
     backgrounds = _images(background_path)

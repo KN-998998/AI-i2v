@@ -1,4 +1,5 @@
 import json
+import random
 from pathlib import Path
 from unittest.mock import patch
 
@@ -279,8 +280,65 @@ def test_asset_library_classification_scan_returns_all_dishes_without_copying(mo
 
     assert len(result["classificationResults"]) == 3
     assert {item["dishName"] for item in result["classificationResults"]} == {"三文鱼寿司", "烤龙虾", "神秘菜"}
-    assert next(item for item in result["classificationResults"] if item["dishName"] == "三文鱼寿司")["classificationSource"] == "本地规则"
+    assert next(item for item in result["classificationResults"] if item["dishName"] == "三文鱼寿司")["classificationSource"] == "目录分类"
     assert next(item for item in result["classificationResults"] if item["dishName"] == "神秘菜")["reviewRequired"] is True
+
+
+def test_standardized_library_metadata_skips_qwen_for_scan_and_selection(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "QWEN_API_KEY", "test-key")
+    monkeypatch.setattr(canvas_asset_library, "QWEN_LLM_ENABLED", True)
+    monkeypatch.setattr(canvas_asset_library, "CANVAS_BACKGROUND_ROOT", tmp_path / "backgrounds")
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    asset_root = tmp_path / "图片素材库"
+    background_root = tmp_path / "background-source"
+    _write_image(asset_root / "寿司" / "三文鱼寿司" / "dish.png", "#d97979")
+    _write_image(asset_root / "前菜_小菜" / "茶碗蒸し" / "dish.png", "#e3c36f")
+    _write_image(background_root / "wood.png", "#806040")
+    (asset_root / "asset_metadata.json").write_text(json.dumps({
+        "寿司/三文鱼寿司": {"category": "寿司", "foodType": "冷食", "visualSubjectType": "菜品主体"},
+        "前菜/小菜/茶碗蒸し": {"category": "前菜/小菜", "foodType": "热食", "visualSubjectType": "手部"},
+    }, ensure_ascii=False), encoding="utf-8")
+
+    with patch.object(canvas_asset_library.urllib.request, "urlopen", side_effect=AssertionError("confirmed assets must not call Qwen")):
+        scan = canvas_asset_library.scan_asset_classifications(str(asset_root))
+        plan = canvas_asset_library.build_asset_plan(
+            "standardized",
+            str(asset_root),
+            str(background_root),
+            {"寿司": 1, "前菜/小菜": 1},
+            rng=random.Random(1),
+        )
+
+    assert scan["classificationMode"] == "library_metadata"
+    assert scan["classificationWarning"] is None
+    tea_cup = next(item for item in scan["classificationResults"] if item["dishName"] == "茶碗蒸し")
+    assert tea_cup["classificationSource"] == "素材库标签"
+    assert tea_cup["foodType"] == "热食"
+    assert tea_cup["visualSubjectType"] == "手部"
+    assert plan["classificationWarning"] is None
+    assert plan["reviewItems"] == []
+    assert {item["sourceCategory"] for item in plan["selected"]} == {"寿司", "前菜/小菜"}
+
+
+def test_standardized_library_only_sends_unknown_dishes_to_qwen(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_asset_library, "QWEN_API_KEY", "test-key")
+    monkeypatch.setattr(canvas_asset_library, "QWEN_LLM_ENABLED", True)
+    asset_root = tmp_path / "图片素材库"
+    _write_image(asset_root / "寿司" / "三文鱼寿司" / "dish.png", "#d97979")
+    _write_image(asset_root / "archive" / "季节限定" / "dish.png", "#7aa879")
+    content = json.dumps({
+        "items": [{"dish_name": "季节限定", "category": "主菜", "confidence": 0.96, "reason": "名称语义判断"}],
+    }, ensure_ascii=False)
+    body = json.dumps({"choices": [{"message": {"content": content}}]}, ensure_ascii=False).encode()
+
+    with patch.object(canvas_asset_library.urllib.request, "urlopen", return_value=_Response(body)) as urlopen:
+        result = canvas_asset_library.scan_asset_classifications(str(asset_root))
+
+    request_payload = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
+    assert json.loads(request_payload["messages"][1]["content"])["dish_names"] == ["季节限定"]
+    sushi = next(item for item in result["classificationResults"] if item["dishName"] == "三文鱼寿司")
+    assert sushi["classificationSource"] == "目录分类"
+    assert sushi["category"] == "寿司"
 
 
 def test_asset_library_merges_simplified_and_traditional_duplicate_folders(monkeypatch, tmp_path):

@@ -355,7 +355,7 @@ export type AssetLibraryReviewItem = {
 
 export type AssetLibraryClassificationItem = AssetLibraryReviewItem & {
   category: string;
-  classificationSource: "本地规则" | "人工规则" | "Qwen";
+  classificationSource: "本地规则" | "人工规则" | "素材库标签" | "目录分类" | "Qwen";
   reviewRequired: boolean;
 };
 
@@ -367,7 +367,7 @@ export type AssetLibraryPlan = {
   categoryCounts: Record<string, number>;
   classificationResults?: AssetLibraryClassificationItem[];
   reviewItems?: AssetLibraryReviewItem[];
-  classificationMode?: "qwen" | "local" | "local_fallback" | "manual_rules";
+  classificationMode?: "qwen" | "local" | "local_fallback" | "manual_rules" | "library_metadata" | "standardized_library" | "library_confirmed";
   classificationWarning?: string | null;
 };
 
