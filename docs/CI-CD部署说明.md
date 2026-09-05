@@ -1,8 +1,8 @@
 # GitHub Actions 验证与部署说明
 
-当前 `.github/workflows/ci-cd.yml` 使用 `workflow_dispatch`，不会因 `git push` 自动运行。需要远程验证或通过 GitHub Actions 部署 ECS 时，在仓库的 **Actions -> CI/CD -> Run workflow** 手动触发。
+当前 `.github/workflows/ci-cd.yml` 同时监听 `main` 分支的 `push` 与 `workflow_dispatch`。本地提交后执行 `git push origin main`，工作流会自动运行；也可以在仓库 **Actions -> CI/CD -> Run workflow** 手动触发。
 
-日常发布仍以 [手动部署说明](手动部署说明.md) 中的 `deploy_cloud.bat` 为准。
+日常发布以 CI/CD 为准：等待验证和部署均成功后再让同事刷新页面。只有在需要检查本机 SSH 链路或自动部署故障后的人工排查时，才使用 [手动部署说明](手动部署说明.md) 中的 `deploy_cloud.bat`；该脚本会再次 `git push` 后直接部署，因此不要与同一提交的运行中工作流并用。
 
 ## 工作流行为
 
