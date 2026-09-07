@@ -20,6 +20,7 @@ def test_canvas_routes_serve_react_page_only():
 
     root_page = client.get("/")
     assert root_page.status_code == 200
+    assert root_page.headers["cache-control"] == "no-cache, must-revalidate"
     assert_react_entry(root_page.text)
 
     react_page = client.get("/canvas-mvp")
@@ -149,6 +150,17 @@ def test_manual_asset_review_upload_route_preserves_folder_structure(monkeypatch
     assert response.status_code == 200
     assert response.json()["items"][0]["dishName"] == "三文鱼寿司"
     assert response.json()["items"][0]["imageCount"] == 1
+
+
+def test_manual_asset_review_managed_target_uses_persistent_output_root(monkeypatch, tmp_path):
+    managed_root = tmp_path / "standardized_asset_library"
+    monkeypatch.setattr(canvas_asset_library, "_MANAGED_LIBRARY_ROOT", managed_root)
+
+    response = TestClient(create_app()).post("/api/canvas/asset-library/manual-review/managed-target")
+
+    assert response.status_code == 200
+    assert Path(response.json()["root"]) == managed_root.resolve()
+    assert managed_root.is_dir()
 
 
 def test_asset_library_folder_upload_is_bound_to_draft_and_keeps_library_layout(monkeypatch, tmp_path):

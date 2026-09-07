@@ -133,6 +133,12 @@ export async function scanManualAssetLibraryUpload(files: File[]): Promise<Manua
   return parseResponse<ManualAssetReviewScan>(response);
 }
 
+export async function prepareManagedAssetLibraryTarget(): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/manual-review/managed-target`, { method: "POST" });
+  const payload = await parseResponse<{ root: string }>(response);
+  return payload.root;
+}
+
 export async function saveAssetLibraryRule(dishName: string, category: string, foodType?: "冷食" | "热食" | "混合/多温", visualSubjectType?: "菜品主体" | "手部" | "厨师上半身" | "手部+厨师上半身"): Promise<{ dishName: string; category: string; foodType?: "冷食" | "热食" | "混合/多温" | null; visualSubjectType?: "菜品主体" | "手部" | "厨师上半身" | "手部+厨师上半身" }> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/rules`, {
     method: "POST",

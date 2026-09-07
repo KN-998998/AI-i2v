@@ -86,7 +86,11 @@ def create_app() -> FastAPI:
         entry = STATIC_DIR / "canvas-app" / "index.html"
         if not entry.exists():
             raise HTTPException(status_code=503, detail="React 前端尚未构建，请先运行 start_dev.bat")
-        return FileResponse(str(entry), media_type="text/html")
+        return FileResponse(
+            str(entry),
+            media_type="text/html",
+            headers={"Cache-Control": "no-cache, must-revalidate"},
+        )
 
     @app.get("/")
     async def index() -> FileResponse:

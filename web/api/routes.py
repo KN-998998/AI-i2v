@@ -35,7 +35,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
-from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, manual_review_preview_path, manual_review_scan_response, manual_review_upload_directory, organize_manual_asset_library, save_category_rule, save_manual_review_state, scan_asset_classifications, scan_manual_asset_library
+from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, managed_asset_library_root, manual_review_preview_path, manual_review_scan_response, manual_review_upload_directory, organize_manual_asset_library, save_category_rule, save_manual_review_state, scan_asset_classifications, scan_manual_asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
@@ -378,6 +378,15 @@ async def create_manual_asset_review_upload(files: list[UploadFile] = File(...))
     except (OSError, ValueError) as exc:
         shutil.rmtree(upload_root, ignore_errors=True)
         raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/canvas/asset-library/manual-review/managed-target")
+def prepare_managed_asset_library_target() -> dict[str, str]:
+    """Create and return the persistent target directory for cloud clients."""
+    try:
+        return {"root": str(managed_asset_library_root())}
+    except OSError as exc:
+        raise _json_error("云端标准素材库目录创建失败", 500) from exc
 
 
 @router.get("/api/canvas/asset-library/manual-review/scans/{scan_id}")

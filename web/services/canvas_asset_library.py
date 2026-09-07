@@ -27,6 +27,7 @@ _ASSET_METADATA_FILENAME = "asset_metadata.json"
 _HOT_PREPARATION_KEYWORDS = ("火炙", "炙烧", "炙烤", "炙り", "炙")
 _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
 _MANUAL_REVIEW_ROOT = CANVAS_BACKGROUND_ROOT.parent / "asset_library_manual_review"
+_MANAGED_LIBRARY_ROOT = CANVAS_BACKGROUND_ROOT.parent / "standardized_asset_library"
 _RULES_LOCK = threading.RLock()
 
 _CATEGORY_KEYWORDS = {
@@ -564,6 +565,13 @@ def _manual_review_file(scan_id: str) -> Path:
 
 def manual_review_upload_directory() -> Path:
     return _MANUAL_REVIEW_ROOT / "uploads" / uuid.uuid4().hex
+
+
+def managed_asset_library_root() -> Path:
+    """Return the persistent, server-managed library root used by cloud clients."""
+    root = _MANAGED_LIBRARY_ROOT.resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
 
 
 def _manual_review_groups(asset_root: str) -> list[dict[str, Any]]:
