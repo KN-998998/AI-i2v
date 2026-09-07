@@ -47,7 +47,11 @@ if errorlevel 1 (
 
 echo [2/2] Deploying to ECS and waiting for the health check...
 ssh -i "%DEPLOY_KEY%" -p %DEPLOY_PORT% ^
+    -o IdentitiesOnly=yes ^
     -o BatchMode=yes ^
+    -o PreferredAuthentications=publickey ^
+    -o PasswordAuthentication=no ^
+    -o KbdInteractiveAuthentication=no ^
     -o ConnectTimeout=15 ^
     -o ServerAliveInterval=30 ^
     -o ServerAliveCountMax=20 ^
