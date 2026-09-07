@@ -56,6 +56,7 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$HOME/.ssh/short-video-deploy"
           chmod 600 "$HOME/.ssh/short-video-deploy"
           ssh-keygen -y -f "$HOME/.ssh/short-video-deploy" >/dev/null
+          ssh-keygen -lf "$HOME/.ssh/short-video-deploy"
       - name: Deploy
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
