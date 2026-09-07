@@ -37,12 +37,26 @@ for /f "delims=" %%S in ('git status --porcelain') do (
 )
 
 :push
-echo [1/2] Pushing committed main branch to GitHub...
-git push origin main
-if errorlevel 1 (
-    echo [ERROR] Git push failed. Commit and resolve any Git errors before deploying.
-    pause
-    exit /b 1
+set "AHEAD_COUNT="
+for /f "delims=" %%C in ('git rev-list --count origin/main..HEAD 2^>nul') do set "AHEAD_COUNT=%%C"
+if "%AHEAD_COUNT%"=="" (
+    echo [1/2] Remote tracking branch is unavailable. Pushing committed main branch to GitHub...
+    git push origin main
+    if errorlevel 1 (
+        echo [ERROR] Git push failed. Check the network or remote configuration before deploying.
+        pause
+        exit /b 1
+    )
+) else if "%AHEAD_COUNT%"=="0" (
+    echo [1/2] Local main is already on GitHub. Skipping redundant push.
+) else (
+    echo [1/2] Pushing %AHEAD_COUNT% committed local change^(s^) to GitHub...
+    git push origin main
+    if errorlevel 1 (
+        echo [ERROR] Git push failed. Check the network or remote configuration before deploying.
+        pause
+        exit /b 1
+    )
 )
 
 echo [2/2] Deploying to ECS and waiting for the health check...
