@@ -616,7 +616,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           food_type: mixed ? "混合/多温" : item.foodType === "冷食" ? "冷食" : "热食",
         } as typeof DEFAULT_PROMPT_CONFIG, item.visualSubjectType);
         const input = createWorkflowNode("input", inputId, { x: 24, y });
-        input.data = { ...input.data, assetId, title: item.dishName, dishName: item.dishName, sourceLibraryCategory: item.sourceCategory, sourceLibraryPath: item.sourcePath, dishCategory: item.dishCategory as typeof input.data.dishCategory, foodType: item.foodType, visualSubjectType: item.visualSubjectType, imageName: item.imageName, imagePreview: item.imagePreview, status: "已就绪" };
+        input.data = { ...input.data, assetId, title: item.dishName, dishName: item.dishName, sourceLibraryCategory: item.sourceCategory, dishCategory: item.dishCategory as typeof input.data.dishCategory, foodType: item.foodType, visualSubjectType: item.visualSubjectType, imageName: item.imageName, imagePreview: item.imagePreview, status: "已就绪" };
         const process = createWorkflowNode("image_process", processId, { x: 286, y });
         const visualSubjectType = normalizedVisualSubjectType(item.visualSubjectType);
         process.data = {
@@ -880,9 +880,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const migrated = migrateImageProcessNode(draft.nodes as WorkflowNode[], draft.edges);
     const normalizedCandidates = (draft.candidateClips ?? draft.timeline).map(normalizeTimelineClip);
     const strategyNodes = syncImageProcessStrategies(migrated.nodes, migrated.edges);
-    const normalizedNodes = strategyNodes.map(node => node.data.kind === "input" && !node.data.dishCategory
-        ? { ...node, data: { ...node.data, dishCategory: node.data.dishName ? inferDishCategory(node.data.dishName) : "正餐" } }
-        : node);
+    const normalizedNodes = strategyNodes.map(node => {
+      const portableData = node.data.kind === "input" && node.data.sourceLibraryPath
+        ? { ...node.data, sourceLibraryPath: undefined }
+        : node.data;
+      return portableData.kind === "input" && !portableData.dishCategory
+        ? { ...node, data: { ...portableData, dishCategory: portableData.dishName ? inferDishCategory(portableData.dishName) : "正餐" } }
+        : portableData === node.data ? node : { ...node, data: portableData };
+    });
     const nodes = syncGeneratorNodeStatuses(normalizedNodes, normalizedCandidates);
     const nodesChanged = nodes.some((node, index) => node !== migrated.nodes[index]);
     set({
@@ -912,7 +917,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const payload: DraftPayload = {
         activePanel: state.activePanel,
         nextNodeNumber: state.nextNodeNumber,
-        nodes: state.nodes.map(({ selected: _selected, measured: _measured, ...node }) => node),
+        nodes: state.nodes.map(({ selected: _selected, measured: _measured, ...node }) => node.data.kind === "input" && node.data.sourceLibraryPath
+          ? { ...node, data: { ...node.data, sourceLibraryPath: undefined } }
+          : node),
         edges: state.edges.map(({ selected: _selected, ...edge }) => edge),
         timeline: state.timeline,
         candidateClips: state.candidateClips,
@@ -923,7 +930,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         bgmName: state.bgmName,
         bgmUrl: state.bgmUrl,
         composeJob: state.composeJob,
-        assetLibraryPlan: state.assetLibraryPlan,
+        assetLibraryPlan: state.assetLibraryPlan
+          ? {
+            ...state.assetLibraryPlan,
+            assetRoot: "",
+            backgroundRoot: "",
+            selected: state.assetLibraryPlan.selected.map(item => ({ ...item, sourcePath: "" })),
+          }
+          : null,
       };
       const saved = await persistDraft(state.draftId, payload);
       set({ saving: false, lastSavedAt: (saved as DraftPayload & { updated_at?: string }).updated_at ?? new Date().toISOString() });

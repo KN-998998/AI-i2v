@@ -16,8 +16,9 @@ const STATE_STORAGE_KEY = `${STORAGE_KEY}:state`;
 const PAGE_SIZE = 24;
 
 function defaultTargetRoot(): string {
-  const hostname = window.location.hostname.toLowerCase();
-  return hostname === "127.0.0.1" || hostname === "localhost" ? "E:\\图片素材库" : "";
+  // A workstation path belongs to one operator only. Let each operator choose
+  // a local folder, or explicitly select the managed cloud library.
+  return "";
 }
 
 function defaultFoodType(category: string): FoodType | "" {

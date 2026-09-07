@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { createAssetLibraryPlan, fetchAssetLibraryClassifications, saveAssetLibraryRule, uploadAssetLibraryFolder } from "../api";
+import { createAssetLibraryPlan, saveAssetLibraryRule, uploadAssetLibraryFolder } from "../api";
 import { VISUAL_SUBJECT_TYPE_OPTIONS, type AssetLibraryClassificationItem, type AssetLibraryPlan, type AssetLibraryReviewItem, type VisualSubjectType } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
@@ -79,8 +79,6 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   }, []);
   useEffect(() => {
     if (!plan) return;
-    setAssetRoot(current => current || plan.assetRoot);
-    setBackgroundRoot(current => current || plan.backgroundRoot);
     setCounts(current => Object.values(current).some(value => value > 0) ? normalizeCategoryCounts(current) : normalizeCategoryCounts(plan.categoryCounts));
     setReviewCategories(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
     setReviewFoodTypes(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.suggestedCategory ?? item.sourceCategory)])));
@@ -88,17 +86,6 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     setPendingRuleCategories(current => ({ ...current, ...Object.fromEntries((plan.classificationResults ?? []).map(item => [item.dishName, item.category])) }));
     setPendingRuleFoodTypes(current => ({ ...current, ...Object.fromEntries((plan.classificationResults ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.category)])) }));
     setPendingRuleVisualSubjects(current => ({ ...current, ...Object.fromEntries((plan.classificationResults ?? []).map(item => [item.dishName, item.visualSubjectType ?? "菜品主体"])) }));
-    if (!plan.classificationResults?.length && plan.assetRoot) {
-      let active = true;
-      fetchAssetLibraryClassifications(plan.assetRoot).then(result => {
-        if (!active || !result.classificationResults?.length) return;
-        setAssetLibraryPlan({ ...plan, ...result });
-        void saveDraft();
-      }).catch(() => {
-        // Keep the persisted plan visible if the original asset folder is unavailable.
-      });
-      return () => { active = false; };
-    }
   }, [plan]);
 
   const updateCount = (category: string, value: number) => setCounts(current => ({ ...current, [category]: Math.max(0, Math.min(50, Number.isFinite(value) ? Math.round(value) : 0)) }));
@@ -132,16 +119,24 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     setBusy(true);
     try {
       const next = await createAssetLibraryPlan(draftId, assetRoot.trim(), backgroundRoot.trim(), normalizedCounts);
+      // The selected images have already been copied into this draft. Keep only
+      // portable plan data so another operator never inherits a local disk path.
+      const portablePlan: AssetLibraryPlan = {
+        ...next,
+        assetRoot: "",
+        backgroundRoot: "",
+        selected: next.selected.map(item => ({ ...item, sourcePath: "" })),
+      };
       setCounts(normalizedCounts);
-      setAssetLibraryPlan(next);
-      setReviewCategories(Object.fromEntries((next.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
-      setReviewFoodTypes(Object.fromEntries((next.reviewItems ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.suggestedCategory ?? item.sourceCategory)])));
-      setReviewVisualSubjects(Object.fromEntries((next.reviewItems ?? []).map(item => [item.dishName, item.visualSubjectType ?? "菜品主体"])));
+      setAssetLibraryPlan(portablePlan);
+      setReviewCategories(Object.fromEntries((portablePlan.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
+      setReviewFoodTypes(Object.fromEntries((portablePlan.reviewItems ?? []).map(item => [item.dishName, item.foodType ?? defaultFoodType(item.suggestedCategory ?? item.sourceCategory)])));
+      setReviewVisualSubjects(Object.fromEntries((portablePlan.reviewItems ?? []).map(item => [item.dishName, item.visualSubjectType ?? "菜品主体"])));
       setActiveReviewItem(null);
       setRulesChanged(false);
       setCreatedGeneratorIds([]);
       await saveDraft();
-      onToast(`已抽取 ${next.selected.length} 个待确认方案`);
+      onToast(`已抽取 ${portablePlan.selected.length} 个待确认方案`);
     } catch (error) {
       onToast(error instanceof Error ? error.message : "素材库扫描失败");
     } finally {
