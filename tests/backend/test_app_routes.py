@@ -151,6 +151,27 @@ def test_manual_asset_review_upload_route_preserves_folder_structure(monkeypatch
     assert response.json()["items"][0]["imageCount"] == 1
 
 
+def test_asset_library_folder_upload_is_bound_to_draft_and_keeps_library_layout(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "canvas-drafts")
+    response = TestClient(create_app()).post(
+        "/api/canvas/asset-library/uploads",
+        params={"draft_id": "default"},
+        data={"kind": "assets"},
+        files=[
+            ("files", ("图片素材库/寿司/三文鱼寿司/dish.jpg", b"jpeg-bytes", "image/jpeg")),
+            ("files", ("图片素材库/asset_metadata.json", '{"寿司/三文鱼寿司":{"category":"寿司","foodType":"冷食","visualSubjectType":"菜品主体"}}'.encode("utf-8"), "application/json")),
+        ],
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    root = Path(payload["root"])
+    assert payload["fileCount"] == 1
+    assert root == tmp_path / "canvas-drafts" / "default" / "asset_library_uploads" / "assets" / root.name
+    assert (root / "寿司" / "三文鱼寿司" / "dish.jpg").read_bytes() == b"jpeg-bytes"
+    assert (root / "asset_metadata.json").is_file()
+
+
 def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
     test_root = tmp_path / "canvas-draft"
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", test_root)

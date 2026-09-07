@@ -8,7 +8,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from fastapi import UploadFile
 
@@ -23,6 +23,11 @@ _ALLOWED_EXTENSIONS = {
     "audio": {".mp3", ".wav", ".m4a", ".aac", ".ogg"},
 }
 _BACKGROUND_EXTENSIONS = _ALLOWED_EXTENSIONS["image"]
+_ASSET_LIBRARY_FOLDER_KINDS = {
+    "assets": _ALLOWED_EXTENSIONS["image"] | {".json"},
+    "backgrounds": _BACKGROUND_EXTENSIONS,
+}
+_ASSET_LIBRARY_METADATA_NAME = "asset_metadata.json"
 _MIXED_MOJIBAKE_REPLACEMENTS = {
     "Â·": "·",
     "â€“": "–",
@@ -245,6 +250,79 @@ async def save_upload(draft_id: str, upload: UploadFile, kind: str) -> dict[str,
         "size": total,
         "content_type": upload.content_type or "application/octet-stream",
     }
+
+
+def _folder_upload_destination(root: Path, filename: str) -> Path | None:
+    normalized = str(filename or "").replace("\\", "/")
+    parts = Path(normalized).parts
+    if not normalized or Path(normalized).is_absolute() or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("上传的文件夹结构无效")
+    destination = (root / Path(*parts)).resolve()
+    if root.resolve() not in destination.parents:
+        raise ValueError("上传文件路径无效")
+    return destination
+
+
+def _folder_upload_names(uploads: Sequence[UploadFile]) -> list[str]:
+    """Normalize browser folder paths and remove the selected folder wrapper."""
+    names = [str(upload.filename or "").replace("\\", "/") for upload in uploads]
+    path_parts = [Path(name).parts for name in names]
+    if not names or any(not name for name in names):
+        raise ValueError("上传的文件夹结构无效")
+    # Chromium's webkitRelativePath starts with the folder selected by the user.
+    # Do not preserve that implementation detail: the returned root must contain
+    # asset_metadata.json and category folders directly for the existing scanner.
+    first_parts = {parts[0] for parts in path_parts if parts}
+    if len(first_parts) == 1 and all(len(parts) > 1 for parts in path_parts):
+        return [str(Path(*parts[1:])) for parts in path_parts]
+    return names
+
+
+async def save_asset_library_folder_upload(draft_id: str, kind: str, uploads: Sequence[UploadFile]) -> dict[str, Any]:
+    """Persist a browser-selected asset/background folder for cloud batch planning."""
+    extensions = _ASSET_LIBRARY_FOLDER_KINDS.get(kind)
+    if extensions is None:
+        raise ValueError("素材库上传类型不受支持")
+    if not uploads:
+        raise ValueError("请选择至少一个文件")
+
+    root = draft_directory(draft_id) / "asset_library_uploads" / kind / uuid.uuid4().hex
+    file_count = 0
+    total_size = 0
+    try:
+        for upload, upload_name in zip(uploads, _folder_upload_names(uploads), strict=True):
+            destination = _folder_upload_destination(root, upload_name)
+            suffix = destination.suffix.lower()
+            is_metadata = kind == "assets" and destination.name.casefold() == _ASSET_LIBRARY_METADATA_NAME
+            if suffix not in extensions or (suffix == ".json" and not is_metadata):
+                await upload.close()
+                continue
+
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            file_size = 0
+            try:
+                with destination.open("wb") as stream:
+                    while chunk := await upload.read(_CHUNK_SIZE):
+                        file_size += len(chunk)
+                        if file_size > MAX_UPLOAD_SIZE:
+                            raise ValueError(f"单个文件不能超过 {MAX_UPLOAD_SIZE // (1024 * 1024)} MB")
+                        stream.write(chunk)
+            except Exception:
+                destination.unlink(missing_ok=True)
+                raise
+            finally:
+                await upload.close()
+            if suffix in _BACKGROUND_EXTENSIONS:
+                file_count += 1
+                total_size += file_size
+        if file_count == 0:
+            raise ValueError("文件夹中没有可用的 JPG、PNG、WEBP 或 GIF 图片")
+    except Exception:
+        import shutil
+        shutil.rmtree(root, ignore_errors=True)
+        raise
+
+    return {"root": str(root), "fileCount": file_count, "totalSize": total_size, "kind": kind}
 
 
 def uploaded_file(draft_id: str, stored_name: str) -> Path | None:

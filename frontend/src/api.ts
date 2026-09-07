@@ -107,6 +107,14 @@ export async function createAssetLibraryPlan(draftId: string, assetRoot: string,
   return parseResponse<AssetLibraryPlan>(response);
 }
 
+export async function uploadAssetLibraryFolder(draftId: string, kind: "assets" | "backgrounds", files: File[]): Promise<{ root: string; fileCount: number; totalSize: number; kind: string }> {
+  const body = new FormData();
+  body.append("kind", kind);
+  files.forEach(file => body.append("files", file, (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name));
+  const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/uploads?draft_id=${encodeURIComponent(draftId)}`, { method: "POST", body });
+  return parseResponse<{ root: string; fileCount: number; totalSize: number; kind: string }>(response);
+}
+
 export async function pickAssetLibraryFolder(title: string, signal?: AbortSignal): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/asset-library/pick-folder`, {
     method: "POST",

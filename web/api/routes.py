@@ -39,7 +39,7 @@ from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
-from web.services.canvas_state import background_file, list_background_files, load_draft, save_background_upload, save_draft, save_upload, uploaded_file
+from web.services.canvas_state import background_file, list_background_files, load_draft, save_asset_library_folder_upload, save_background_upload, save_draft, save_upload, uploaded_file
 
 router = APIRouter()
 CANVAS_CLIP_PREVIEW_ROOT = CANVAS_CLIP_ROOT / ".previews"
@@ -312,6 +312,15 @@ def create_asset_library_plan(draft_id: str, payload: dict[str, Any] | None = No
             str(request.get("background_root") or ""),
             counts,
         )
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/canvas/asset-library/uploads")
+async def upload_asset_library_folder(draft_id: str, kind: str = Form(...), files: list[UploadFile] = File(...)) -> dict[str, Any]:
+    """Receive a browser-selected local folder for the cloud batch-planning workflow."""
+    try:
+        return await save_asset_library_folder_upload(draft_id, kind, files)
     except (OSError, ValueError) as exc:
         raise _json_error(str(exc), 400) from exc
 
