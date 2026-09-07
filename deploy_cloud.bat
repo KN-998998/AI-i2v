@@ -71,7 +71,7 @@ ssh -i "%DEPLOY_KEY%" -p %DEPLOY_PORT% ^
     -o ServerAliveCountMax=20 ^
     -o StrictHostKeyChecking=accept-new ^
     "%DEPLOY_USER%@%DEPLOY_HOST%" ^
-    "cd '%DEPLOY_PATH%' && test -f .env && for attempt in 1 2 3; do git -c http.connectTimeout=20 -c http.lowSpeedLimit=1 -c http.lowSpeedTime=300 pull --ff-only origin main && break; test $attempt -eq 3 && exit 1; sleep 10; done && bash scripts/deploy_server.sh"
+    "cd '%DEPLOY_PATH%' && for attempt in 1 2 3; do git -c http.connectTimeout=20 -c http.lowSpeedLimit=1 -c http.lowSpeedTime=300 pull --ff-only origin main && break; test $attempt -eq 3 && exit 1; sleep 10; done && bash scripts/deploy_server.sh"
 if errorlevel 1 (
     echo [ERROR] ECS deployment failed. The server output above contains the cause.
     pause
