@@ -14,6 +14,7 @@ from pipeline.config import CANVAS_CLIP_ROOT, KLING_ACCESS_KEY, KLING_API_KEY, K
 from web.services import canvas_state
 from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import analyze_video, infer_category
+from web.services.task_contract import is_recoverable, task_metadata, update_task
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _JOB_LOCK = threading.RLock()
@@ -55,7 +56,14 @@ def get_generation_job(draft_id: str, job_id: str) -> dict[str, Any] | None:
 
 
 def _update_job(draft_id: str, job: dict[str, Any], **changes: Any) -> None:
-    job.update(changes, updated_at=_now())
+    status = changes.pop("status", None)
+    stage = changes.pop("stage", None)
+    if status is None and changes.get("task_id"):
+        status = "polling"
+    if status == "running" and job.get("task_id"):
+        status = "polling"
+    job.setdefault("task_type", "kling_generation")
+    update_task(job, status=status, stage=stage, **changes)
     with _JOB_LOCK:
         _save_job(draft_id, job)
 
@@ -350,7 +358,9 @@ def _complete_generation_job(
             raise RuntimeError("Kling 任务完成但未返回视频地址")
         from pipeline.kling import download_video
 
+        _update_job(draft_id, job, status="downloading", stage="下载 Kling 视频到本地片段库")
         download_video(session, video_url, str(output_path))
+    _update_job(draft_id, job, status="analyzing", stage="分析视频质量并写入片段库")
     clip = _build_clip(job, output_path, dish, category)
     _append_manifest({**clip, "videoTaskId": job.get("task_id"), "prompt": prompt})
     _update_job(draft_id, job, status="done", stage="已下载到本地片段库", clip=clip, output_filename=output_path.name)
@@ -403,7 +413,7 @@ def recover_generation_jobs() -> int:
     """Schedule unfinished Kling tasks once during each backend process lifetime."""
     scheduled = 0
     for draft_id, job in _iter_generation_jobs():
-        if job.get("status") not in {"queued", "running"}:
+        if not is_recoverable(job.get("status")):
             continue
         job_id = str(job.get("job_id") or "")
         key = f"{draft_id}:{job_id}"
@@ -541,6 +551,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
         "asset_id": asset_id,
         "clip_version": _next_clip_version(asset_id),
     }
+    job.update(task_metadata("kling_generation"))
     with _JOB_LOCK:
         _save_job(draft_id, job)
         _persist_generator_status(draft_id, node_id, "生成中")

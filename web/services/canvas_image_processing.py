@@ -24,6 +24,7 @@ from pipeline.config import (
     TENCENTCLOUD_SECRET_KEY,
 )
 from web.services.canvas_quality import analyze_image
+from web.services.task_contract import is_recoverable, task_metadata, update_task
 from web.services.canvas_state import background_file, draft_directory, generated_file_path, load_draft, save_draft, uploaded_file
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -50,7 +51,10 @@ def _save_job(draft_id: str, job: dict[str, Any]) -> None:
 
 
 def _update_job(draft_id: str, job: dict[str, Any], **changes: Any) -> None:
-    job.update(changes, updated_at=_now())
+    status = changes.pop("status", None)
+    stage = changes.pop("stage", None)
+    job.setdefault("task_type", "image_processing")
+    update_task(job, status=status, stage=stage, **changes)
     with _JOB_LOCK:
         _save_job(draft_id, job)
 
@@ -313,6 +317,7 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
         "visualSubjectType": visual_subject_type,
         "processingMode": "matting_composite" if visual_subject_type == "菜品主体" else "preserve_original",
     }
+    job.update(task_metadata("image_processing"))
     with _JOB_LOCK:
         _save_job(draft_id, job)
 
@@ -323,6 +328,7 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
             _update_job(draft_id, job, status="running", stage="准备图片处理")
             result_path, cutout_name, stage = _process_source_image(draft_id, source_image, data, input_data)
             _update_job(draft_id, job, stage=stage)
+            _update_job(draft_id, job, status="analyzing", stage="分析处理后的首帧质量")
             analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
             result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
             _persist_node_status(
@@ -407,7 +413,7 @@ def recover_image_processing_jobs() -> int:
     """Resume queued/running image processing jobs once per backend process."""
     scheduled = 0
     for draft_id, job in _iter_image_processing_jobs():
-        if job.get("status") not in {"queued", "running"}:
+        if not is_recoverable(job.get("status")):
             continue
         key = f"{draft_id}:{job.get('job_id')}"
         with _RECOVERY_LOCK:

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getCanvasComposeStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
+import { getCanvasComposeStatus, isActiveTaskStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
 import { resolveDishCategory, type ComposeWorkspace, type TimelineClip } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
@@ -57,7 +57,7 @@ export function BatchComposePage({ onToast }: Props) {
     if (!report.ok) throw new Error(report.errors.map(item => item.message).join("；"));
     let job = await startCanvasCompose(draftId, workspaceId);
     setWorkspaceJob(workspaceId, job);
-    while (job.status === "running") {
+    while (isActiveTaskStatus(job.status)) {
       await new Promise(resolve => window.setTimeout(resolve, 800));
       job = await getCanvasComposeStatus(draftId, job.job_id);
       setWorkspaceJob(workspaceId, job);

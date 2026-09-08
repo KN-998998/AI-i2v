@@ -217,6 +217,9 @@ export type ComposeJob = {
   timeline_count: number;
   output_url: string | null;
   error: string | null;
+  stage?: string;
+  phase?: string;
+  events?: TaskEvent[];
   workspace_id?: string;
   include_sound?: boolean;
   voice_timings?: Record<string, CaptionTiming>;
@@ -294,12 +297,17 @@ export type MediaAnalysis = {
   semanticReview?: string;
 };
 
+export type TaskStatus = "queued" | "running" | "polling" | "downloading" | "analyzing" | "retrying" | "done" | "error";
+export type TaskEvent = { at: string; status: TaskStatus; stage?: string };
+
 export type GenerationJob = {
   job_id: string;
   draft_id?: string;
   node_id: string;
-  status: "queued" | "running" | "done" | "error";
+  status: TaskStatus;
   stage?: string;
+  phase?: string;
+  events?: TaskEvent[];
   task_id?: string | null;
   clip?: TimelineClip | null;
   error?: string | null;
@@ -309,8 +317,10 @@ export type ImageProcessingJob = {
   job_id: string;
   draft_id?: string;
   node_id: string;
-  status: "queued" | "running" | "done" | "error";
+  status: TaskStatus;
   stage?: string;
+  phase?: string;
+  events?: TaskEvent[];
   result_url?: string | null;
   result_name?: string | null;
   cutout_name?: string | null;

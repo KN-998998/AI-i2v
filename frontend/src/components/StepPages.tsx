@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getCanvasComposeStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
+import { getCanvasComposeStatus, isActiveTaskStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
 import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, nodeCatalog, repairCaptionVoiceSegments, totalTimelineDuration, type ComposeJob, type NodeKind, type TimelineClip, type WorkflowNode } from "../model";
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
@@ -312,7 +312,7 @@ function SoundComposePanel({ onToast }: StepPageProps) {
       if (!report.ok) throw new Error(report.errors.map(item => item.message).join("；"));
       let job = await startCanvasCompose(draftId, activeWorkspaceId ?? undefined, true);
       setWorkspaceJob(activeWorkspaceId ?? "compose_1", job);
-      while (job.status === "running") {
+      while (isActiveTaskStatus(job.status)) {
         await new Promise(resolve => window.setTimeout(resolve, 800));
         job = await getCanvasComposeStatus(draftId, job.job_id);
         setWorkspaceJob(activeWorkspaceId ?? "compose_1", job);

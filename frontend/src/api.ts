@@ -204,7 +204,7 @@ export async function getCanvasImageProcessingStatus(draftId: string, jobId: str
 
 export async function waitForCanvasImageProcessing(draftId: string, job: ImageProcessingJob): Promise<ImageProcessingJob> {
   let current = job;
-  for (let attempt = 0; attempt < 120 && (current.status === "queued" || current.status === "running"); attempt += 1) {
+  for (let attempt = 0; attempt < 120 && isActiveTaskStatus(current.status); attempt += 1) {
     await new Promise(resolve => window.setTimeout(resolve, 1000));
     current = await getCanvasImageProcessingStatus(draftId, job.job_id);
   }
@@ -235,7 +235,7 @@ export async function getCanvasGenerationStatus(draftId: string, jobId: string):
 
 export async function waitForCanvasGeneration(draftId: string, job: GenerationJob): Promise<GenerationJob> {
   let current = job;
-  for (let attempt = 0; attempt < 180 && (current.status === "queued" || current.status === "running"); attempt += 1) {
+  for (let attempt = 0; attempt < 180 && isActiveTaskStatus(current.status); attempt += 1) {
     await new Promise(resolve => window.setTimeout(resolve, 2000));
     current = await getCanvasGenerationStatus(draftId, job.job_id);
   }
@@ -263,4 +263,8 @@ export async function startCanvasCompose(draftId: string, workspaceId?: string, 
 export async function getCanvasComposeStatus(draftId: string, jobId: string): Promise<ComposeJob> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/compose/${encodeURIComponent(jobId)}`, { cache: "no-store" });
   return parseResponse<ComposeJob>(response);
+}
+
+export function isActiveTaskStatus(status: string): boolean {
+  return ["queued", "running", "polling", "downloading", "analyzing", "retrying"].includes(status);
 }

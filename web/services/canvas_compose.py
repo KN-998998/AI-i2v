@@ -13,6 +13,7 @@ from typing import Any
 from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT
 from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import preflight_draft
+from web.services.task_contract import is_recoverable, task_metadata, update_task
 
 _JOB_ID_RE = r"^[0-9a-f]{32}$"
 _JOB_LOCK = threading.RLock()
@@ -38,7 +39,10 @@ def _save_job(draft_id: str, job: dict[str, Any]) -> None:
 
 
 def _update_job(draft_id: str, job: dict[str, Any], **changes: Any) -> None:
-    job.update(changes, updated_at=_now())
+    status = changes.pop("status", None)
+    stage = changes.pop("stage", None)
+    job.setdefault("task_type", "video_composition")
+    update_task(job, status=status, stage=stage, **changes)
     with _JOB_LOCK:
         _save_job(draft_id, job)
 
@@ -267,7 +271,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
     job = {
         "job_id": job_id,
         "draft_id": draft_id,
-        "status": "running",
+        "status": "queued",
         "timeline_count": len(prepared),
         "created_at": _now(),
         "updated_at": _now(),
@@ -279,6 +283,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
         "timeline": [dict(clip) for clip, _source in prepared],
         "sound": dict(_sound_node(draft, workspace_id)),
     }
+    job.update(task_metadata("video_composition"))
     with _JOB_LOCK:
         _save_job(draft_id, job)
     _persist_workspace_job(draft_id, job)
@@ -288,6 +293,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
         output_dir.mkdir(parents=True, exist_ok=True)
         temporary_paths: list[str] = []
         try:
+            _update_job(draft_id, job, status="running", stage="准备片段与合成参数")
             from pipeline.video_render import concat_clips, trim_clip
 
             trimmed_paths = []
@@ -343,19 +349,17 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                         save_draft(draft_id, latest_draft)
             for path in temporary_paths:
                 Path(path).unlink(missing_ok=True)
-            job.update({
-                "status": "done",
-                "updated_at": _now(),
-                "output_url": f"/api/canvas/drafts/{draft_id}/compose/{job_id}/file",
-                "voice_timings": {
+            _update_job(draft_id, job, status="done",
+                output_url=f"/api/canvas/drafts/{draft_id}/compose/{job_id}/file",
+                voice_timings={
                     voice_id: {"startSeconds": round(start, 3), "endSeconds": round(end, 3)}
                     for voice_id, (start, end) in voice_timings.items()
                 },
-            })
+            )
         except Exception as exc:
             for path in temporary_paths:
                 Path(path).unlink(missing_ok=True)
-            job.update({"status": "error", "updated_at": _now(), "error": str(exc)})
+            _update_job(draft_id, job, status="error", error=str(exc))
         with _JOB_LOCK:
             _save_job(draft_id, job)
         _persist_workspace_job(draft_id, job)
@@ -412,7 +416,7 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / ("canvas_final.mp4" if job.get("include_sound") else "canvas_composed.mp4")
         if output_path.is_file():
-            job.update({"status": "done", "updated_at": _now(), "output_url": f"/api/canvas/drafts/{draft_id}/compose/{job['job_id']}/file"})
+            _update_job(draft_id, job, status="done", output_url=f"/api/canvas/drafts/{draft_id}/compose/{job['job_id']}/file")
             with _JOB_LOCK:
                 _save_job(draft_id, job)
             _persist_workspace_job(draft_id, job)
@@ -466,16 +470,14 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
 
         for path in temporary_paths:
             Path(path).unlink(missing_ok=True)
-        job.update({
-            "status": "done",
-            "updated_at": _now(),
-            "output_url": f"/api/canvas/drafts/{draft_id}/compose/{job['job_id']}/file",
-            "voice_timings": {voice_id: {"startSeconds": round(start, 3), "endSeconds": round(end, 3)} for voice_id, (start, end) in voice_timings.items()},
-        })
+        _update_job(draft_id, job, status="done",
+            output_url=f"/api/canvas/drafts/{draft_id}/compose/{job['job_id']}/file",
+            voice_timings={voice_id: {"startSeconds": round(start, 3), "endSeconds": round(end, 3)} for voice_id, (start, end) in voice_timings.items()},
+        )
     except Exception as exc:
         for path in temporary_paths:
             Path(path).unlink(missing_ok=True)
-        job.update({"status": "error", "updated_at": _now(), "error": str(exc)})
+        _update_job(draft_id, job, status="error", error=str(exc))
     with _JOB_LOCK:
         _save_job(draft_id, job)
     _persist_workspace_job(draft_id, job)
@@ -485,7 +487,7 @@ def recover_compose_jobs() -> int:
     """Resume queued/running composition jobs once per backend process."""
     scheduled = 0
     for draft_id, job in _iter_compose_jobs():
-        if job.get("status") not in {"queued", "running"}:
+        if not is_recoverable(job.get("status")):
             continue
         key = f"{draft_id}:{job.get('job_id')}"
         with _RECOVERY_LOCK:
