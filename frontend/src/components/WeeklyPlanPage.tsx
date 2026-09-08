@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { createWeeklyPlan, fetchWeeklyPlans, updateWeeklyPlanDay, type WeeklyDailyPlan, type WeeklyPlan } from "../api";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { createWeeklyPlan, fetchWeeklyPlans, updateWeeklyPlanDay, uploadAssetLibraryFolder, type WeeklyDailyPlan, type WeeklyPlan } from "../api";
 import { DRAFT_ID_STORAGE_KEY } from "../draftIdentity";
 import { DISH_CATEGORY_OPTIONS } from "../model";
 import { navigate } from "../router";
@@ -33,6 +33,10 @@ export function WeeklyPlanPage({ onToast }: Props) {
   const [form, setForm] = useState<DailyForm>(defaultForm);
   const [manualCounts, setManualCounts] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
+  const [folderUploadSummary, setFolderUploadSummary] = useState<{ asset?: string; background?: string }>({});
+  const assetFolderInputRef = useRef<HTMLInputElement>(null);
+  const backgroundFolderInputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<DailyForm>(defaultForm);
 
@@ -44,6 +48,34 @@ export function WeeklyPlanPage({ onToast }: Props) {
     catch (error) { onToast(error instanceof Error ? error.message : "周计划加载失败"); }
   };
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    for (const input of [assetFolderInputRef.current, backgroundFolderInputRef.current]) {
+      input?.setAttribute("webkitdirectory", "");
+      input?.setAttribute("directory", "");
+    }
+  }, []);
+
+  const uploadFolder = async (kind: "asset" | "background", event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    setFolderBusy(kind);
+    try {
+      const result = await uploadAssetLibraryFolder(draftId, kind === "asset" ? "assets" : "backgrounds", files);
+      if (kind === "asset") setAssetRoot(result.root);
+      else setBackgroundRoot(result.root);
+      const size = result.totalSize >= 1024 * 1024
+        ? `${(result.totalSize / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.max(1, Math.ceil(result.totalSize / 1024))} KB`;
+      const summary = `已上传 ${result.fileCount} 个文件（${size}）`;
+      setFolderUploadSummary(current => ({ ...current, [kind]: summary }));
+      onToast(`${kind === "asset" ? "菜品" : "背景"}素材库${summary}`);
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "文件夹上传失败");
+    } finally {
+      setFolderBusy(null);
+    }
+  };
 
   const create = async () => {
     if (!assetRoot.trim() || !backgroundRoot.trim()) return onToast("请填写菜品素材库和背景素材库路径");
@@ -91,8 +123,8 @@ export function WeeklyPlanPage({ onToast }: Props) {
         <label className="field"><span>开始日期</span><input className="input" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></label>
         <label className="field"><span>持续天数</span><input className="input" type="number" min="1" max="14" value={durationDays} onChange={event => setDurationDays(Number(event.target.value))} /><small className="muted">计划覆盖 {durationDays} 天，其他日期不会自动生成</small></label>
         <label className="field"><span>每天执行时间</span><input className="input" type="time" value={runAt} onChange={event => setRunAt(event.target.value)} /></label>
-        <label className="field"><span>菜品素材库路径</span><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="ECS 挂载目录或已上传素材目录" /></label>
-        <label className="field"><span>背景素材库路径</span><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="ECS 挂载目录或已上传背景目录" /></label>
+        <label className="field"><span>菜品素材库路径</span><div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="上传后自动填写；或填写 ECS 挂载目录" /><button type="button" className="btn" disabled={folderBusy !== null || busy} onClick={() => assetFolderInputRef.current?.click()}>{folderBusy === "asset" ? "上传中..." : "上传本机文件夹"}</button></div><input ref={assetFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("asset", event)} /><small className="muted">支持 JPG、JPEG、PNG、WEBP、GIF；单个文件不超过 50 MB。{folderUploadSummary.asset ? ` ${folderUploadSummary.asset}` : ""}</small></label>
+        <label className="field"><span>背景素材库路径</span><div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="上传后自动填写；或填写 ECS 挂载目录" /><button type="button" className="btn" disabled={folderBusy !== null || busy} onClick={() => backgroundFolderInputRef.current?.click()}>{folderBusy === "background" ? "上传中..." : "上传本机文件夹"}</button></div><input ref={backgroundFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("background", event)} /><small className="muted">支持 JPG、JPEG、PNG、WEBP、GIF；单个文件不超过 50 MB。{folderUploadSummary.background ? ` ${folderUploadSummary.background}` : ""}</small></label>
         <label className="field"><span>候选片段 / 天</span><input className="input" type="number" min="1" max="80" value={form.candidate_count} onChange={event => setForm(value => ({ ...value, candidate_count: Number(event.target.value) }))} /></label>
         <label className="field"><span>成片数 / 天</span><input className="input" type="number" min="1" max="30" value={form.video_count} onChange={event => setForm(value => ({ ...value, video_count: Number(event.target.value) }))} /></label>
         <label className="field"><span>每条成片片段数</span><input className="input" type="number" min="1" max="8" value={form.clips_per_video} onChange={event => setForm(value => ({ ...value, clips_per_video: Number(event.target.value) }))} /></label>
