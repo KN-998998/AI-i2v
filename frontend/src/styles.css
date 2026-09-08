@@ -354,6 +354,7 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
 .field { display: block; margin: 13px 0; color: var(--muted); font-size: 11px; }
 .field > span { display: block; margin-bottom: 6px; }
 .input { width: 100%; border: 1px solid rgba(123,216,208,.18); border-radius: 6px; padding: 8px 9px; outline: 0; color: #f2f4f5; background: #142023; }
+.input:read-only { color: var(--muted); background: rgba(20,32,35,.62); cursor: default; }
 .input:focus { border-color: var(--cyan); }
 .textarea { min-height: 72px; resize: vertical; }
 .overlay-text-input { min-height: 96px; }

@@ -26,6 +26,10 @@ function rememberPath(key: string, value: string): void {
   }
 }
 
+function isUploadedFolderRoot(value: string): boolean {
+  return value.includes("/asset_library_uploads/") || value.includes("\\asset_library_uploads\\");
+}
+
 function defaultFoodType(category: string): "冷食" | "热食" | "混合/多温" | "" {
   if (category === "套餐") return "混合/多温";
   return ["甜品", "水果"].includes(category) ? "冷食" : "";
@@ -261,13 +265,13 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     <div className="field-grid asset-library-paths">
       <label className="field">
         <span>菜品素材库路径</span>
-        <div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="云端上传后自动填写；或填写 ECS 服务器路径" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => assetFolderInputRef.current?.click()}>{folderBusy === "asset" ? "上传中..." : "上传本机文件夹"}</button></div>
+        <div className="asset-path-control"><input className="input" readOnly={isUploadedFolderRoot(assetRoot)} value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="云端上传后自动填写；或填写 ECS 服务器路径" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => assetFolderInputRef.current?.click()}>{folderBusy === "asset" ? "上传中..." : "上传本机文件夹"}</button></div>
         <input ref={assetFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("asset", event)} />
         <small className="muted">支持 JPG、JPEG、PNG、WEBP、GIF；可同时上传根目录的 asset_metadata.json。单个文件不超过 50 MB。{folderUploadSummary.asset ? ` ${folderUploadSummary.asset}` : ""}</small>
       </label>
       <label className="field">
         <span>背景素材库路径</span>
-        <div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="云端上传后自动填写；或填写 ECS 服务器路径" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => backgroundFolderInputRef.current?.click()}>{folderBusy === "background" ? "上传中..." : "上传本机文件夹"}</button></div>
+        <div className="asset-path-control"><input className="input" readOnly={isUploadedFolderRoot(backgroundRoot)} value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="云端上传后自动填写；或填写 ECS 服务器路径" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => backgroundFolderInputRef.current?.click()}>{folderBusy === "background" ? "上传中..." : "上传本机文件夹"}</button></div>
         <input ref={backgroundFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("background", event)} />
         <small className="muted">支持 JPG、JPEG、PNG、WEBP、GIF。单个文件不超过 50 MB。{folderUploadSummary.background ? ` ${folderUploadSummary.background}` : ""}</small>
       </label>
