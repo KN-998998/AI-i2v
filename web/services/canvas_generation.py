@@ -14,7 +14,7 @@ from pipeline.config import CANVAS_CLIP_ROOT, KLING_ACCESS_KEY, KLING_API_KEY, K
 from web.services import canvas_state
 from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import analyze_video, infer_category
-from web.services.task_contract import is_recoverable, task_metadata, update_task
+from web.services.task_contract import is_recoverable, retry_delay_seconds, retry_plan, task_metadata, update_task
 
 _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _JOB_LOCK = threading.RLock()
@@ -367,6 +367,68 @@ def _complete_generation_job(
     _persist_generated_clip(draft_id, str(job.get("node_id") or ""), clip)
 
 
+def _retry_download_or_analysis(
+    draft_id: str,
+    job: dict[str, Any],
+    video_url: str | None,
+    session: Any,
+    dish: str,
+    category: str,
+    duration: int,
+    prompt: str,
+) -> bool:
+    plan = retry_plan(job)
+    if plan is None:
+        return False
+    update_task(job, status="retrying", stage=f"下载或分析失败，{plan['delay_seconds']} 秒后第 {plan['retry_count']} 次重试", retry_count=plan["retry_count"], next_retry_at=plan["next_retry_at"])
+    _save_job(draft_id, job)
+    threading.Timer(
+        plan["delay_seconds"],
+        _run_generation_postprocess,
+        args=(draft_id, job, video_url, session, dish, category, duration, prompt),
+    ).start()
+    return True
+
+
+def _run_generation_postprocess(
+    draft_id: str,
+    job: dict[str, Any],
+    video_url: str | None,
+    session: Any,
+    dish: str,
+    category: str,
+    duration: int,
+    prompt: str,
+) -> None:
+    try:
+        _complete_generation_job(draft_id, job, video_url, session, dish, category, duration, prompt)
+    except Exception as exc:
+        if not _retry_download_or_analysis(draft_id, job, video_url, session, dish, category, duration, prompt):
+            _update_job(draft_id, job, status="error", stage="下载或分析失败", error=str(exc))
+            _persist_generator_status(draft_id, str(job.get("node_id") or ""), "生成失败")
+
+
+def _schedule_generation_postprocess(
+    draft_id: str,
+    job: dict[str, Any],
+    video_url: str | None,
+    session: Any,
+    dish: str,
+    category: str,
+    duration: int,
+    prompt: str,
+) -> None:
+    delay = retry_delay_seconds(job)
+    if delay <= 0:
+        _run_generation_postprocess(draft_id, job, video_url, session, dish, category, duration, prompt)
+        return
+    threading.Timer(
+        delay,
+        _run_generation_postprocess,
+        args=(draft_id, job, video_url, session, dish, category, duration, prompt),
+    ).start()
+
+
 def _run_generation_job(draft_id: str, job: dict[str, Any]) -> None:
     """Poll one persisted Kling task and finish it idempotently after restart."""
     try:
@@ -382,7 +444,7 @@ def _run_generation_job(draft_id: str, job: dict[str, Any]) -> None:
             video_url, info = wait_for_video(session, str(job.get("task_id") or ""))
             if not video_url:
                 raise RuntimeError(str(info.get("error") or "Kling 生成失败"))
-        _complete_generation_job(draft_id, job, video_url, session, dish, category, duration, prompt)
+        _schedule_generation_postprocess(draft_id, job, video_url, session, dish, category, duration, prompt)
     except Exception as exc:
         _update_job(draft_id, job, status="error", stage="恢复任务失败", error=str(exc))
         _persist_generator_status(draft_id, str(job.get("node_id") or ""), "生成失败")
@@ -425,7 +487,15 @@ def recover_generation_jobs() -> int:
             _update_job(draft_id, job, status="error", stage="服务重启后无法恢复", error="任务尚未保存 Kling task_id，无法安全恢复，请重新生成")
             _persist_generator_status(draft_id, str(job.get("node_id") or ""), "生成失败")
             continue
-        threading.Thread(target=_run_generation_job, args=(draft_id, job), name=f"canvas-recover-{job_id}", daemon=True).start()
+        delay = retry_delay_seconds(job) if job.get("status") == "retrying" else 0
+        if delay > 0:
+            threading.Timer(
+                delay,
+                _run_generation_job,
+                args=(draft_id, job),
+            ).start()
+        else:
+            threading.Thread(target=_run_generation_job, args=(draft_id, job), name=f"canvas-recover-{job_id}", daemon=True).start()
         scheduled += 1
     return scheduled
 
@@ -569,7 +639,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
             video_url, info = wait_for_video(session, task_id)
             if not video_url:
                 raise RuntimeError(str(info.get("error") or "Kling 生成失败"))
-            _complete_generation_job(draft_id, job, video_url, session, input_dish, category, duration, prompt)
+            _schedule_generation_postprocess(draft_id, job, video_url, session, input_dish, category, duration, prompt)
         except Exception as exc:
             _update_job(draft_id, job, status="error", stage="生成失败", error=str(exc))
             _persist_generator_status(draft_id, node_id, "生成失败")

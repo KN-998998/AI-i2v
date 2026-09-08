@@ -305,6 +305,8 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                 trimmed_paths.append(str(trimmed_path))
                 temporary_paths.append(str(trimmed_path))
 
+            _update_job(draft_id, job, status="running", stage="片段裁剪完成，准备渲染画面")
+
             output_path = output_dir / ("canvas_final.mp4" if include_sound else "canvas_composed.mp4")
             sound = _sound_node(draft, workspace_id)
             _pair_caption_tracks(sound)
@@ -314,6 +316,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
             if include_sound:
                 from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
+                _update_job(draft_id, job, status="running", stage="生成并测量 Qwen 人声")
                 video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
                 bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
                 audio_path = output_dir / "mixed_audio.m4a"
@@ -335,8 +338,10 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                     if item.get("id"):
                         voice_timings[item["id"]] = (item["start"], effective_end)
                 subtitles = _overlay_items(sound, voice_timings)
+                _update_job(draft_id, job, status="running", stage="渲染视频与多轨文字")
                 concat_clips(trimmed_paths, str(output_path), subtitles=subtitles, brand_info=None)
                 if voice_segments or (bgm_file and bgm_file.exists() and bgm_volume > 0):
+                    _update_job(draft_id, job, status="running", stage="混合 BGM 与人声")
                     mix_voice_segments(voice_segments, str(bgm_file) if bgm_file and bgm_file.exists() and bgm_volume > 0 else None, str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)
                     temporary_paths.append(str(audio_path))
                     merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), video_duration=video_duration)
@@ -433,6 +438,8 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
             trimmed_paths.append(str(trimmed_path))
             temporary_paths.append(str(trimmed_path))
 
+        _update_job(draft_id, job, status="running", stage="片段裁剪完成，准备恢复渲染")
+
         sound = job.get("sound") if isinstance(job.get("sound"), dict) else _sound_node(draft, workspace_id)
         voice_timings: dict[str, tuple[float, float]] = {}
         if not job.get("include_sound"):
@@ -440,6 +447,7 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
         else:
             from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
+            _update_job(draft_id, job, status="running", stage="恢复并生成 Qwen 人声")
             video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
             bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
             audio_path = output_dir / "mixed_audio.m4a"
@@ -460,8 +468,10 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
                 voice_segments.append((generated, item["start"], effective_end, item["volume"]))
                 if item.get("id"):
                     voice_timings[item["id"]] = (item["start"], effective_end)
+            _update_job(draft_id, job, status="running", stage="恢复渲染视频与多轨文字")
             concat_clips(trimmed_paths, str(output_path), subtitles=_overlay_items(sound, voice_timings), brand_info=None)
             if voice_segments or (bgm_file and bgm_file.exists() and bgm_volume > 0):
+                _update_job(draft_id, job, status="running", stage="恢复混合 BGM 与人声")
                 mix_voice_segments(voice_segments, str(bgm_file) if bgm_file and bgm_file.exists() and bgm_volume > 0 else None, str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)
                 temporary_paths.append(str(audio_path))
                 merge_audio_video(str(output_path), str(audio_path), str(output_path.with_suffix(".with-audio.mp4")), video_duration=video_duration)

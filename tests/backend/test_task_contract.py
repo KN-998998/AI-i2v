@@ -1,4 +1,4 @@
-from web.services.task_contract import is_recoverable, task_metadata, update_task
+from web.services.task_contract import is_recoverable, retry_plan, task_metadata, update_task
 
 
 def test_task_contract_records_canonical_phase_and_history():
@@ -21,3 +21,17 @@ def test_task_contract_allows_restart_recovery_states():
     assert all(is_recoverable(status) for status in ("queued", "running", "polling", "downloading", "analyzing", "retrying"))
     assert not is_recoverable("done")
     assert not is_recoverable("error")
+
+
+def test_task_contract_retry_budget_is_bounded_and_exponential():
+    job = {**task_metadata("kling_generation"), "retry_count": 0}
+    first = retry_plan(job)
+    assert first is not None
+    assert first["retry_count"] == 1
+    assert first["delay_seconds"] == 1
+
+    job["retry_count"] = 2
+    assert retry_plan(job) is None
+
+    compose_job = task_metadata("video_composition")
+    assert retry_plan(compose_job)["delay_seconds"] == 1

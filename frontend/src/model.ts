@@ -213,7 +213,7 @@ export type DraftPayload = {
 export type ComposeJob = {
   job_id: string;
   draft_id?: string;
-  status: "running" | "done" | "error";
+  status: TaskStatus;
   timeline_count: number;
   output_url: string | null;
   error: string | null;

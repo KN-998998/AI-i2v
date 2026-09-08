@@ -6,7 +6,7 @@ so restart recovery and future queue backends can use the same contract.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 TaskStatus = Literal[
@@ -22,6 +22,11 @@ RECOVERABLE_TASK_STATUSES: frozenset[str] = frozenset({
     "queued", "running", "polling", "downloading", "analyzing", "retrying",
 })
 _MAX_EVENTS = 40
+_DEFAULT_MAX_RETRIES = {
+    "kling_generation": 2,
+    "image_processing": 1,
+    "video_composition": 1,
+}
 
 
 def utc_now() -> str:
@@ -36,7 +41,7 @@ def task_metadata(task_type: str) -> dict[str, Any]:
         "status_version": 1,
         "phase": "queued",
         "retry_count": 0,
-        "max_retries": 0,
+        "max_retries": _DEFAULT_MAX_RETRIES.get(task_type, 0),
         "events": [{"at": now, "status": "queued", "stage": "等待任务"}],
     }
 
@@ -74,6 +79,36 @@ def update_task(
 
 def is_recoverable(status: Any) -> bool:
     return str(status or "") in RECOVERABLE_TASK_STATUSES
+
+
+def retry_plan(task: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a bounded exponential-backoff plan without mutating the task."""
+    retry_count = max(0, int(task.get("retry_count") or 0))
+    max_retries = max(0, int(task.get("max_retries") or 0))
+    if retry_count >= max_retries:
+        return None
+    next_count = retry_count + 1
+    delay_seconds = min(8, 2 ** (next_count - 1))
+    next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+    return {
+        "retry_count": next_count,
+        "delay_seconds": delay_seconds,
+        "next_retry_at": next_retry_at.isoformat(timespec="seconds"),
+    }
+
+
+def retry_delay_seconds(task: dict[str, Any]) -> float:
+    """Return seconds until a persisted retry is due; zero means run now."""
+    value = task.get("next_retry_at")
+    if not value:
+        return 0.0
+    try:
+        due_at = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return 0.0
+    if due_at.tzinfo is None:
+        due_at = due_at.replace(tzinfo=timezone.utc)
+    return max(0.0, (due_at - datetime.now(timezone.utc)).total_seconds())
 
 
 def _phase_for(status: str) -> str:
