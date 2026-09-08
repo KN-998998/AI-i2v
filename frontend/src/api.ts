@@ -286,7 +286,9 @@ export type WeeklyDailyPlan = {
 
 export type WeeklyPlan = {
   id: string;
+  startDate: string;
   weekStart: string;
+  durationDays: number;
   assetRoot: string;
   backgroundRoot: string;
   templateDraftId: string;
@@ -296,7 +298,8 @@ export type WeeklyPlan = {
 };
 
 export type WeeklyPlanInput = {
-  week_start: string;
+  start_date: string;
+  duration_days: number;
   asset_root: string;
   background_root: string;
   template_draft_id: string;

@@ -49,6 +49,7 @@ def initialize() -> None:
             CREATE TABLE IF NOT EXISTS weekly_plans (
                 id TEXT PRIMARY KEY,
                 week_start TEXT NOT NULL,
+                duration_days INTEGER NOT NULL DEFAULT 7,
                 asset_root TEXT NOT NULL,
                 background_root TEXT NOT NULL,
                 template_draft_id TEXT NOT NULL,
@@ -97,6 +98,9 @@ def initialize() -> None:
                 UNIQUE(daily_plan_id, clip_id)
             );
         """)
+        columns = {str(row["name"]) for row in connection.execute("PRAGMA table_info(weekly_plans)")}
+        if "duration_days" not in columns:
+            connection.execute("ALTER TABLE weekly_plans ADD COLUMN duration_days INTEGER NOT NULL DEFAULT 7")
 
 
 def _parse_date(value: str) -> date:
@@ -237,7 +241,8 @@ def get_plan(plan_id: str) -> dict[str, Any] | None:
             return None
         daily = connection.execute("SELECT * FROM daily_plans WHERE weekly_plan_id = ? ORDER BY run_date", (plan_id,)).fetchall()
         return {
-            "id": plan["id"], "weekStart": plan["week_start"], "assetRoot": plan["asset_root"],
+            "id": plan["id"], "startDate": plan["week_start"], "weekStart": plan["week_start"],
+            "durationDays": int(plan["duration_days"] or 7), "assetRoot": plan["asset_root"],
             "backgroundRoot": plan["background_root"], "templateDraftId": plan["template_draft_id"],
             "runAt": plan["run_at"], "active": bool(plan["active"]), "days": [_serialise_daily(connection, item) for item in daily],
         }
@@ -252,9 +257,8 @@ def list_plans() -> list[dict[str, Any]]:
 
 def create_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
     initialize()
-    week_start = _parse_date(str(payload.get("week_start") or ""))
-    if week_start.weekday() != 0:
-        raise ValueError("周计划开始日期必须为周一")
+    week_start = _parse_date(str(payload.get("start_date") or payload.get("week_start") or ""))
+    duration_days = _positive(payload.get("duration_days", 7), "持续天数", maximum=14)
     asset_root = str(payload.get("asset_root") or "").strip()
     background_root = str(payload.get("background_root") or "").strip()
     template_draft_id = str(payload.get("template_draft_id") or "").strip()
@@ -273,11 +277,11 @@ def create_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
     candidates = _library_candidates(asset_root)
     with _LOCK, _connect() as connection:
         connection.execute(
-            "INSERT INTO weekly_plans (id, week_start, asset_root, background_root, template_draft_id, run_at, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
-            (plan_id, week_start.isoformat(), asset_root, background_root, template_draft_id, run_at, now, now),
+            "INSERT INTO weekly_plans (id, week_start, duration_days, asset_root, background_root, template_draft_id, run_at, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+            (plan_id, week_start.isoformat(), duration_days, asset_root, background_root, template_draft_id, run_at, now, now),
         )
         try:
-            for offset in range(7):
+            for offset in range(duration_days):
                 run_date = week_start + timedelta(days=offset)
                 source = by_date.get(run_date.isoformat(), defaults)
                 candidate_count = _positive(source.get("candidate_count", 40), "候选片段数")
