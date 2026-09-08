@@ -770,6 +770,33 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
 .workspace-picker, .caption-bulk-tools, .sound-text-explainer { border-color: rgba(123,216,208,.2); background: rgba(123,216,208,.06); }
 .manual-review-card { border-color: rgba(123,216,208,.16); background: rgba(21,30,33,.9); }
 
+/* Weekly production and its mandatory review gate. */
+.weekly-plan-page, .clip-review-page { max-width: 1320px; }
+.weekly-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.weekly-readonly { display: flex; align-items: center; color: var(--cyan); }
+.weekly-plan-days { margin-top: 22px; }
+.weekly-run-at { color: var(--cyan); font-size: 13px; }
+.weekly-day-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.weekly-day-card, .clip-review-card { display: grid; gap: 10px; padding: 15px; border: 1px solid var(--line); border-radius: 8px; background: rgba(21,30,33,.64); }
+.weekly-day-card.review { border-color: rgba(123,216,208,.62); }
+.weekly-day-card.error { border-color: rgba(239,122,104,.7); }
+.weekly-day-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.weekly-day-head > div { display: grid; gap: 3px; }
+.weekly-day-head span { color: var(--coral); font-size: 12px; }
+.weekly-day-head small { color: var(--muted); text-align: right; }
+.weekly-category-summary { display: flex; flex-wrap: wrap; gap: 6px; }
+.weekly-category-summary span { padding: 3px 6px; border: 1px solid rgba(123,216,208,.2); color: var(--muted); font-size: 11px; }
+.weekly-day-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.weekly-category-fields { margin-top: 12px; }
+.clip-review-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
+.clip-review-summary strong { color: var(--cyan); }
+.clip-review-summary span { color: var(--muted); }
+.clip-review-summary .btn { margin-left: auto; }
+.clip-review-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.clip-review-card video { width: 100%; aspect-ratio: 9 / 16; max-height: 280px; border: 1px solid var(--line); background: #000; object-fit: contain; }
+.clip-review-card.approved { border-color: rgba(145,211,167,.65); }
+.clip-review-card.rejected { opacity: .66; border-color: rgba(239,122,104,.65); }
+
 @media (max-width: 1380px) {
   .workspace { grid-template-columns: 216px minmax(0, 1fr) 320px; }
   .step-main { padding-inline: 28px; }
@@ -800,4 +827,10 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
   .step-header h1 { font-size: 24px; }
   .canvas-toolbar { align-items: flex-start; gap: 10px; }
   .canvas-toolbar .toolbar-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .weekly-form-grid, .weekly-day-grid, .clip-review-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1080px) {
+  .weekly-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .clip-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

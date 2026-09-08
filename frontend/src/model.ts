@@ -266,6 +266,8 @@ export type TimelineClip = {
   qualityLabel?: "good" | "warning" | "reject";
   qualityWarnings?: string[];
   analysisMode?: string;
+  /** Required only for scheduled weekly runs; one-off drafts remain unaffected. */
+  reviewStatus?: "approved" | "rejected";
 };
 
 /**
@@ -785,7 +787,7 @@ export function resolveDishCategory(clip: Pick<TimelineClip, "dish" | "dishCateg
 }
 
 export function randomizeClipSelection(items: TimelineClip[], clipCount: number, random = Math.random): TimelineClip[] {
-  const available = items.filter(clip => clip.sourcePath).filter((clip, index, list) => list.findIndex(item => item.id === clip.id) === index);
+  const available = items.filter(clip => clip.sourcePath && clip.reviewStatus !== "rejected").filter((clip, index, list) => list.findIndex(item => item.id === clip.id) === index);
   const count = Math.max(0, Math.round(clipCount));
   if (count === 0 || available.length === 0) return [];
   const special = available.filter(clip => ["甜品", "水果"].includes(resolveDishCategory(clip)));
@@ -802,7 +804,7 @@ export function randomizeClipSelection(items: TimelineClip[], clipCount: number,
 
 export function recommendClipSelection(items: TimelineClip[], clipCount: number): TimelineClip[] {
   const available = items
-    .filter(clip => clip.sourcePath)
+    .filter(clip => clip.sourcePath && clip.reviewStatus !== "rejected")
     .filter((clip, index, list) => list.findIndex(item => item.id === clip.id) === index)
     .sort((left, right) => clipRecommendationScore(right) - clipRecommendationScore(left));
   const count = Math.max(0, Math.round(clipCount));

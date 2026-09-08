@@ -6,6 +6,7 @@ export function Pipeline({ path }: { path: WorkflowRoute }) {
     <div className="pipeline-heading"><span className="pipeline-kicker">PROJECT FLOW</span><strong>生产工作台</strong><small>从素材到最终成片</small></div>
     <button type="button" className={`canvas-link ${path === "/canvas-mvp" ? "active" : ""}`} onClick={() => navigate("/canvas-mvp")}><span className="canvas-link-icon">⌘</span><span><strong>流程画布总览</strong><small>节点与连接关系</small></span></button>
     <TaskCenterLink path={path} />
+    <button type="button" className={`task-center-link ${path === "/workflow/weekly-plan" ? "active" : ""}`} onClick={() => navigate("/workflow/weekly-plan")}><span className="task-center-link-icon">周</span><span><strong>周计划生产</strong><small>配置 7 天自动选材与生成</small></span></button>
     <div className="pipeline-group-label"><span>01—06</span><span>制作流程</span></div>
     {workflowRoutes.filter(item => item.path !== "/workflow/output").map(item => <PipelineItem key={item.path} item={item} active={path === item.path} />)}
     <div className="pipeline-divider" />

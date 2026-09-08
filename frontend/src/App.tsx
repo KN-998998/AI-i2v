@@ -12,6 +12,8 @@ import { BatchComposePage } from "./components/BatchComposePage";
 import { ImageProcessingPage } from "./components/ImageProcessingPage";
 import { ManualAssetLibraryPage } from "./components/ManualAssetLibraryPage";
 import { TaskCenterPage } from "./components/TaskCenterPage";
+import { WeeklyPlanPage } from "./components/WeeklyPlanPage";
+import { ClipReviewPage } from "./components/ClipReviewPage";
 
 const nodeTypes = { workflow: WorkflowNodeCard };
 
@@ -67,6 +69,8 @@ function RouteContent({ path, onToast }: { path: WorkflowRoute; onToast: (messag
   if (path === "/workflow/output") return <OutputPage onToast={onToast} />;
   if (path === "/workflow/tasks") return <TaskCenterPage onToast={onToast} />;
   if (path === "/workflow/asset-library-review") return <ManualAssetLibraryPage onToast={onToast} />;
+  if (path === "/workflow/weekly-plan") return <WeeklyPlanPage onToast={onToast} />;
+  if (path === "/workflow/clip-review") return <ClipReviewPage onToast={onToast} />;
   return <StepPage route={path} onToast={onToast} />;
 }
 

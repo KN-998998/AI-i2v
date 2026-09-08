@@ -35,6 +35,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
+from web.services.weekly_plans import assert_ready_for_compose, create_plan as create_weekly_plan, get_daily_by_draft, get_plan as get_weekly_plan, list_plans as list_weekly_plans, save_clip_review, update_daily_plan
 from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, managed_asset_library_root, manual_review_preview_path, manual_review_scan_response, manual_review_upload_directory, organize_manual_asset_library, save_category_rule, save_manual_review_state, scan_asset_classifications, scan_manual_asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
@@ -508,9 +509,56 @@ def canvas_preflight(draft_id: str, payload: dict[str, Any] | None = None) -> di
 @router.post("/api/canvas/drafts/{draft_id}/compose")
 def compose_canvas_draft(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
+        assert_ready_for_compose(draft_id)
         request = payload or {}
         return start_compose(draft_id, workspace_id=request.get("workspace_id"), include_sound=bool(request.get("include_sound", False)))
     except ValueError as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/weekly-plans")
+def get_weekly_plans() -> list[dict[str, Any]]:
+    return list_weekly_plans()
+
+
+@router.post("/api/weekly-plans")
+def post_weekly_plan(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        return create_weekly_plan(payload or {})
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/weekly-plans/{plan_id}")
+def get_weekly_plan_detail(plan_id: str) -> dict[str, Any]:
+    plan = get_weekly_plan(plan_id)
+    if plan is None:
+        raise _json_error("周计划不存在", 404)
+    return plan
+
+
+@router.put("/api/weekly-plans/days/{daily_id}")
+def put_weekly_plan_day(daily_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        return update_daily_plan(daily_id, payload or {})
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/weekly-plans/runs/by-draft/{draft_id}")
+def get_weekly_run_by_draft(draft_id: str) -> dict[str, Any]:
+    run = get_daily_by_draft(draft_id)
+    if run is None:
+        raise _json_error("当前草稿不属于周计划运行", 404)
+    return run
+
+
+@router.put("/api/weekly-plans/runs/{daily_id}/clips/{clip_id}/review")
+def put_weekly_clip_review(daily_id: str, clip_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    request = payload or {}
+    try:
+        return save_clip_review(daily_id, clip_id, str(request.get("decision") or ""), request.get("source_start"), request.get("source_end"))
+    except (OSError, ValueError) as exc:
         raise _json_error(str(exc), 400) from exc
 
 

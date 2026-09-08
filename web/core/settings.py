@@ -10,6 +10,8 @@ STATIC_DIR = WEB_ROOT / "static"
 LOG_DIR = PROJECT_ROOT / "logs"
 CANVAS_DRAFT_ROOT = PROJECT_ROOT / "output" / "canvas_drafts"
 CANVAS_BACKGROUND_ROOT = PROJECT_ROOT / "output" / "background_templates"
+WEEKLY_PLAN_DB = PROJECT_ROOT / "output" / "weekly_plans.sqlite3"
+WEEKLY_PLAN_TIMEZONE = os.environ.get("WEEKLY_PLAN_TIMEZONE", "Asia/Shanghai")
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

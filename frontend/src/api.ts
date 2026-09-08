@@ -268,3 +268,61 @@ export async function getCanvasComposeStatus(draftId: string, jobId: string): Pr
 export function isActiveTaskStatus(status: string): boolean {
   return ["queued", "running", "polling", "downloading", "analyzing", "retrying"].includes(status);
 }
+
+export type WeeklyDailyPlan = {
+  id: string;
+  runDate: string;
+  candidateCount: number;
+  videoCount: number;
+  clipsPerVideo: number;
+  categoryCounts: Record<string, number>;
+  status: "scheduled" | "processing_images" | "generating" | "review" | "error";
+  draftId: string | null;
+  error: string | null;
+  updatedAt: string;
+  reservations: Array<{ dish_name: string; dish_key: string; category: string; image_path: string }>;
+  reviewSummary: Record<string, number>;
+};
+
+export type WeeklyPlan = {
+  id: string;
+  weekStart: string;
+  assetRoot: string;
+  backgroundRoot: string;
+  templateDraftId: string;
+  runAt: string;
+  active: boolean;
+  days: WeeklyDailyPlan[];
+};
+
+export type WeeklyPlanInput = {
+  week_start: string;
+  asset_root: string;
+  background_root: string;
+  template_draft_id: string;
+  run_at: string;
+  defaults: { candidate_count: number; video_count: number; clips_per_video: number; category_counts: Record<string, number> };
+  days?: Array<{ run_date: string; candidate_count: number; video_count: number; clips_per_video: number; category_counts: Record<string, number> }>;
+};
+
+export async function fetchWeeklyPlans(): Promise<WeeklyPlan[]> {
+  return parseResponse<WeeklyPlan[]>(await fetch(`${API_BASE_URL}/api/weekly-plans`, { cache: "no-store" }));
+}
+
+export async function createWeeklyPlan(payload: WeeklyPlanInput): Promise<WeeklyPlan> {
+  return parseResponse<WeeklyPlan>(await fetch(`${API_BASE_URL}/api/weekly-plans`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }));
+}
+
+export async function updateWeeklyPlanDay(dailyId: string, payload: WeeklyPlanInput["defaults"]): Promise<WeeklyDailyPlan> {
+  return parseResponse<WeeklyDailyPlan>(await fetch(`${API_BASE_URL}/api/weekly-plans/days/${encodeURIComponent(dailyId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }));
+}
+
+export async function fetchWeeklyRunByDraft(draftId: string): Promise<WeeklyDailyPlan | null> {
+  const response = await fetch(`${API_BASE_URL}/api/weekly-plans/runs/by-draft/${encodeURIComponent(draftId)}`, { cache: "no-store" });
+  if (response.status === 404) return null;
+  return parseResponse<WeeklyDailyPlan>(response);
+}
+
+export async function saveWeeklyClipReview(dailyId: string, clipId: string, decision: "approved" | "rejected", sourceStart: number, sourceEnd: number): Promise<WeeklyDailyPlan> {
+  return parseResponse<WeeklyDailyPlan>(await fetch(`${API_BASE_URL}/api/weekly-plans/runs/${encodeURIComponent(dailyId)}/clips/${encodeURIComponent(clipId)}/review`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, source_start: sourceStart, source_end: sourceEnd }) }));
+}

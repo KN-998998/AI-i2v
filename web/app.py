@@ -21,6 +21,7 @@ from web.core.settings import APP_HOST, APP_PORT, APP_RELOAD, STATIC_DIR
 from web.services.canvas_compose import recover_compose_jobs
 from web.services.canvas_generation import recover_generation_jobs
 from web.services.canvas_image_processing import recover_image_processing_jobs
+from web.services.weekly_plans import initialize as initialize_weekly_plans, start_scheduler as start_weekly_scheduler, stop_scheduler as stop_weekly_scheduler
 
 configure_logging()
 logger = get_logger(__name__)
@@ -29,6 +30,8 @@ logger = get_logger(__name__)
 def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        initialize_weekly_plans()
+        start_weekly_scheduler()
         recovered_generation = recover_generation_jobs()
         recovered_image = recover_image_processing_jobs()
         recovered_compose = recover_compose_jobs()
@@ -40,7 +43,10 @@ def create_app() -> FastAPI:
                 recovered_image,
                 recovered_compose,
             )
-        yield
+        try:
+            yield
+        finally:
+            stop_weekly_scheduler()
 
     app = FastAPI(title="引流视频生产平台", version="0.2.0", lifespan=lifespan)
     app.include_router(router)
@@ -103,7 +109,7 @@ def create_app() -> FastAPI:
 
     @app.get("/workflow/{step}")
     async def workflow_step(step: str) -> FileResponse:
-        allowed_steps = {"assets", "asset-library-review", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output", "tasks"}
+        allowed_steps = {"assets", "asset-library-review", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output", "tasks", "weekly-plan", "clip-review"}
         if step not in allowed_steps:
             raise HTTPException(status_code=404, detail="工作流页面不存在")
         return react_entry()
