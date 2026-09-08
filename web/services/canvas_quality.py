@@ -15,7 +15,8 @@ from PIL import Image, ImageFilter, ImageStat
 from pipeline.config import FINAL_DURATION_RANGE
 from web.services.canvas_state import draft_directory, uploaded_file
 
-_CATEGORIES = {"正餐", "小吃", "炸物", "甜品", "水果", "饮品", "套餐", "其他", "寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品"}
+_CATEGORIES = {"寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他"}
+_LEGACY_CATEGORY_MAP = {"正餐": "主菜", "小吃": "前菜/小菜"}
 _FRUIT_KEYWORDS = ("蜜瓜", "草莓", "西瓜", "芒果", "葡萄", "蓝莓", "树莓", "樱桃", "桃", "梨", "苹果", "橙", "柚", "柠檬")
 _DESSERT_KEYWORDS = ("蛋糕", "布丁", "冰淇淋", "甜点", "甜品", "慕斯", "奶油", "铜锣烧", "抹茶", "芝士")
 _SNACK_KEYWORDS = ("天妇罗", "炸", "串", "薯", "饼", "小吃")
@@ -23,6 +24,8 @@ _DRINK_KEYWORDS = ("饮料", "果汁", "咖啡", "茶", "酒", "汽水", "苏打
 
 
 def infer_category(name: str, explicit: str | None = None) -> str:
+    if explicit in _LEGACY_CATEGORY_MAP:
+        return _LEGACY_CATEGORY_MAP[explicit]
     if explicit in _CATEGORIES:
         return explicit
     normalized = str(name or "").strip().lower()
@@ -33,7 +36,7 @@ def infer_category(name: str, explicit: str | None = None) -> str:
     if any(keyword in normalized for keyword in _DRINK_KEYWORDS):
         return "饮品"
     if any(keyword in normalized for keyword in _SNACK_KEYWORDS):
-        return "小吃"
+        return "前菜/小菜"
     return "其他"
 
 

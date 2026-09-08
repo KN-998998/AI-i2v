@@ -159,7 +159,7 @@ def test_startup_recovery_polls_task_downloads_and_persists_clip(monkeypatch, tm
         "status": "running",
         "task_id": "kling-task-1",
         "dish": "测试菜",
-        "dish_category": "正餐",
+        "dish_category": "主菜",
         "duration": 3,
         "prompt": "food movement",
     }

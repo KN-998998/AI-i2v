@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { inferDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
+import { normalizeDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
 import { ACTION_VERB_OPTIONS, assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData, SHOT_SIZE_OPTIONS } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
@@ -18,7 +18,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const kind = data.kind;
   const promptResult = kind === "prompt" ? assemblePrompt(promptConfigFromData(data)) : null;
   const promptConfig = kind === "prompt" ? promptConfigFromData(data) : null;
-  const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
+  const dishCategory = normalizeDishCategory(data.dishCategory, data.dishName ?? "");
   const soundConfig = activeWorkspace?.soundConfig;
   const preserveOriginal = data.processingMode === "preserve_original" || data.visualSubjectType === "手部" || data.visualSubjectType === "厨师上半身" || data.visualSubjectType === "手部+厨师上半身";
   const actionLabel = promptConfig && (promptConfig.l1_subject === "hand" || promptConfig.l1_subject === "chef")

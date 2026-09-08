@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, inferDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
+import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, normalizeDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
 import { fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
@@ -46,7 +46,7 @@ function AssetFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const draftId = useWorkflowStore(state => state.draftId);
   const data = node.data;
-  const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(data.dishName) : "正餐");
+  const dishCategory = normalizeDishCategory(data.dishCategory, data.dishName ?? "");
   const dishFoodType = dishCategory === "套餐" ? "混合/多温" : formatNodeValue(data.foodType, "热食");
   useEffect(() => () => {
     if (data.imagePreview?.startsWith("blob:")) URL.revokeObjectURL(data.imagePreview);

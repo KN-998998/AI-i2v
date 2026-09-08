@@ -87,8 +87,13 @@ export type CaptionTiming = {
   endSeconds: number;
 };
 
-export const DISH_CATEGORY_OPTIONS = ["正餐", "小吃", "炸物", "甜品", "水果", "饮品", "套餐", "寿司", "刺身", "前菜/小菜", "主菜", "主食", "汤品", "其他"] as const;
+/** Canonical categories used by the asset library, canvas, and composition. */
+export const DISH_CATEGORY_OPTIONS = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "主食", "汤品", "甜品", "水果", "饮品", "套餐", "其他"] as const;
 export type DishCategory = typeof DISH_CATEGORY_OPTIONS[number];
+const LEGACY_DISH_CATEGORY_MAP: Record<string, DishCategory> = {
+  正餐: "主菜",
+  小吃: "前菜/小菜",
+};
 export const FOOD_TYPE_OPTIONS = ["冷食", "热食", "混合/多温"] as const;
 export type FoodType = typeof FOOD_TYPE_OPTIONS[number];
 export const VISUAL_SUBJECT_TYPE_OPTIONS = ["菜品主体", "手部", "厨师上半身", "手部+厨师上半身"] as const;
@@ -697,15 +702,15 @@ function legacyVoiceId(value: string): string {
 export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜／装饰", "餐具器皿", "桌面／台面", "手部", "厨师上半身", "背景陈设"];
 
 export const clips: TimelineClip[] = [
-  { id: "clip_salmon_01", dish: "炙烤三文鱼", label: "平稳推进", tone: "#355e62", timelineDuration: 2.5, dishCategory: "正餐" },
-  { id: "clip_salmon_02", dish: "炙烤三文鱼", label: "小幅弧线", tone: "#4b5d68", timelineDuration: 2.5, dishCategory: "正餐" },
-  { id: "clip_tempura_01", dish: "天妇罗", label: "右向横移", tone: "#665038", timelineDuration: 2.5, dishCategory: "小吃" },
-  { id: "clip_sashimi_01", dish: "刺身拼盘", label: "固定机位", tone: "#4c4265", timelineDuration: 2.5, dishCategory: "正餐" },
+  { id: "clip_salmon_01", dish: "炙烤三文鱼", label: "平稳推进", tone: "#355e62", timelineDuration: 2.5, dishCategory: "主菜" },
+  { id: "clip_salmon_02", dish: "炙烤三文鱼", label: "小幅弧线", tone: "#4b5d68", timelineDuration: 2.5, dishCategory: "主菜" },
+  { id: "clip_tempura_01", dish: "天妇罗", label: "右向横移", tone: "#665038", timelineDuration: 2.5, dishCategory: "炸物" },
+  { id: "clip_sashimi_01", dish: "刺身拼盘", label: "固定机位", tone: "#4c4265", timelineDuration: 2.5, dishCategory: "刺身" },
 ];
 
 export function dataFor(kind: NodeKind): WorkflowData {
   const base = { kind, ...nodeCatalog[kind] };
-  if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", dishCategory: "正餐", assetMode: "单图模式", imageName: "当前素材" };
+  if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", dishCategory: "主菜", assetMode: "单图模式", imageName: "当前素材" };
   if (kind === "image_process") return { ...base, processingMode: "matting_composite", backgroundBlur: 4, backgroundBrightness: 0.72, subjectScale: 0.68, subjectX: 0.5, subjectY: 0.58 };
   if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
@@ -718,7 +723,7 @@ export function createWorkflowNode(kind: NodeKind, id: string, position: { x: nu
   return { id, type: "workflow", position, data: dataFor(kind) };
 }
 
-export function createPendingGeneratorClip(nodeId: string, _nodeNumber: number, dish = "待配置菜品", dishCategory: DishCategory = "正餐", assetId = `asset_${nodeId}`): TimelineClip {
+export function createPendingGeneratorClip(nodeId: string, _nodeNumber: number, dish = "待配置菜品", dishCategory: DishCategory = "其他", assetId = `asset_${nodeId}`): TimelineClip {
   return {
     id: `${nodeId}_clip`,
     assetId,
@@ -739,7 +744,7 @@ export function normalizeTimelineClip<T extends TimelineClip>(clip: T): T {
   const sourceDuration = Math.max(0.1, Number(clip.sourceDurationSeconds ?? 3) || 3);
   const start = clampNumber(clip.sourceStartSeconds, 0, Math.max(0, sourceDuration - 0.1), Math.min(0.5, Math.max(0, sourceDuration - 0.1)));
   const end = clampNumber(clip.sourceEndSeconds, start + 0.1, sourceDuration, Math.min(sourceDuration, start + Math.max(0.1, clip.timelineDuration || 2.5)));
-  return { ...clip, sourceDurationSeconds: sourceDuration, sourceStartSeconds: start, sourceEndSeconds: end, timelineDuration: Math.max(0.1, end - start) };
+  return { ...clip, dishCategory: normalizeDishCategory(clip.dishCategory, clip.dish), sourceDurationSeconds: sourceDuration, sourceStartSeconds: start, sourceEndSeconds: end, timelineDuration: Math.max(0.1, end - start) };
 }
 
 function clampNumber(value: number | undefined, min: number, max: number, fallback: number): number {
@@ -757,8 +762,16 @@ export function inferDishCategory(dish: string): DishCategory {
   return "其他";
 }
 
+/** Migrate pre-standard-library values before they reach editable UI or jobs. */
+export function normalizeDishCategory(category: string | null | undefined, dish = ""): DishCategory {
+  const value = String(category ?? "").trim();
+  if (DISH_CATEGORY_OPTIONS.includes(value as DishCategory)) return value as DishCategory;
+  if (LEGACY_DISH_CATEGORY_MAP[value]) return LEGACY_DISH_CATEGORY_MAP[value];
+  return dish.trim() ? inferDishCategory(dish) : "其他";
+}
+
 export function resolveDishCategory(clip: Pick<TimelineClip, "dish" | "dishCategory">): DishCategory {
-  return clip.dishCategory && DISH_CATEGORY_OPTIONS.includes(clip.dishCategory) ? clip.dishCategory : inferDishCategory(clip.dish);
+  return normalizeDishCategory(clip.dishCategory, clip.dish);
 }
 
 export function randomizeClipSelection(items: TimelineClip[], clipCount: number, random = Math.random): TimelineClip[] {

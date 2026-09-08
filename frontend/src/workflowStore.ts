@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
+import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
@@ -397,7 +397,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return { nodes, composeWorkspaces, revision: state.revision + 1 };
     }
     const dish = data.dishName || "待配置菜品";
-    const dishCategory = data.dishCategory ?? (data.dishName ? inferDishCategory(dish) : "正餐");
+    const dishCategory = normalizeDishCategory(data.dishCategory, data.dishName ? dish : "");
     const foodType = dishCategory === "套餐" ? "混合/多温" : data.foodType as FoodType | undefined;
     const nextInputData = { ...data, foodType };
     const visualSubjectType = data.visualSubjectType ?? "菜品主体";
@@ -428,7 +428,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const existing = state.candidateClips.find(item => item.generatorNodeId === nodeId && item.status === "pending");
     const input = state.nodes.find(item => item.data.kind === "input");
     const dish = input?.data.dishName || existing?.dish || "待配置菜品";
-    const dishCategory = input?.data.dishCategory ?? existing?.dishCategory ?? (input?.data.dishName ? inferDishCategory(dish) : "正餐");
+    const dishCategory = normalizeDishCategory(input?.data.dishCategory ?? existing?.dishCategory, input?.data.dishName ? dish : "");
     const foodType = dishCategory === "套餐" ? "混合/多温" : input?.data.foodType as FoodType | undefined;
     const visualSubjectType = input?.data.visualSubjectType ?? "菜品主体";
     const assetId = input?.data.assetId ?? existing?.assetId ?? `asset_${nodeId}`;
@@ -881,11 +881,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const normalizedCandidates = (draft.candidateClips ?? draft.timeline).map(normalizeTimelineClip);
     const strategyNodes = syncImageProcessStrategies(migrated.nodes, migrated.edges);
     const normalizedNodes = strategyNodes.map(node => {
-      const portableData = node.data.kind === "input" && node.data.sourceLibraryPath
-        ? { ...node.data, sourceLibraryPath: undefined }
+      const portableData = node.data.kind === "input"
+        ? { ...node.data, sourceLibraryPath: undefined, dishCategory: normalizeDishCategory(node.data.dishCategory, node.data.dishName ?? "") }
         : node.data;
       return portableData.kind === "input" && !portableData.dishCategory
-        ? { ...node, data: { ...portableData, dishCategory: portableData.dishName ? inferDishCategory(portableData.dishName) : "正餐" } }
+        ? { ...node, data: { ...portableData, dishCategory: portableData.dishName ? inferDishCategory(portableData.dishName) : "其他" } }
         : portableData === node.data ? node : { ...node, data: portableData };
     });
     const nodes = syncGeneratorNodeStatuses(normalizedNodes, normalizedCandidates);

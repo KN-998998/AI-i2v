@@ -213,7 +213,7 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
                 "dishName": "炙烧寿司",
                 "sourceCategory": "未确认",
                 "classificationReason": "名称存在多个候选分类",
-                "categoryCandidates": ["寿司", "正餐"],
+                "categoryCandidates": ["寿司", "主菜"],
                 "suggestedCategory": "寿司",
                 "folderCount": 2,
             }],

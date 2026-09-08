@@ -1,4 +1,4 @@
-import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 
@@ -40,12 +40,13 @@ assert(packagePrompt.prompt.includes("包含冷食与热食"), "package prompt l
 assert(pendingClip.status === "pending" && !pendingClip.sourcePath, "generator clip should wait for a real file");
 assert(resolveGeneratorNodeStatus("生成中", { status: "generated", sourcePath: "clip.mp4" }) === "已生成", "linked generator clip should be completed");
 assert(resolveGeneratorNodeStatus("生成中") === "待生成", "stale generator status should reset when its clip is gone");
-assert(pendingClip.dishCategory === "正餐", "pending generator clip should have a default dish category");
+assert(pendingClip.dishCategory === "其他", "pending generator clip should have a default dish category");
 
 assert(inferDishCategory("蜜瓜") === "水果", "fruit fallback classification is incorrect");
 assert(inferDishCategory("抹茶布丁") === "甜品", "dessert fallback classification is incorrect");
 assert(inferDishCategory("冷食三文鱼") === "其他", "food temperature must not imply fruit classification");
-assert(resolveDishCategory({ dish: "冷食三文鱼", dishCategory: "正餐" }) === "正餐", "explicit dish category was ignored");
+assert(normalizeDishCategory("正餐") === "主菜" && normalizeDishCategory("小吃") === "前菜/小菜", "legacy categories were not migrated");
+assert(resolveDishCategory({ dish: "冷食三文鱼", dishCategory: "主菜" }) === "主菜", "explicit dish category was ignored");
 
 const overlays = overlayItemsFromData({ overlayMain: "开胃钩子", overlayCta: "现在预订", overlayPosition: "中上钩子区", overlayStart: "0s", overlayEnd: "2.5s" });
 assert(overlays.length === 2 && overlays[0].position === "upper" && overlays[1].position === "top", "legacy overlay fields were not migrated");
@@ -163,8 +164,8 @@ const duplicateBinding = captionSegmentsFromData({
 assert(captionSegmentsPatch(duplicateBinding).voiceItems?.length === 2, "rebinding duplicated voice entities");
 
 const composePool = [
-  { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "正餐" as const },
-  { id: "main-2", dish: "天妇罗", label: "", tone: "", timelineDuration: 2, sourcePath: "main-2.mp4", dishCategory: "小吃" as const },
+  { id: "main-1", dish: "三文鱼", label: "", tone: "", timelineDuration: 2, sourcePath: "main-1.mp4", dishCategory: "主菜" as const },
+  { id: "main-2", dish: "天妇罗", label: "", tone: "", timelineDuration: 2, sourcePath: "main-2.mp4", dishCategory: "炸物" as const },
   { id: "fruit-1", dish: "蜜瓜", label: "", tone: "", timelineDuration: 2, sourcePath: "fruit-1.mp4", dishCategory: "水果" as const },
   { id: "dessert-1", dish: "布丁", label: "", tone: "", timelineDuration: 2, sourcePath: "dessert-1.mp4", dishCategory: "甜品" as const },
 ];
@@ -182,7 +183,7 @@ const recommended = recommendClipSelection([
   { ...composePool[0], qualityScore: 62, qualityWarnings: ["暗部"] },
   { ...composePool[1], qualityScore: 95, qualityWarnings: [] },
   { ...composePool[2], qualityScore: 99, qualityWarnings: [] },
-  { id: "same-dish", dish: "天妇罗", label: "重复菜品", tone: "", timelineDuration: 2, sourcePath: "same-dish.mp4", dishCategory: "小吃" as const, qualityScore: 100, qualityWarnings: [] },
+  { id: "same-dish", dish: "天妇罗", label: "重复菜品", tone: "", timelineDuration: 2, sourcePath: "same-dish.mp4", dishCategory: "炸物" as const, qualityScore: 100, qualityWarnings: [] },
 ], 3);
 assert(recommended.length === 3, "smart recommendation did not fill the requested count");
 assert(recommended[0].id === "same-dish", "smart recommendation did not prioritize high quality clips");
