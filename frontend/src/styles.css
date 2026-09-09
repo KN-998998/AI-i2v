@@ -1177,7 +1177,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .pipeline-item.locked .pipeline-item-copy strong, .pipeline-item.locked .pipeline-item-copy small, .canvas-link.locked small, .task-center-link.locked small { color: #a5a7b4; }
 .canvas-link.locked .canvas-link-icon, .task-center-link.locked .task-center-link-icon { border-color: #e6e7ee; color: #a7a9b5; background: #fafafd; }
 
-.main-column, .step-main { max-width: 1600px; padding: 36px clamp(24px, 3.4vw, 56px) 76px; }
+.main-column, .step-main { width: 100%; max-width: none; padding: 36px clamp(24px, 3.4vw, 56px) 76px; }
 .main-column { min-height: calc(100vh - 68px); }
 .step-breadcrumb { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid #ededf2; border-radius: 999px; background: #fff; font-size: 11px; }
 .step-header, .task-center-hero { position: relative; margin: 22px 0 30px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
@@ -1190,6 +1190,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .step-context, .step-panel, .node-manager, .task-center-panel, .prompt-node-workspace, .compose-workspace-card, .asset-library-batch-panel { border-color: var(--line); border-radius: 12px; background: var(--panel); box-shadow: none; }
 .step-panel, .node-manager, .task-center-panel, .prompt-node-workspace { padding: clamp(18px, 2vw, 26px); }
+.step-page-grid { grid-template-columns: minmax(0, 1fr); }
 .panel-section-head { gap: 16px; }
 .panel-section-head h2, .step-panel h2 { font-size: 19px; letter-spacing: -.025em; }
 .task-row-card, .node-record, .prompt-node-card, .manual-review-card, .clip-review-card, .weekly-day-card, .pool-card, .workspace-chip, .background-template { border-color: #e8e8ef; border-radius: 10px; box-shadow: none; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease; }

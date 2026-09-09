@@ -1,15 +1,15 @@
 import { useWorkflowStore } from "../workflowStore";
 import { navigate, workflowRoutes, type WorkflowRoute } from "../router";
-import { deriveWorkflowProgress, isWorkflowRouteUnlocked, lockedStepHint } from "../workflowProgress";
+import { deriveWorkflowProgress, lockedStepHint } from "../workflowProgress";
 
 export function Pipeline({ path, collapsed, onToggle }: { path: WorkflowRoute; collapsed: boolean; onToggle: () => void }) {
   const nodes = useWorkflowStore(state => state.nodes);
   const candidates = useWorkflowStore(state => state.candidateClips);
   const workspaces = useWorkflowStore(state => state.composeWorkspaces);
   const progress = deriveWorkflowProgress(nodes, candidates, workspaces);
-  const overviewUnlocked = isWorkflowRouteUnlocked("/canvas-mvp", progress);
-  const tasksUnlocked = isWorkflowRouteUnlocked("/workflow/tasks", progress);
-  const weeklyPlanUnlocked = isWorkflowRouteUnlocked("/workflow/weekly-plan", progress);
+  const overviewUnlocked = true;
+  const tasksUnlocked = true;
+  const weeklyPlanUnlocked = true;
   return <aside id="pipeline-navigation" className="pipeline" aria-label="生产工作台导航">
     <button type="button" className="pipeline-toggle" onClick={onToggle} aria-label={collapsed ? "展开左侧菜单" : "收起左侧菜单"} aria-controls="pipeline-navigation" aria-expanded={!collapsed} title={collapsed ? "展开左侧菜单" : "收起左侧菜单"}><span aria-hidden="true">{collapsed ? "»" : "«"}</span><span className="pipeline-toggle-copy">{collapsed ? "展开" : "收起菜单"}</span></button>
     <div className="pipeline-heading"><span className="pipeline-kicker">PROJECT FLOW</span><strong>生产工作台</strong><small>从素材到最终成片</small></div>

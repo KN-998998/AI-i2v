@@ -18,6 +18,7 @@ import { ClipReviewPage } from "./components/ClipReviewPage";
 
 const nodeTypes = { workflow: WorkflowNodeCard };
 const pipelinePreferenceKey = "restaurant-video.pipeline-collapsed";
+const alwaysAvailableWorkspaceRoutes = new Set<WorkflowRoute>(["/canvas-mvp", "/workflow/tasks", "/workflow/weekly-plan"]);
 
 function loadPipelinePreference() {
   try {
@@ -80,7 +81,7 @@ function App() {
     }
   }, [pipelineCollapsed]);
   useEffect(() => {
-    if (!hydrated || isWorkflowRouteUnlocked(path, workflowProgress)) return;
+    if (!hydrated || alwaysAvailableWorkspaceRoutes.has(path) || isWorkflowRouteUnlocked(path, workflowProgress)) return;
     const fallback = firstIncompleteWorkflowRoute(workflowProgress);
     window.history.replaceState({}, "", fallback);
     window.dispatchEvent(new Event("workflow:navigate"));
