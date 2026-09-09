@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, ConnectionLineType, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, type Edge, type OnConnect } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { connectWouldCycle, nodeCatalog, type NodeKind, type WorkflowNode } from "./model";
@@ -7,6 +7,7 @@ import { Inspector } from "./components/Inspector";
 import { Pipeline } from "./components/Pipeline";
 import { GeneratorPage, OutputPage, StepPage } from "./components/StepPages";
 import { navigate, routeForPath, type WorkflowRoute } from "./router";
+import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress";
 import { WorkflowNodeCard } from "./components/WorkflowNodeCard";
 import { BatchComposePage } from "./components/BatchComposePage";
 import { ImageProcessingPage } from "./components/ImageProcessingPage";
@@ -51,8 +52,12 @@ function App() {
   const saving = useWorkflowStore(state => state.saving);
   const lastSavedAt = useWorkflowStore(state => state.lastSavedAt);
   const revision = useWorkflowStore(state => state.revision);
+  const nodes = useWorkflowStore(state => state.nodes);
+  const candidateClips = useWorkflowStore(state => state.candidateClips);
+  const composeWorkspaces = useWorkflowStore(state => state.composeWorkspaces);
   const [toast, setToast] = useState("");
   const [pipelineCollapsed, setPipelineCollapsed] = useState(loadPipelinePreference);
+  const workflowProgress = useMemo(() => deriveWorkflowProgress(nodes, candidateClips, composeWorkspaces), [nodes, candidateClips, composeWorkspaces]);
   const toastTimer = useRef<number | null>(null);
   useEffect(() => () => { if (toastTimer.current !== null) window.clearTimeout(toastTimer.current); }, []);
   const notify = useCallback((message: string) => { if (toastTimer.current !== null) window.clearTimeout(toastTimer.current); setToast(message); toastTimer.current = window.setTimeout(() => { toastTimer.current = null; setToast(""); }, 2600); }, []);
@@ -74,16 +79,24 @@ function App() {
       // 无法写入本地偏好时，仍保证当前页面可正常开合。
     }
   }, [pipelineCollapsed]);
+  useEffect(() => {
+    if (!hydrated || isWorkflowRouteUnlocked(path, workflowProgress)) return;
+    const fallback = firstIncompleteWorkflowRoute(workflowProgress);
+    window.history.replaceState({}, "", fallback);
+    window.dispatchEvent(new Event("workflow:navigate"));
+  }, [hydrated, path, workflowProgress]);
   const save = () => saveDraft().then(() => notify("草稿已保存")).catch(() => notify("保存失败，请检查后端服务"));
   const workspaceLabel = path === "/canvas-mvp" ? "流程总览" : path === "/workflow/weekly-plan" ? "自动化生产" : "分步编辑";
+  const overviewUnlocked = isWorkflowRouteUnlocked("/canvas-mvp", workflowProgress);
+  const outputUnlocked = isWorkflowRouteUnlocked("/workflow/output", workflowProgress);
   return <div className="app-shell">
     <header className="topbar">
-      <button type="button" className="brand-button" onClick={() => navigate("/canvas-mvp")}>
+      <button type="button" className="brand-button" onClick={() => navigate(overviewUnlocked ? "/canvas-mvp" : firstIncompleteWorkflowRoute(workflowProgress))}>
         <span className="brand-mark"><img src={`${import.meta.env.BASE_URL}favicon.png`} alt="" /></span>
         <span className="brand-copy"><span className="eyebrow">AI VIDEO WORKFLOW</span><h1>AI 图生视频工作流</h1></span>
       </button>
       <div className="topbar-context"><span className="context-label">当前模式</span><strong>{workspaceLabel}</strong><span className="context-divider" /><span className="context-label">自动化工作台</span></div>
-      <div className="top-actions"><span className="status-dot">{saving ? "保存中" : lastSavedAt ? "已保存" : hydrated ? "就绪" : "加载中"}</span><button type="button" className="btn" disabled={saving || !hydrated} onClick={save}>{saving ? "保存中..." : "保存草稿"}</button><button type="button" className="btn btn-primary" onClick={() => navigate("/workflow/output")}>查看成片</button></div>
+      <div className="top-actions"><span className="status-dot">{saving ? "保存中" : lastSavedAt ? "已保存" : hydrated ? "就绪" : "加载中"}</span><button type="button" className="btn" disabled={saving || !hydrated} onClick={save}>{saving ? "保存中..." : "保存草稿"}</button><button type="button" className="btn btn-primary" disabled={!outputUnlocked} title={outputUnlocked ? "查看成片" : "请先完成前序步骤"} onClick={() => navigate("/workflow/output")}>查看成片</button></div>
     </header>
     <div className={`workspace ${pipelineCollapsed ? "pipeline-collapsed" : ""}`}><Pipeline path={path} collapsed={pipelineCollapsed} onToggle={() => setPipelineCollapsed(value => !value)} /><RouteContent path={path} onToast={notify} /></div>
     {toast && <div className="toast">{toast}</div>}

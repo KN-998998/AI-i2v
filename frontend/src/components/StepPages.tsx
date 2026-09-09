@@ -4,6 +4,7 @@ import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimin
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
+import { deriveWorkflowProgress, isWorkflowRouteUnlocked } from "../workflowProgress";
 import { StoryboardTimeline } from "./StoryboardTimeline";
 import { AssetLibraryBatchPanel } from "./AssetLibraryBatchPanel";
 
@@ -180,14 +181,18 @@ function StepSummary({ route, nodeId }: { route: WorkflowRoute; nodeId: string |
 }
 
 function StepNext({ route }: { route: WorkflowRoute }) {
+  const nodes = useWorkflowStore(state => state.nodes);
+  const candidateClips = useWorkflowStore(state => state.candidateClips);
+  const composeWorkspaces = useWorkflowStore(state => state.composeWorkspaces);
   const next: Record<string, { path: WorkflowRoute; label: string }> = {
-    "/workflow/assets": { path: "/workflow/prompts", label: "下一步：提示词装配" },
+    "/workflow/assets": { path: "/workflow/image-processing", label: "下一步：图片处理" },
     "/workflow/prompts": { path: "/workflow/generator", label: "下一步：生成片段" },
     "/workflow/sound": { path: "/workflow/output", label: "查看成片结果" },
   };
   const item = next[route];
   if (!item) return null;
-  return <button type="button" className="btn btn-primary step-next" onClick={() => navigate(item.path)}>{item.label}</button>;
+  const unlocked = isWorkflowRouteUnlocked(item.path, deriveWorkflowProgress(nodes, candidateClips, composeWorkspaces));
+  return <button type="button" disabled={!unlocked} title={unlocked ? item.label : "请先完成当前步骤"} className="btn btn-primary step-next" onClick={() => navigate(item.path)}>{item.label}</button>;
 }
 
 function SoundTextPreview() {

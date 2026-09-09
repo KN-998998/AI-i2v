@@ -1,6 +1,7 @@
 import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
+import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -14,6 +15,21 @@ assert(browserDraftId({ getItem: key => draftStorage.get(key) ?? null, setItem: 
 
 assert(connectWouldCycle(initialEdges, "sound", "assets") === true, "cycle connection was accepted");
 assert(connectWouldCycle(initialEdges, "assets", "sound") === false, "acyclic connection was rejected");
+
+const lockedProgress = deriveWorkflowProgress(initialNodes, [], []);
+assert(lockedProgress.steps[0].unlocked && !lockedProgress.steps[0].complete, "first workflow step should be the only initial entry point");
+assert(!lockedProgress.steps[1].unlocked && !isWorkflowRouteUnlocked("/canvas-mvp", lockedProgress), "new users should not access later workflow or overview routes");
+assert(firstIncompleteWorkflowRoute(lockedProgress) === "/workflow/assets", "new users should be directed to the asset step");
+const completedNodes = initialNodes.map(node => ({ ...node, data: { ...node.data } }));
+const completedInput = completedNodes.find(node => node.data.kind === "input");
+const completedImageProcess = completedNodes.find(node => node.data.kind === "image_process");
+const completedPrompt = completedNodes.find(node => node.data.kind === "prompt");
+if (!completedInput || !completedImageProcess || !completedPrompt) throw new Error("workflow seed is missing required nodes");
+completedInput.data.imagePreview = "/assets/dish.png";
+completedImageProcess.data.processedImagePreview = "/assets/dish-processed.png";
+completedPrompt.data.status = "已装配";
+const generatedProgress = deriveWorkflowProgress(completedNodes, [{ id: "generated", dish: "dish", label: "", tone: "", timelineDuration: 3, generatorNodeId: "clips", sourcePath: "clip.mp4", isSelected: true }], []);
+assert(generatedProgress.steps[4].unlocked && !generatedProgress.steps[5].unlocked, "completed clips should unlock composition but not sound");
 
 const next = removeNodeAndEdges(initialNodes, initialEdges, "prompt");
 assert(!next.nodes.some(node => node.id === "prompt"), "node was not removed");
