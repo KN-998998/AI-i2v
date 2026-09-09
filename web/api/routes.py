@@ -35,7 +35,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
-from web.services.weekly_plans import assert_ready_for_compose, create_plan as create_weekly_plan, get_daily_by_draft, get_plan as get_weekly_plan, list_plans as list_weekly_plans, save_clip_review, update_daily_plan
+from web.services.weekly_plans import assert_ready_for_compose, create_plan as create_weekly_plan, get_daily_by_draft, get_plan as get_weekly_plan, list_plans as list_weekly_plans, save_clip_review, update_daily_plan, update_plan_status
 from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, managed_asset_library_root, manual_review_preview_path, manual_review_scan_response, manual_review_upload_directory, organize_manual_asset_library, save_category_rule, save_manual_review_state, scan_asset_classifications, scan_manual_asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
@@ -535,6 +535,14 @@ def get_weekly_plan_detail(plan_id: str) -> dict[str, Any]:
     if plan is None:
         raise _json_error("周计划不存在", 404)
     return plan
+
+
+@router.put("/api/weekly-plans/{plan_id}/status")
+def put_weekly_plan_status(plan_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        return update_plan_status(plan_id, str((payload or {}).get("action") or ""))
+    except ValueError as exc:
+        raise _json_error(str(exc), 400) from exc
 
 
 @router.put("/api/weekly-plans/days/{daily_id}")

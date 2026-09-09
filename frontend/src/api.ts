@@ -276,7 +276,7 @@ export type WeeklyDailyPlan = {
   videoCount: number;
   clipsPerVideo: number;
   categoryCounts: Record<string, number>;
-  status: "scheduled" | "processing_images" | "generating" | "review" | "error";
+  status: "scheduled" | "processing_images" | "generating" | "review" | "error" | "cancelled";
   draftId: string | null;
   error: string | null;
   updatedAt: string;
@@ -294,6 +294,7 @@ export type WeeklyPlan = {
   templateDraftId: string;
   runAt: string;
   active: boolean;
+  status: "active" | "paused" | "cancelled";
   days: WeeklyDailyPlan[];
 };
 
@@ -318,6 +319,10 @@ export async function createWeeklyPlan(payload: WeeklyPlanInput): Promise<Weekly
 
 export async function updateWeeklyPlanDay(dailyId: string, payload: WeeklyPlanInput["defaults"]): Promise<WeeklyDailyPlan> {
   return parseResponse<WeeklyDailyPlan>(await fetch(`${API_BASE_URL}/api/weekly-plans/days/${encodeURIComponent(dailyId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }));
+}
+
+export async function updateWeeklyPlanStatus(planId: string, action: "pause" | "resume" | "cancel"): Promise<WeeklyPlan> {
+  return parseResponse<WeeklyPlan>(await fetch(`${API_BASE_URL}/api/weekly-plans/${encodeURIComponent(planId)}/status`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) }));
 }
 
 export async function fetchWeeklyRunByDraft(draftId: string): Promise<WeeklyDailyPlan | null> {

@@ -55,6 +55,7 @@ def initialize() -> None:
                 template_draft_id TEXT NOT NULL,
                 run_at TEXT NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'active',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -101,6 +102,9 @@ def initialize() -> None:
         columns = {str(row["name"]) for row in connection.execute("PRAGMA table_info(weekly_plans)")}
         if "duration_days" not in columns:
             connection.execute("ALTER TABLE weekly_plans ADD COLUMN duration_days INTEGER NOT NULL DEFAULT 7")
+        if "status" not in columns:
+            connection.execute("ALTER TABLE weekly_plans ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+            connection.execute("UPDATE weekly_plans SET status = CASE WHEN active = 1 THEN 'active' ELSE 'paused' END")
 
 
 def _parse_date(value: str) -> date:
@@ -177,7 +181,7 @@ def _reserved_keys(connection: sqlite3.Connection, run_date: date, exclude_plan_
         "SELECT DISTINCT r.dish_key FROM asset_reservations r "
         "JOIN daily_plans d ON d.id = r.daily_plan_id "
         "JOIN weekly_plans w ON w.id = d.weekly_plan_id "
-        "WHERE r.run_date BETWEEN ? AND ? AND w.active = 1" + clause,
+        "WHERE r.run_date BETWEEN ? AND ? AND w.active = 1 AND w.status = 'active'" + clause,
         params,
     ).fetchall()
     return {str(row["dish_key"]) for row in rows}
@@ -244,7 +248,8 @@ def get_plan(plan_id: str) -> dict[str, Any] | None:
             "id": plan["id"], "startDate": plan["week_start"], "weekStart": plan["week_start"],
             "durationDays": int(plan["duration_days"] or 7), "assetRoot": plan["asset_root"],
             "backgroundRoot": plan["background_root"], "templateDraftId": plan["template_draft_id"],
-            "runAt": plan["run_at"], "active": bool(plan["active"]), "days": [_serialise_daily(connection, item) for item in daily],
+            "runAt": plan["run_at"], "active": bool(plan["active"]), "status": plan["status"],
+            "days": [_serialise_daily(connection, item) for item in daily],
         }
 
 
@@ -303,6 +308,33 @@ def create_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
         except Exception:
             connection.rollback()
             raise
+    return get_plan(plan_id) or {}
+
+
+def update_plan_status(plan_id: str, action: str) -> dict[str, Any]:
+    """Pause, resume, or permanently cancel future runs while preserving history."""
+    if action not in {"pause", "resume", "cancel"}:
+        raise ValueError("计划操作仅支持 pause、resume 或 cancel")
+    initialize()
+    with _LOCK, _connect() as connection:
+        plan = connection.execute("SELECT * FROM weekly_plans WHERE id = ?", (plan_id,)).fetchone()
+        if plan is None:
+            raise ValueError("计划不存在")
+        if action == "pause":
+            if plan["status"] == "cancelled":
+                raise ValueError("已取消的计划不能恢复暂停")
+            connection.execute("UPDATE weekly_plans SET active=0, status='paused', updated_at=? WHERE id=?", (_now(), plan_id))
+        elif action == "resume":
+            if plan["status"] == "cancelled":
+                raise ValueError("已取消的计划不能恢复；请新建计划")
+            connection.execute("UPDATE weekly_plans SET active=1, status='active', updated_at=? WHERE id=?", (_now(), plan_id))
+        else:
+            connection.execute("UPDATE weekly_plans SET active=0, status='cancelled', updated_at=? WHERE id=?", (_now(), plan_id))
+            connection.execute(
+                "UPDATE daily_plans SET status='cancelled', updated_at=? WHERE weekly_plan_id=? AND status='scheduled'",
+                (_now(), plan_id),
+            )
+        connection.commit()
     return get_plan(plan_id) or {}
 
 
@@ -470,7 +502,7 @@ def run_due_plans() -> int:
     today = now.date().isoformat()
     current_time = now.strftime("%H:%M")
     with _LOCK, _connect() as connection:
-        due = connection.execute("SELECT d.id FROM daily_plans d JOIN weekly_plans w ON w.id=d.weekly_plan_id WHERE w.active=1 AND d.status='scheduled' AND d.run_date=? AND w.run_at <= ?", (today, current_time)).fetchall()
+        due = connection.execute("SELECT d.id FROM daily_plans d JOIN weekly_plans w ON w.id=d.weekly_plan_id WHERE w.active=1 AND w.status='active' AND d.status='scheduled' AND d.run_date=? AND w.run_at <= ?", (today, current_time)).fetchall()
     for row in due:
         threading.Thread(target=_launch_daily_run, args=(str(row["id"]),), name=f"weekly-run-{str(row['id'])[:8]}", daemon=True).start()
     _refresh_generating_runs()

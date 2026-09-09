@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from PIL import Image
 
+from web.core.settings import WEEKLY_PLAN_TIMEZONE
 from web.services import canvas_state, weekly_plans
 
 
@@ -104,3 +107,31 @@ def test_daily_plan_rejects_edit_after_execution_has_started(monkeypatch, tmp_pa
         assert "不能编辑" in str(exc)
     else:
         raise AssertionError("started daily plan unexpectedly accepted an edit")
+
+
+def test_weekly_plan_can_pause_resume_and_cancel_unstarted_days(monkeypatch, tmp_path):
+    monkeypatch.setattr(weekly_plans, "WEEKLY_PLAN_DB", tmp_path / "weekly.sqlite3")
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    asset_root = tmp_path / "assets"
+    background_root = tmp_path / "backgrounds"
+    _image(background_root / "bg.png")
+    for index in range(6):
+        _image(asset_root / "寿司" / f"寿司{index}" / "source.png")
+    canvas_state.save_draft("template", _template())
+    plan = weekly_plans.create_plan({
+        "start_date": datetime.now(ZoneInfo(WEEKLY_PLAN_TIMEZONE)).date().isoformat(), "duration_days": 3,
+        "asset_root": str(asset_root), "background_root": str(background_root), "template_draft_id": "template", "run_at": "00:00",
+        "defaults": {"candidate_count": 2, "video_count": 1, "clips_per_video": 2, "category_counts": {}},
+    })
+
+    paused = weekly_plans.update_plan_status(plan["id"], "pause")
+    assert paused["status"] == "paused"
+    assert not paused["active"]
+    assert weekly_plans.run_due_plans() == 0
+    resumed = weekly_plans.update_plan_status(plan["id"], "resume")
+    assert resumed["status"] == "active"
+    assert resumed["active"]
+    cancelled = weekly_plans.update_plan_status(plan["id"], "cancel")
+    assert cancelled["status"] == "cancelled"
+    assert not cancelled["active"]
+    assert {day["status"] for day in cancelled["days"]} == {"cancelled"}
