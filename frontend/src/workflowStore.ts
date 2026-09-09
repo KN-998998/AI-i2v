@@ -6,6 +6,8 @@ import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, star
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
 import { browserDraftId } from "./draftIdentity";
 
+type NodeEditSnapshot = Pick<WorkflowState, "nodes" | "timeline" | "candidateClips" | "composeWorkspaces" | "bgmName" | "bgmUrl" | "composeJob" | "activePanel" | "selectedNodeId" | "selectedEdgeId">;
+
 type WorkflowState = {
   nodes: WorkflowNode[];
   edges: Edge[];
@@ -32,10 +34,15 @@ type WorkflowState = {
   saving: boolean;
   lastSavedAt: string | null;
   revision: number;
+  editingNodeId: string | null;
+  nodeEditSnapshot: NodeEditSnapshot | null;
   setNodes: (changes: NodeChange<WorkflowNode>[]) => void;
   setEdges: (changes: EdgeChange[]) => void;
   addEdge: (edge: Edge) => void;
   setSelection: (nodeId: string | null, edgeId?: string | null) => void;
+  beginNodeEdit: (nodeId: string) => void;
+  saveNodeEdit: () => void;
+  discardNodeEdit: () => void;
   setActivePanel: (panel: Panel) => void;
   updateNodeData: (nodeId: string, patch: Partial<WorkflowData>) => void;
   registerGeneratorClip: (nodeId: string) => void;
@@ -317,6 +324,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   saving: false,
   lastSavedAt: null,
   revision: 0,
+  editingNodeId: null,
+  nodeEditSnapshot: null,
   setNodes: changes => set(state => {
     const safeChanges = changes.filter(change => !(change.type === "remove" && protectedNodeIds.has(change.id)));
     const nodes = applyNodeChanges(safeChanges, state.nodes) as WorkflowNode[];
@@ -340,6 +349,27 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const nextEdgeId = nodeId ? null : edgeId;
     if (state.selectedNodeId === nodeId && state.selectedEdgeId === nextEdgeId) return {};
     return { selectedNodeId: nodeId, selectedEdgeId: nextEdgeId };
+  }),
+  beginNodeEdit: nodeId => set(state => {
+    if (!state.nodes.some(node => node.id === nodeId)) return {};
+    const snapshot: NodeEditSnapshot = structuredClone({
+      nodes: state.nodes,
+      timeline: state.timeline,
+      candidateClips: state.candidateClips,
+      composeWorkspaces: state.composeWorkspaces,
+      bgmName: state.bgmName,
+      bgmUrl: state.bgmUrl,
+      composeJob: state.composeJob,
+      activePanel: state.activePanel,
+      selectedNodeId: state.selectedNodeId,
+      selectedEdgeId: state.selectedEdgeId,
+    });
+    return { editingNodeId: nodeId, nodeEditSnapshot: snapshot, selectedNodeId: nodeId, selectedEdgeId: null };
+  }),
+  saveNodeEdit: () => set({ editingNodeId: null, nodeEditSnapshot: null }),
+  discardNodeEdit: () => set(state => {
+    if (!state.nodeEditSnapshot) return { editingNodeId: null };
+    return { ...state.nodeEditSnapshot, editingNodeId: null, nodeEditSnapshot: null, revision: state.revision + 1 };
   }),
   setActivePanel: activePanel => set(state => ({ activePanel, revision: state.revision + 1 })),
   updateNodeData: (nodeId, patch) => set(state => {

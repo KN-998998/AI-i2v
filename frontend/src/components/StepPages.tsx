@@ -26,11 +26,12 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
     if (panel) setActivePanel(panel);
   }, [nodeId, panel, setActivePanel, setSelection]);
 
-  if (route === "/workflow/prompts") return <StepFrame route={route} title={title} description={description} onToast={onToast}>
+  if (route === "/workflow/prompts") return <><StepFrame route={route} title={title} description={description} onToast={onToast}>
     <div className="prompt-step-layout"><PromptNodeWorkspace onToast={onToast} /><div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div>
-  </StepFrame>;
+  </StepFrame><Inspector onToast={onToast} /></>;
   return <StepFrame route={route} title={title} description={description} onToast={onToast}>
-    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}{route === "/workflow/sound" && <><SoundTextPreview /><SoundComposePanel onToast={onToast} /></>}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div><Inspector onToast={onToast} /></div>
+    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}{route === "/workflow/sound" && <><SoundTextPreview /><SoundComposePanel onToast={onToast} /></>}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div></div>
+    <Inspector onToast={onToast} />
   </StepFrame>;
 }
 
@@ -51,21 +52,19 @@ function resolveStepNodeId(kind: ManagedNodeKind | null, nodes: WorkflowNode[], 
 
 function PromptNodeWorkspace({ onToast }: { onToast: (message: string) => void }) {
   const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === "prompt");
-  const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
   const setSelection = useWorkflowStore(state => state.setSelection);
+  const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
   const addNode = useWorkflowStore(state => state.addNode);
   return <section className="prompt-node-workspace">
     <div className="panel-section-head"><div><span className="panel-label">PROMPT NODES</span><h2>提示词节点 · {nodes.length} 个</h2><p className="muted">每个节点独立配置 L0/L1/L2、镜头与动作；点击节点卡片展开对应编辑区。</p></div><button type="button" className="btn btn-primary" onClick={() => { addNode("prompt"); onToast("已新增提示词节点"); }}>＋ 新增提示词节点</button></div>
     <div className="prompt-node-list">{nodes.map((node, index) => {
-      const expanded = selectedNodeId === node.id;
-      return <article className={`prompt-node-card ${expanded ? "is-expanded" : ""}`} key={node.id}>
+      return <article className="prompt-node-card" key={node.id}>
         <div className="prompt-node-card-head" onClick={() => setSelection(node.id)}>
           <span className="node-record-index">{String(index + 1).padStart(2, "0")}</span>
           <div><strong>{node.data.title}</strong><small>{node.data.description || "配置画面元素、镜头和动作"}</small></div>
           <div className="prompt-node-card-meta"><span className="node-status">{node.data.status}</span><span>L0 {node.data.promptL0?.length ?? 0}</span></div>
-          <button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(expanded ? null : node.id); }}>{expanded ? "收起编辑" : "编辑节点"}</button>
+          <button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); beginNodeEdit(node.id); }}>编辑节点</button>
         </div>
-        {expanded && <div className="prompt-node-editor"><Inspector nodeId={node.id} embedded onToast={onToast} /></div>}
       </article>;
     })}</div>
   </section>;
@@ -76,6 +75,7 @@ function LegacyNodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: 
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
   const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
   const legacyBgmName = useWorkflowStore(state => state.bgmName);
+  const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
   const bgmName = activeWorkspace?.soundConfig?.bgmName ?? legacyBgmName;
   const setSelection = useWorkflowStore(state => state.setSelection);
   const addNode = useWorkflowStore(state => state.addNode);
@@ -97,7 +97,7 @@ function LegacyNodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: 
     deleteNode(node.id);
     onToast(`已删除${node.data.title}`);
   };
-  return <section className="node-manager"><div className="panel-section-head"><div><span className="panel-label">GENERATION NODES</span><h2>{nodeCatalog[kind].title} · {nodes.length} 个生成节点</h2><p className="muted">每个生成节点对应一个片段输出槽位，可在画布或这里编辑。</p></div><button type="button" className="btn btn-primary" onClick={add}>＋ 新增生成节点</button></div><div className="node-record-grid">{nodes.map((node, index) => { const selected = selectedNodeId === node.id; const protectedNode = ["assets", "prompt", "clips", "output", "sound"].includes(node.id); return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}><div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div><div className="node-record-body">{node.data.kind === "input" && <><span>菜品：{node.data.dishName || "未设置"}</span><span>素材：{node.data.imageName || "未上传"}</span></>}{node.data.kind === "prompt" && <><span>L0：{node.data.promptL0?.length ?? 0} 个画面元素</span><span>运动：{node.data.promptMotion || "未设置"}</span></>}{node.data.kind === "generator" && <><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></>}{node.data.kind === "output" && <><span>目标：{node.data.outputTarget || "未设置"}</span><span>画幅：{node.data.outputAspect || "9:16"}</span></>}{node.data.kind === "sound" && <><span>BGM：{bgmName || "未上传"}</span><span>文字：{node.data.overlayMain || "未设置"}</span></>}</div><div className="node-record-actions"><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div></article>; })}</div></section>;
+  return <section className="node-manager"><div className="panel-section-head"><div><span className="panel-label">GENERATION NODES</span><h2>{nodeCatalog[kind].title} · {nodes.length} 个生成节点</h2><p className="muted">每个生成节点对应一个片段输出槽位，点击“编辑”在右侧抽屉中完成配置。</p></div><button type="button" className="btn btn-primary" onClick={add}>＋ 新增生成节点</button></div><div className="node-record-grid">{nodes.map((node, index) => { const selected = selectedNodeId === node.id; const protectedNode = ["assets", "prompt", "clips", "output", "sound"].includes(node.id); return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}><div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div><div className="node-record-body">{node.data.kind === "input" && <><span>菜品：{node.data.dishName || "未设置"}</span><span>素材：{node.data.imageName || "未上传"}</span></>}{node.data.kind === "prompt" && <><span>L0：{node.data.promptL0?.length ?? 0} 个画面元素</span><span>运动：{node.data.promptMotion || "未设置"}</span></>}{node.data.kind === "generator" && <><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></>}{node.data.kind === "output" && <><span>目标：{node.data.outputTarget || "未设置"}</span><span>画幅：{node.data.outputAspect || "9:16"}</span></>}{node.data.kind === "sound" && <><span>BGM：{bgmName || "未上传"}</span><span>文字：{node.data.overlayMain || "未设置"}</span></>}</div><div className="node-record-actions"><button type="button" className="btn" onClick={event => { event.stopPropagation(); beginNodeEdit(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div></article>; })}</div></section>;
 }
 
 function NodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (message: string) => void }) {
@@ -111,6 +111,7 @@ function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void 
   const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === "generator");
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
   const setSelection = useWorkflowStore(state => state.setSelection);
+  const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
   const addNode = useWorkflowStore(state => state.addNode);
   const deleteNode = useWorkflowStore(state => state.deleteNode);
   const duplicateNode = useWorkflowStore(state => state.duplicateNode);
@@ -153,7 +154,7 @@ function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void 
       return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}>
         <div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div>
         <div className="node-record-body"><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></div>
-        <div className="node-record-actions"><button type="button" disabled={generating} className={`btn ${generated || failed ? "" : "btn-primary"}`} onClick={event => { event.stopPropagation(); void generate(node); }}>{generating ? "生成中..." : failed ? "重试生成" : generated ? "再次生成" : "生成片段"}</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div>
+        <div className="node-record-actions"><button type="button" disabled={generating} className={`btn ${generated || failed ? "" : "btn-primary"}`} onClick={event => { event.stopPropagation(); void generate(node); }}>{generating ? "生成中..." : failed ? "重试生成" : generated ? "再次生成" : "生成片段"}</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); beginNodeEdit(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div>
       </article>;
     })}</div>
   </section>;

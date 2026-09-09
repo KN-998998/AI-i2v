@@ -10,6 +10,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const generateNode = useWorkflowStore(state => state.generateNode);
   const setSelection = useWorkflowStore(state => state.setSelection);
+  const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
   const legacyBgmName = useWorkflowStore(state => state.bgmName);
@@ -28,6 +29,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const action = (nextPanel?: Panel) => {
     setSelection(id);
     if (nextPanel) setActivePanel(nextPanel);
+    beginNodeEdit(id);
   };
 
   const generate = async () => {

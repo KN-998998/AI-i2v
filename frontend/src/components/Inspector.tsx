@@ -341,18 +341,22 @@ function TypeFields({ node, onToast }: { node: WorkflowNode; onToast: (message: 
   return <><SectionTitle>自定义处理</SectionTitle><div className="preview-box">{data.description}</div></>;
 }
 
-export function Inspector({ onToast, nodeId, embedded = false }: { onToast: (message: string) => void; nodeId?: string | null; embedded?: boolean }) {
+export function Inspector({ onToast }: { onToast: (message: string) => void }) {
   const nodes = useWorkflowStore(state => state.nodes);
-  const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
-  const selectedEdgeId = useWorkflowStore(state => state.selectedEdgeId);
+  const editingNodeId = useWorkflowStore(state => state.editingNodeId);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const deleteSelected = useWorkflowStore(state => state.deleteSelected);
   const duplicateSelected = useWorkflowStore(state => state.duplicateSelected);
-  const resolvedNodeId = nodeId ?? selectedNodeId;
-  const node = nodes.find(item => item.id === resolvedNodeId);
-  const className = `inspector${embedded ? " inspector-embedded" : ""}`;
-  if (!nodeId && selectedEdgeId) return <aside className={className}><div className="inspector-head"><div><h2>连接线</h2><p>选中后可删除当前连接</p></div></div><button type="button" className="btn btn-danger full" onClick={() => { deleteSelected(); onToast("连接线已删除"); }}>删除连接</button></aside>;
-  if (!node) return <aside className={className}><div className="empty-state">选择节点查看可编辑属性</div></aside>;
+  const saveNodeEdit = useWorkflowStore(state => state.saveNodeEdit);
+  const discardNodeEdit = useWorkflowStore(state => state.discardNodeEdit);
+  const node = nodes.find(item => item.id === editingNodeId);
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") discardNodeEdit(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [discardNodeEdit]);
+  if (!node) return null;
   const selectCurrentNode = () => setSelection(node.id);
-  return <aside className={className}><div className="inspector-head"><div><h2>节点属性</h2><p>{node.data.title} · 可编辑</p></div><Tag>{node.data.kind}</Tag></div><BasicFields node={node} /><TypeFields node={node} onToast={onToast} /><div className="inspector-actions"><button type="button" className="btn btn-primary full" onClick={() => onToast("节点修改已同步到画布")}>保存节点</button><button type="button" className="btn full" onClick={() => { selectCurrentNode(); duplicateSelected(); onToast("节点已复制"); }}>复制节点</button><button type="button" className="btn btn-danger full" onClick={() => { selectCurrentNode(); deleteSelected(); setSelection(null); onToast("节点已删除"); }}>删除节点</button></div></aside>;
+  const closeWithoutSaving = () => { discardNodeEdit(); onToast("已放弃本次节点修改"); };
+  return <div className="node-edit-drawer-layer"><button type="button" className="node-edit-drawer-backdrop" aria-label="关闭节点编辑" onClick={closeWithoutSaving} /><aside className="inspector node-edit-drawer" role="dialog" aria-modal="true" aria-label={`编辑节点：${node.data.title}`}><div className="inspector-head"><div><span className="panel-label">NODE EDITOR</span><h2>编辑节点</h2><p>{node.data.title} · 仅在保存后保留本次修改</p></div><div className="drawer-head-actions"><Tag>{node.data.kind}</Tag><button type="button" className="drawer-close" aria-label="不保存并关闭" title="不保存并关闭" onClick={closeWithoutSaving}>×</button></div></div><div className="node-edit-drawer-body"><BasicFields node={node} /><TypeFields node={node} onToast={onToast} /></div><div className="inspector-actions node-edit-drawer-actions"><button type="button" className="btn" onClick={closeWithoutSaving}>不保存</button><button type="button" className="btn btn-primary" onClick={() => { saveNodeEdit(); onToast("节点修改已保存"); }}>保存并收起</button><button type="button" className="btn" onClick={() => { selectCurrentNode(); duplicateSelected(); saveNodeEdit(); onToast("节点已复制"); }}>复制节点</button><button type="button" className="btn btn-danger" onClick={() => { selectCurrentNode(); deleteSelected(); saveNodeEdit(); setSelection(null); onToast("节点已删除"); }}>删除节点</button></div></aside></div>;
 }
