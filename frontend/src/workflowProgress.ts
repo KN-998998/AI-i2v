@@ -42,7 +42,7 @@ export function deriveWorkflowProgress(nodes: WorkflowNode[], candidateClips: Ti
   const compositionComplete = workspaces.some(workspace => workspace.job?.status === "done");
   const soundComplete = workspaces.some(workspace => workspace.finalJob?.status === "done");
   const completedSteps = [assetsComplete, imageProcessingComplete, promptsComplete, clipsComplete, compositionComplete, soundComplete, soundComplete];
-  const steps = completedSteps.map((complete, index) => ({ complete, unlocked: index === 0 || completedSteps[index - 1] }));
+  const steps = completedSteps.map((complete, index) => ({ complete, unlocked: index === 0 || completedSteps.slice(0, index).every(Boolean) }));
   return { steps, allStepsComplete: completedSteps.slice(0, 6).every(Boolean) };
 }
 

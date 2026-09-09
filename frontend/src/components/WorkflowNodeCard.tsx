@@ -12,6 +12,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const setSelection = useWorkflowStore(state => state.setSelection);
   const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
+  const canAssemblePrompt = useWorkflowStore(state => state.nodes.some(node => node.data.kind === "input" && Boolean(node.data.imagePreview)) && state.nodes.some(node => node.data.kind === "image_process" && Boolean(node.data.processedImagePreview)));
   const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
   const legacyBgmName = useWorkflowStore(state => state.bgmName);
   const [generating, setGenerating] = useState(false);
@@ -67,7 +68,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <Row label="L1 主运动" value={promptConfig?.l1_subject === "none" ? "无（纯运镜）" : `${ELEMENT_OPTIONS.find(item => item.id === promptConfig?.l1_subject)?.label ?? "待配置"}${actionLabel ? ` · ${actionLabel}` : ""}`} />
       <Row label="L2 次级动态" value={`${promptConfig?.l2_dynamics.length ?? 0} / 2 项`} />
       <div className="tag-list"><Tag good={!promptResult?.blocked} warn={Boolean(promptResult?.blocked)}>{promptResult?.blocked ? `阻断 ${promptResult.errors[0]?.code ?? ""}` : "校验通过"}</Tag>{promptResult?.warnings.slice(0, 1).map(warning => <Tag warn key={warning.code}>{warning.code}</Tag>)}</div>
-      <Footer><ActionButton onClick={() => action("prompt")}>编辑槽位</ActionButton><ActionButton primary onClick={() => updateNodeData(id, { status: "已装配" })}>实时装配</ActionButton></Footer>
+      <Footer><ActionButton onClick={() => action("prompt")}>编辑槽位</ActionButton><ActionButton primary disabled={!canAssemblePrompt} title={canAssemblePrompt ? "校验并完成提示词装配" : "请先上传图片素材并完成图片处理"} onClick={() => updateNodeData(id, { status: "已装配" })}>实时装配</ActionButton></Footer>
     </>,
     generator: <>
       <Row label="规格" value={`${formatNodeValue(data.duration, "3s")} · ${formatNodeValue(data.resolution, "1080p")}`} />

@@ -16,8 +16,8 @@ export function Footer({ children }: { children: ReactNode }) {
   return <div className="node-footer">{children}</div>;
 }
 
-export function ActionButton({ children, onClick, primary = false }: { children: ReactNode; onClick: () => void; primary?: boolean }) {
-  return <button className={`btn nodrag nopan ${primary ? "btn-primary" : ""}`} type="button" onClick={(event: MouseEvent<HTMLButtonElement>) => { event.stopPropagation(); onClick(); }}>{children}</button>;
+export function ActionButton({ children, onClick, primary = false, disabled = false, title }: { children: ReactNode; onClick: () => void; primary?: boolean; disabled?: boolean; title?: string }) {
+  return <button className={`btn nodrag nopan ${primary ? "btn-primary" : ""}`} type="button" disabled={disabled} title={title} onClick={(event: MouseEvent<HTMLButtonElement>) => { event.stopPropagation(); onClick(); }}>{children}</button>;
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
