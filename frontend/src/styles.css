@@ -1046,3 +1046,76 @@ h1 { color: #1e1f29; font-size: 19px; letter-spacing: -.02em; }
   .step-main { padding: 24px 16px 48px; }
   .step-header h1, .task-center-hero h1 { font-size: 26px; }
 }
+
+/* Content pages use compact, single-purpose work cards instead of long form stacks. */
+.task-hero-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 9px; }
+.task-sync-pill { display: inline-flex; align-items: center; min-height: 34px; padding: 0 11px; border: 1px solid #dedfec; border-radius: 999px; color: #747789; background: #fff; font-size: 12px; font-weight: 600; }
+.task-sync-pill::before { width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #b7b9c7; content: ""; }
+.task-sync-pill.ready { border-color: #c7e5d2; color: #28734f; background: #f6fcf8; }
+.task-sync-pill.ready::before { background: #36a86d; box-shadow: 0 0 0 3px rgba(54, 168, 109, .11); }
+.task-sync-pill.error { border-color: #f0caca; color: #b64343; background: #fff8f8; }
+.task-sync-pill.error::before { background: #d65757; }
+.task-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.task-summary-card { position: relative; overflow: hidden; min-height: 124px; padding: 18px; }
+.task-summary-card::after { position: absolute; right: -22px; bottom: -38px; width: 96px; height: 96px; border: 18px solid rgba(91, 92, 226, .055); border-radius: 50%; content: ""; }
+.task-summary-card.active::after { border-color: rgba(215, 150, 44, .10); }
+.task-summary-card.done::after { border-color: rgba(50, 168, 112, .10); }
+.task-summary-card.error::after { border-color: rgba(209, 79, 79, .10); }
+.task-summary-card strong { position: relative; z-index: 1; margin-top: 2px; font-size: 31px; }
+.task-summary-card small { max-width: 190px; line-height: 1.5; }
+
+.weekly-plan-page { max-width: 1440px; }
+.weekly-plan-config { display: grid; gap: 18px; }
+.content-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 2px 2px 0; }
+.content-section-head > div { max-width: 700px; }
+.content-section-head h2 { margin: 6px 0 5px; color: #282936; font-size: 21px; letter-spacing: -.025em; }
+.content-section-head p { margin: 0; color: #777a8a; font-size: 13px; line-height: 1.65; }
+.content-section-head > .btn { flex: 0 0 auto; }
+.weekly-config-grid { display: grid; grid-template-columns: minmax(220px, .88fr) minmax(300px, 1.25fr) minmax(245px, .95fr); gap: 14px; align-items: stretch; }
+.weekly-config-card { display: flex; flex-direction: column; min-width: 0; padding: 18px; border: 1px solid #e1e2ed; border-radius: 14px; background: rgba(255, 255, 255, .96); box-shadow: 0 7px 20px rgba(49, 47, 93, .05); transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.weekly-config-card:hover { border-color: #c4c5f3; box-shadow: 0 12px 28px rgba(67, 65, 156, .09); transform: translateY(-1px); }
+.config-card-head { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; min-height: 61px; padding-bottom: 14px; border-bottom: 1px solid #eeeeF4; }
+.config-card-head > span { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; color: #5657c8; background: #f0efff; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
+.config-card-head h3 { margin: 0; color: #333543; font-size: 15px; letter-spacing: -.015em; }
+.config-card-head p { margin: 4px 0 0; color: #818494; font-size: 12px; line-height: 1.5; }
+.weekly-card-fields, .weekly-output-fields, .weekly-source-fields { display: grid; gap: 12px; margin-top: 16px; }
+.weekly-card-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.weekly-card-fields > .field:last-child { grid-column: 1 / -1; }
+.weekly-output-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.weekly-source-fields { grid-template-columns: 1fr; }
+.weekly-config-card .field { gap: 6px; min-width: 0; }
+.weekly-config-card .field > span { font-size: 12px; }
+.weekly-config-card .input { min-width: 0; min-height: 36px; }
+.weekly-config-card .field small { min-height: 15px; font-size: 11px; line-height: 1.35; }
+.weekly-config-card .asset-path-control { gap: 7px; }
+.weekly-config-card .asset-path-control .input { width: 100%; }
+.weekly-config-card .asset-path-control .btn { flex: 0 0 auto; padding-inline: 9px; font-size: 12px; }
+.weekly-output-fields + .form-check { margin-top: auto; padding-top: 16px; }
+.weekly-advanced-panel { display: grid; grid-template-columns: minmax(220px, .34fr) minmax(0, 1fr); align-items: start; gap: 28px; padding: 19px; border: 1px solid #dfe0f0; border-radius: 14px; background: linear-gradient(120deg, #fbfaff, #fff); box-shadow: 0 6px 18px rgba(65, 63, 150, .04); }
+.weekly-advanced-panel h3 { margin: 6px 0 4px; color: #363747; font-size: 16px; }
+.weekly-advanced-panel p { margin: 0; }
+.weekly-advanced-panel .weekly-category-fields { margin: 0; }
+.weekly-plan-days { margin-top: 30px; padding-top: 24px; border-top: 1px solid #e5e5ef; }
+.weekly-plan-days > .panel-section-head { margin-bottom: 9px; }
+.weekly-day-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.weekly-day-card { min-height: 188px; padding: 17px; border-radius: 13px; }
+.weekly-day-card p { margin: 2px 0 0; color: #505364; font-size: 13px; line-height: 1.55; }
+.weekly-category-summary { margin: 2px 0; }
+.weekly-day-card .compose-actions { margin-top: auto; }
+.clip-review-grid, .manual-review-grid, .node-record-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 1160px) {
+  .weekly-config-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .weekly-config-card:nth-child(2) { grid-column: span 1; }
+  .weekly-day-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .task-hero-actions, .content-section-head { align-items: stretch; justify-content: flex-start; }
+  .task-hero-actions .btn, .content-section-head > .btn { width: 100%; }
+  .task-sync-pill { justify-content: center; }
+  .task-summary-grid, .weekly-config-grid, .weekly-day-grid, .clip-review-grid, .manual-review-grid, .node-record-grid { grid-template-columns: 1fr; }
+  .weekly-card-fields, .weekly-output-fields { grid-template-columns: 1fr; }
+  .weekly-card-fields > .field:last-child { grid-column: auto; }
+  .weekly-advanced-panel { grid-template-columns: 1fr; gap: 16px; }
+}

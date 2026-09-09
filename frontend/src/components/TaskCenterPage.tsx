@@ -41,14 +41,13 @@ export function TaskCenterPage({ onToast }: { onToast: (message: string) => void
         <h1>任务中心</h1>
         <p>集中查看图片处理、Kling 生成、片段评分、成片合成和最终输出的当前状态。</p>
       </div>
-      <button type="button" className="btn" onClick={() => navigate("/canvas-mvp")}>回到流程画布</button>
+      <div className="task-hero-actions"><span className={`task-sync-pill ${clipsLoadError ? "error" : clipsLastLoadedAt ? "ready" : ""}`}>{clipsLoadError ? "片段库同步异常" : clipsLastLoadedAt ? `片段库已同步 · ${new Date(clipsLastLoadedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : "片段库等待首次同步"}</span><button type="button" className="btn" onClick={() => navigate("/canvas-mvp")}>回到流程画布</button></div>
     </div>
 
     <div className="task-summary-grid">
       <SummaryCard label="进行中" value={String(activeCount)} tone="active" hint="正在执行或等待外部平台" />
       <SummaryCard label="已完成" value={String(doneCount)} tone="done" hint="可以继续下一步操作" />
       <SummaryCard label="需要处理" value={String(errorCount)} tone="error" hint="请检查错误并重新执行" />
-      <SummaryCard label="片段库同步" value={clipsLastLoadedAt ? "已同步" : "等待同步"} tone="neutral" hint={clipsLastLoadedAt ? new Date(clipsLastLoadedAt).toLocaleTimeString("zh-CN") : "每 30 秒自动检查"} />
     </div>
 
     <section className="task-center-panel">
