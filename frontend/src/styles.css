@@ -49,7 +49,11 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
 .workspace > .step-main { grid-column: 2 / 4; }
 .workspace > .canvas-main { grid-column: 2 / 4; }
 .workspace > .canvas-main.is-inspecting { grid-column: 2; }
-.pipeline { position: sticky; top: 78px; min-height: calc(100vh - 78px); overflow: visible; padding: 26px 16px 22px; border-right: 1px solid rgba(123,216,208,.1); background: #11191b; }
+.pipeline { position: sticky; top: 78px; height: calc(100vh - 78px); min-height: 0; overflow-x: hidden; overflow-y: scroll; padding: 26px 16px 22px; border-right: 1px solid rgba(123,216,208,.1); background: #11191b; scrollbar-color: #526164 var(--bg); scrollbar-width: thin; }
+.pipeline::-webkit-scrollbar { width: 10px; background: var(--bg); }
+.pipeline::-webkit-scrollbar-track { background: var(--bg); }
+.pipeline::-webkit-scrollbar-thumb { min-height: 42px; border: 2px solid var(--bg); border-radius: 999px; background: #526164; }
+.pipeline::-webkit-scrollbar-thumb:hover { background: #708080; }
 .pipeline-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; margin: -8px 0 18px; padding: 7px 9px; border: 1px solid rgba(123,216,208,.16); border-radius: 7px; color: var(--muted); background: rgba(123,216,208,.05); font-size: 10px; text-align: left; }
 .pipeline-toggle > span:first-child { color: var(--cyan); font-size: 17px; line-height: 1; }
 .pipeline-toggle:hover { border-color: var(--cyan); color: #f2f4f5; background: var(--cyan-soft); }
@@ -147,7 +151,7 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
   body:has(.canvas-main) { overflow-y: hidden; }
   .app-shell:has(.canvas-main) { height: 100vh; overflow: hidden; }
   .workspace:has(.canvas-main) { min-height: 0; height: calc(100vh - 78px); overflow: hidden; align-items: stretch; }
-  .workspace:has(.canvas-main) .pipeline { min-height: 0; height: calc(100vh - 78px); overflow-y: auto; }
+  .workspace:has(.canvas-main) .pipeline { min-height: 0; height: calc(100vh - 78px); }
   .main-column.canvas-main { display: flex; min-height: 0; height: calc(100vh - 78px); flex-direction: column; overflow: hidden; padding: 18px 30px 12px; }
   .canvas-main .canvas-toolbar { flex: 0 0 auto; margin-bottom: 10px; }
   .canvas-main .flow-shell.flow-overview { min-height: 0; height: auto; flex: 1 1 0; }
@@ -707,7 +711,7 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
   .topbar { align-items: flex-start; gap: 12px; flex-direction: column; }
   .top-actions { width: 100%; justify-content: space-between; }
   .workspace { display: block; }
-  .pipeline { min-height: auto; padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .pipeline { height: auto; min-height: auto; overflow: visible; padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); }
   .pipeline .panel-label { padding-bottom: 8px; }
   .canvas-link { margin-bottom: 8px; }
   .pipeline-item { display: inline-flex; width: auto; min-width: 148px; margin: 2px; vertical-align: top; }
@@ -823,7 +827,7 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
   .top-actions { gap: 6px; }
   .top-actions .status-dot { display: none; }
   .top-actions .btn { padding-inline: 8px; }
-  .pipeline { position: relative; top: auto; padding: 18px 12px; }
+  .pipeline { position: relative; top: auto; height: auto; min-height: auto; overflow: visible; padding: 18px 12px; }
   .pipeline-toggle { display: none; }
   .pipeline-heading { padding-bottom: 14px; }
   .pipeline-footer { display: none; }
