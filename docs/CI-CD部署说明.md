@@ -1,57 +1,112 @@
-# GitHub Actions 验证与部署说明
+# CI/CD 部署说明
 
-当前 `.github/workflows/ci-cd.yml` 同时监听 `main` 分支的 `push` 与 `workflow_dispatch`。本地提交后执行 `git push origin main`，工作流会自动运行；也可以在仓库 **Actions -> CI/CD -> Run workflow** 手动触发。
+本项目的默认发布路径是：本地验证 → 推送 `main` → GitHub Actions 验证 → SSH 部署到 ECS。日常发布以 CI/CD 为准；不要对同一提交同时运行手动部署脚本，以免重复部署。
 
-日常发布以 CI/CD 为准：等待验证和部署均成功后再让同事刷新页面。只有在需要检查本机 SSH 链路或自动部署故障后的人工排查时，才使用 [手动部署说明](手动部署说明.md) 中的 `deploy_cloud.bat`；该脚本会再次 `git push` 后直接部署，因此不要与同一提交的运行中工作流并用。
+## 工作流触发条件
 
-## 工作流行为
+文件：`.github/workflows/ci-cd.yml`
 
-工作流按以下顺序执行：
+| 触发方式 | 说明 |
+| --- | --- |
+| `push` 到 `main` | 日常发布入口 |
+| `workflow_dispatch` | 在 GitHub Actions 页面手动触发 |
 
-1. 安装前端依赖，运行前端模型测试和构建。
-2. 安装 Python 3.11 依赖，运行编译检查和后端/领域测试。
-3. 验证成功后，通过 SSH 登录 ECS。
-4. ECS 在 `/opt/apps/short-video` 拉取 `main`，运行 `scripts/deploy_server.sh` 构建镜像、重启服务并检查 `/api/config`。
+工作流使用并发组 `short-video-production`，同一组部署不会被自动取消。
 
-服务器上的 Nginx 继续代理 `127.0.0.1:8015`，对外访问地址不变。
+## 验证与部署流水线
 
-## 服务器一次性准备
-
-以 root 执行：
-
-```bash
-usermod -aG docker deploy
+```mermaid
+flowchart LR
+  A[push main] --> B[Frontend test]
+  B --> C[Frontend build]
+  C --> D[Python compile]
+  D --> E[pytest]
+  E --> F[SSH 到 ECS]
+  F --> G[git pull --ff-only]
+  G --> H[deploy_server.sh]
+  H --> I[容器健康检查]
 ```
 
-重新登录 `deploy` 用户后确认：
+### Verify 作业
 
-```bash
-docker ps
-sudo -n docker ps
-```
+运行环境为 Ubuntu，超时 20 分钟，执行：
 
-服务器目录必须是 `/opt/apps/short-video`，并且已有本机 `.env`。`.env`、`output/`、`logs/` 仅保留在 ECS，不由 Git 覆盖。
+1. Node.js 22 + `npm ci`
+2. `frontend/npm test`
+3. `frontend/npm run build`
+4. Python 3.11 + `pip install -r requirements.txt`
+5. `python -m compileall -q web pipeline`
+6. `python -m pytest`
+
+### Deploy 作业
+
+仅在 Verify 成功后运行，超时 30 分钟：
+
+1. 从 GitHub Secrets 临时写入 SSH 私钥并校验格式。
+2. 使用密钥认证连接目标主机。
+3. 在目标目录执行 `git pull --ff-only origin main`，网络失败时最多重试 3 次。
+4. 运行 `bash scripts/deploy_server.sh` 构建镜像、重启服务并检查健康接口。
 
 ## GitHub Secrets
 
-在仓库 **Settings -> Secrets and variables -> Actions** 中配置：
+在仓库 **Settings → Secrets and variables → Actions** 配置以下 Secrets：
 
-| Secret | 值 |
+| Secret | 说明 |
 | --- | --- |
-| `DEPLOY_HOST` | ECS 地址 |
-| `DEPLOY_PORT` | SSH 端口，通常为 `22` |
-| `DEPLOY_USER` | `deploy` |
-| `DEPLOY_PATH` | `/opt/apps/short-video` |
-| `DEPLOY_SSH_KEY` | GitHub Actions 专用私钥完整内容 |
+| `DEPLOY_HOST` | ECS 主机地址或域名 |
+| `DEPLOY_PORT` | SSH 端口；未设置时默认为 `22` |
+| `DEPLOY_USER` | 部署用户 |
+| `DEPLOY_PATH` | 服务器上的项目绝对路径 |
+| `DEPLOY_SSH_KEY` | Actions 专用私钥完整内容 |
 
-私钥只能写入 GitHub Secret，不能提交到项目。
+私钥只可存于 GitHub Secret，不可提交到仓库、写入 README 或粘贴到工单。
 
-## 排查与回滚
+## 服务器前置条件
+
+- 项目目录已经存在，且远程仓库可由部署用户拉取。
+- 已安装 Docker 与 Docker Compose。
+- 部署用户具备运行 Docker 的权限。
+- 服务端保留自己的 `.env`、`output/` 与 `logs/`；部署不应覆盖这些运行数据。
+- Nginx 代理到 `127.0.0.1:8015`，容器健康检查使用 `/api/config`。
+
+建议在首次部署前由服务器管理员确认：
 
 ```bash
-sudo docker compose ps
-sudo docker compose logs --tail=100
+docker ps
+docker compose version
 curl --fail http://127.0.0.1:8015/api/config
 ```
 
-回滚应在本地确认目标提交后重新发布，不要在服务器直接提交业务代码。需要服务器级回滚时，先记录当前版本，再切换到明确的提交并重新运行 `scripts/deploy_server.sh`。
+## 日常发布步骤
+
+```bash
+scripts\verify.bat
+git add <changed-files>
+git commit -m "type: concise change summary"
+git push origin main
+```
+
+随后在仓库 **Actions → CI/CD** 查看同一次提交的 Verify 与 Deploy 状态。只有两者成功后，才认为代码已部署；本地构建成功不能证明 ECS 已成功更新。
+
+## 失败排查
+
+| 现象 | 首先检查 |
+| --- | --- |
+| Verify 失败 | Actions 日志中的具体测试或构建步骤 |
+| SSH 失败 | `DEPLOY_*` Secrets、主机网络、部署用户和公钥授权 |
+| `git pull --ff-only` 失败 | 服务器工作树是否被人工修改；不要直接在服务器提交业务代码 |
+| 容器未健康 | `docker compose ps`、`docker compose logs --tail=100`、`/api/config` |
+| 构建被系统杀死 | 主机内存与磁盘空间；避免在低配环境并发构建多个镜像 |
+
+## 回滚原则
+
+1. 在本地确认要回滚到的已验证提交。
+2. 用新提交或经过审查的发布操作使 `main` 指向目标版本。
+3. 通过 CI/CD 发布并验证健康检查。
+
+不要在服务器直接修改或提交业务源码来“回滚”；这会破坏 `git pull --ff-only` 和后续可追溯性。
+
+## 相关文档
+
+- [手动部署说明](手动部署说明.md)
+- [运行与排障手册](运行与排障手册.md)
