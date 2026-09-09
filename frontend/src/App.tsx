@@ -16,6 +16,15 @@ import { WeeklyPlanPage } from "./components/WeeklyPlanPage";
 import { ClipReviewPage } from "./components/ClipReviewPage";
 
 const nodeTypes = { workflow: WorkflowNodeCard };
+const pipelinePreferenceKey = "restaurant-video.pipeline-collapsed";
+
+function loadPipelinePreference() {
+  try {
+    return window.localStorage.getItem(pipelinePreferenceKey) === "true";
+  } catch {
+    return false;
+  }
+}
 
 function useWorkflowPath(): WorkflowRoute {
   const resolvePath = () => {
@@ -43,6 +52,7 @@ function App() {
   const lastSavedAt = useWorkflowStore(state => state.lastSavedAt);
   const revision = useWorkflowStore(state => state.revision);
   const [toast, setToast] = useState("");
+  const [pipelineCollapsed, setPipelineCollapsed] = useState(loadPipelinePreference);
   const toastTimer = useRef<number | null>(null);
   useEffect(() => () => { if (toastTimer.current !== null) window.clearTimeout(toastTimer.current); }, []);
   const notify = useCallback((message: string) => { if (toastTimer.current !== null) window.clearTimeout(toastTimer.current); setToast(message); toastTimer.current = window.setTimeout(() => { toastTimer.current = null; setToast(""); }, 2600); }, []);
@@ -57,8 +67,15 @@ function App() {
     return () => window.clearInterval(timer);
   }, [hydrated, loadClipLibrary]);
   useEffect(() => { if (!hydrated || revision === 0) return; const timer = window.setTimeout(() => saveDraft().catch(() => notify("自动保存失败，请检查后端服务")), 800); return () => window.clearTimeout(timer); }, [hydrated, revision, saveDraft, notify]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(pipelinePreferenceKey, String(pipelineCollapsed));
+    } catch {
+      // 无法写入本地偏好时，仍保证当前页面可正常开合。
+    }
+  }, [pipelineCollapsed]);
   const save = () => saveDraft().then(() => notify("草稿已保存")).catch(() => notify("保存失败，请检查后端服务"));
-  return <div className="app-shell"><header className="topbar"><button type="button" className="brand-button" onClick={() => navigate("/canvas-mvp")}><span className="brand-mark">鮨</span><span className="brand-copy"><span className="eyebrow">AI VIDEO WORKBENCH</span><h1>引流视频生产画布</h1></span></button><div className="topbar-context"><span className="context-label">当前工作区</span><strong>{path === "/canvas-mvp" ? "流程总览" : "分步编辑"}</strong><span className="context-divider" /><span className="context-label">端口</span><strong>8015</strong></div><div className="top-actions"><span className="status-dot">{saving ? "保存中" : lastSavedAt ? "已持久化" : hydrated ? "本地草稿" : "加载中"}</span><button type="button" className="btn" disabled={saving || !hydrated} onClick={save}>{saving ? "保存中..." : "保存草稿"}</button><button type="button" className="btn btn-primary" onClick={() => navigate("/workflow/output")}>查看成片</button></div></header><div className="workspace"><Pipeline path={path} /><RouteContent path={path} onToast={notify} /></div>{toast && <div className="toast">{toast}</div>}</div>;
+  return <div className="app-shell"><header className="topbar"><button type="button" className="brand-button" onClick={() => navigate("/canvas-mvp")}><span className="brand-mark">鮨</span><span className="brand-copy"><span className="eyebrow">AI VIDEO WORKBENCH</span><h1>引流视频生产画布</h1></span></button><div className="topbar-context"><span className="context-label">当前工作区</span><strong>{path === "/canvas-mvp" ? "流程总览" : "分步编辑"}</strong><span className="context-divider" /><span className="context-label">端口</span><strong>8015</strong></div><div className="top-actions"><span className="status-dot">{saving ? "保存中" : lastSavedAt ? "已持久化" : hydrated ? "本地草稿" : "加载中"}</span><button type="button" className="btn" disabled={saving || !hydrated} onClick={save}>{saving ? "保存中..." : "保存草稿"}</button><button type="button" className="btn btn-primary" onClick={() => navigate("/workflow/output")}>查看成片</button></div></header><div className={`workspace ${pipelineCollapsed ? "pipeline-collapsed" : ""}`}><Pipeline path={path} collapsed={pipelineCollapsed} onToggle={() => setPipelineCollapsed(value => !value)} /><RouteContent path={path} onToast={notify} /></div>{toast && <div className="toast">{toast}</div>}</div>;
 }
 
 function RouteContent({ path, onToast }: { path: WorkflowRoute; onToast: (message: string) => void }) {
