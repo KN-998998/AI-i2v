@@ -9,9 +9,7 @@ export function Pipeline({ path, collapsed, onToggle }: { path: WorkflowRoute; c
   const candidates = useWorkflowStore(state => state.candidateClips);
   const workspaces = useWorkflowStore(state => state.composeWorkspaces);
   const progress = deriveWorkflowProgress(nodes, candidates, workspaces, edges);
-  const overviewUnlocked = true;
-  const tasksUnlocked = true;
-  const weeklyPlanUnlocked = true;
+  // 流程画布总览、任务中心、周计划生产是辅助工作台，不参与制作步骤的顺序解锁，始终可访问。
   const visibleWorkflowSteps = workflowRoutes
     .map((item, index) => ({ item, index, progress: progress.steps[index]! }))
     .filter(({ progress: stepProgress }) => stepProgress.unlocked);
@@ -21,19 +19,19 @@ export function Pipeline({ path, collapsed, onToggle }: { path: WorkflowRoute; c
     <button type="button" className="pipeline-toggle" onClick={onToggle} aria-label={collapsed ? "展开左侧菜单" : "收起左侧菜单"} aria-controls="pipeline-navigation" aria-expanded={!collapsed} title={collapsed ? "展开左侧菜单" : "收起左侧菜单"}><span aria-hidden="true">{collapsed ? "»" : "«"}</span><span className="pipeline-toggle-copy">{collapsed ? "展开" : "收起菜单"}</span></button>
     <div className="pipeline-heading"><span className="pipeline-kicker">PROJECT FLOW</span><strong>生产工作台</strong><small>从素材到最终成片</small></div>
     <button type="button" className="pipeline-tutorial-button" onClick={() => requestTutorial(path)}><span aria-hidden="true">?</span><span><strong>使用教程</strong><small>查看当前页面或步骤教学</small></span></button>
-    <button type="button" disabled={!overviewUnlocked} className={`canvas-link ${path === "/canvas-mvp" ? "active" : ""} ${!overviewUnlocked ? "locked" : ""}`} onClick={() => navigate("/canvas-mvp")} title={overviewUnlocked ? "流程画布总览" : "完成全部制作步骤后解锁"}><span className="canvas-link-icon">{overviewUnlocked ? "⌘" : "🔒"}</span><span><strong>流程画布总览</strong><small>{overviewUnlocked ? "节点与连接关系" : "完成全部步骤后解锁"}</small></span></button>
-    <TaskCenterLink path={path} unlocked={tasksUnlocked} />
-    <button type="button" disabled={!weeklyPlanUnlocked} className={`task-center-link ${path === "/workflow/weekly-plan" ? "active" : ""} ${!weeklyPlanUnlocked ? "locked" : ""}`} onClick={() => navigate("/workflow/weekly-plan")} title={weeklyPlanUnlocked ? "周计划生产" : "完成全部制作步骤后解锁"}><span className="task-center-link-icon">{weeklyPlanUnlocked ? "周" : "🔒"}</span><span><strong>周计划生产</strong><small>{weeklyPlanUnlocked ? "配置自动选材与生成计划" : "完成全部步骤后解锁"}</small></span></button>
+    <button type="button" className={`canvas-link ${path === "/canvas-mvp" ? "active" : ""}`} onClick={() => navigate("/canvas-mvp")} title="流程画布总览"><span className="canvas-link-icon">⌘</span><span><strong>流程画布总览</strong><small>节点与连接关系</small></span></button>
+    <TaskCenterLink path={path} />
+    <button type="button" className={`task-center-link ${path === "/workflow/weekly-plan" ? "active" : ""}`} onClick={() => navigate("/workflow/weekly-plan")} title="周计划生产"><span className="task-center-link-icon">周</span><span><strong>周计划生产</strong><small>配置自动选材与生成计划</small></span></button>
     {visibleProductionSteps.length > 0 && <><div className="pipeline-group-label"><span>01—06</span><span>制作流程</span></div>{visibleProductionSteps.map(({ item, index, progress: stepProgress }) => <div className="pipeline-step-row" key={item.path}><PipelineItem item={item} active={path === item.path} progress={stepProgress} stepIndex={index} /><PipelineTutorialButton item={item} /></div>)}</>}
     {visibleOutputStep && <><div className="pipeline-divider" /><div className="pipeline-group-label output-label"><span>07</span><span>交付</span></div><div className="pipeline-step-row"><PipelineItem item={visibleOutputStep.item} active={path === "/workflow/output"} progress={visibleOutputStep.progress} stepIndex={visibleOutputStep.index} /><PipelineTutorialButton item={visibleOutputStep.item} /></div></>}
     <div className="pipeline-footer"><span className="footer-dot" />草稿自动保存<div>每 30 秒同步片段库</div></div>
   </aside>;
 }
 
-function TaskCenterLink({ path, unlocked }: { path: WorkflowRoute; unlocked: boolean }) {
+function TaskCenterLink({ path }: { path: WorkflowRoute }) {
   const workspaces = useWorkflowStore(state => state.composeWorkspaces);
   const activeTasks = workspaces.filter(item => [item.job?.status, item.finalJob?.status].some(status => ["queued", "running", "polling", "downloading", "analyzing", "retrying"].includes(status ?? ""))).length;
-  return <button type="button" disabled={!unlocked} className={`task-center-link ${path === "/workflow/tasks" ? "active" : ""} ${!unlocked ? "locked" : ""}`} onClick={() => navigate("/workflow/tasks")} title={unlocked ? "任务中心" : "完成全部制作步骤后解锁"}><span className="task-center-link-icon">{unlocked ? "↗" : "🔒"}</span><span><strong>任务中心</strong><small>{unlocked ? activeTasks ? `${activeTasks} 个任务处理中` : "查看全部任务状态" : "完成全部步骤后解锁"}</small></span>{unlocked && activeTasks > 0 && <b>{activeTasks}</b>}</button>;
+  return <button type="button" className={`task-center-link ${path === "/workflow/tasks" ? "active" : ""}`} onClick={() => navigate("/workflow/tasks")} title="任务中心"><span className="task-center-link-icon">↗</span><span><strong>任务中心</strong><small>{activeTasks ? `${activeTasks} 个任务处理中` : "查看全部任务状态"}</small></span>{activeTasks > 0 && <b>{activeTasks}</b>}</button>;
 }
 
 function PipelineTutorialButton({ item }: { item: typeof workflowRoutes[number] }) {
