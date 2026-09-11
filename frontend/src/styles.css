@@ -1,22 +1,42 @@
+/* ===============================================================
+   主题令牌 —— 全站唯一定义处
+
+   本文件原先有三个 :root，分别来自三轮视觉改版：
+     1. 文件开头       深色主题（14 个变量）
+     2. 产品库视觉系统  浅色主题（14 个变量，全部覆盖第 1 组）
+     3. Design refresh 浅色主题微调（12 个变量，再覆盖第 2 组大部分）
+   变量名完全重名，因此只有最后一次定义生效，改前两处的颜色在页面上
+   看不到任何变化。现已按层叠后的真实结果合并为这一处。
+
+   下面每个值都与合并前的计算结果逐项核对一致。改颜色只改这里。
+   =============================================================== */
 :root {
-  font-family: Inter, "Microsoft YaHei", sans-serif;
-  color: #f4f6f4;
-  background: #0d1315;
+  font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
+  color: #20212a;
+  background: #f8f8fc;
   font-synthesis: none;
-  --bg: #0d1315;
-  --panel: #151e21;
-  --panel-2: #1b282b;
-  --panel-3: #253438;
-  --line: #2d3d40;
-  --muted: #a8b5b5;
-  --dim: #708080;
-  --cyan: #7bd8d0;
-  --cyan-soft: rgba(123, 216, 208, .12);
-  --green: #91d3a7;
-  --amber: #edc07b;
-  --red: #ef8f86;
-  --coral: #ef986f;
-  --shadow: 0 16px 34px rgba(0, 0, 0, .24);
+
+  /* 背景与面板 */
+  --bg: #fbfbfd;
+  --panel: #ffffff;
+  --panel-2: #f7f7fa;
+  --panel-3: #efeff5;
+  --line: #e7e7ee;
+
+  /* 文字 */
+  --text: #202128;
+  --muted: #6c6e7c;
+  --dim: #989aa8;
+
+  /* 强调色与状态色 */
+  --cyan: #4f46e5;
+  --cyan-soft: #f0efff;
+  --coral: #4f46e5;
+  --green: #21845b;
+  --amber: #ad6b13;
+  --red: #c74343;
+
+  --shadow: 0 10px 28px rgba(31, 32, 45, .055);
 }
 
 * { box-sizing: border-box; }
@@ -880,26 +900,8 @@ h1 { margin-top: 3px; font-size: 18px; letter-spacing: .01em; }
   .clip-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* Product-library visual system: light, compact, and task-first. */
-:root {
-  font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
-  color: #20212a;
-  background: #f8f8fc;
-  --bg: #f8f8fc;
-  --panel: #ffffff;
-  --panel-2: #f5f5fa;
-  --panel-3: #ececf6;
-  --line: #e3e4ee;
-  --muted: #666a7c;
-  --dim: #9094a6;
-  --cyan: #5b5ce2;
-  --cyan-soft: rgba(91, 92, 226, .10);
-  --green: #21845b;
-  --amber: #ad6b13;
-  --red: #c74343;
-  --coral: #5b5ce2;
-  --shadow: 0 8px 24px rgba(49, 47, 93, .07);
-}
+/* Product-library visual system: light, compact, and task-first.
+   （本节原有的 :root 主题令牌已上移至文件开头统一定义） */
 
 body { color: #20212a; background: var(--bg); }
 body::before { position: fixed; z-index: -1; inset: 0; background: radial-gradient(circle at 15% -10%, rgba(112, 101, 255, .09), transparent 32%), radial-gradient(circle at 92% 6%, rgba(85, 166, 255, .06), transparent 25%); content: ""; }
@@ -1146,21 +1148,8 @@ h1 { color: #1e1f29; font-size: 19px; letter-spacing: -.02em; }
   .weekly-advanced-panel { grid-template-columns: 1fr; gap: 16px; }
 }
 
-/* Design refresh: editorial navigation and calm component cards. */
-:root {
-  --bg: #fbfbfd;
-  --panel: #ffffff;
-  --panel-2: #f7f7fa;
-  --panel-3: #efeff5;
-  --line: #e7e7ee;
-  --text: #202128;
-  --muted: #6c6e7c;
-  --dim: #989aa8;
-  --cyan: #4f46e5;
-  --cyan-soft: #f0efff;
-  --coral: #4f46e5;
-  --shadow: 0 10px 28px rgba(31, 32, 45, .055);
-}
+/* Design refresh: editorial navigation and calm component cards.
+   （本节原有的 :root 主题令牌已上移至文件开头统一定义） */
 
 body { min-width: 320px; background: var(--bg); }
 body::before { background: radial-gradient(circle at 4% -10%, rgba(79, 70, 229, .055), transparent 29%), radial-gradient(circle at 95% 0, rgba(66, 153, 225, .04), transparent 23%); }
