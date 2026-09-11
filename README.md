@@ -67,12 +67,16 @@ flowchart LR
 
 ### 环境要求
 
-- Windows 10 或更高版本
+- Windows 10 或更高版本，或 macOS / Linux
 - Python 3.11（推荐 Conda `PY3_11` 环境）
-- Node.js（前端构建使用 `npm.cmd`）
-- `ffmpeg` 与 `ffprobe` 已加入 `PATH`
+- Node.js 20 或更高版本
+- `ffmpeg` 与 `ffprobe` 已加入 `PATH`（macOS：`brew install ffmpeg`）
+
+> Windows 使用根目录的 `.bat` 脚本，macOS / Linux 使用同名 `.sh` 脚本，两者行为一致。
 
 ### 1. 安装依赖
+
+Windows：
 
 ```bat
 python -m pip install -r requirements.txt
@@ -81,10 +85,25 @@ npm.cmd install
 cd ..
 ```
 
+macOS / Linux：
+
+```bash
+python3 -m pip install -r requirements.txt
+cd frontend && npm install && cd ..
+```
+
+> `frontend/node_modules` 里的 `esbuild`、`rollup` 是按平台编译的原生包，不能跨系统拷贝。
+> 换机器或换系统后若 `npm run build` 报 `MODULE_NOT_FOUND`，删掉 `frontend/node_modules` 重装即可；
+> `start_dev.sh` 会自动检测并重装。
+
 ### 2. 配置外部能力（按需）
 
 ```bat
-copy .env.example .env
+copy .env.example .env        :: Windows
+```
+
+```bash
+cp .env.example .env          # macOS / Linux
 ```
 
 在 `.env` 中填写实际需要的服务配置。不要提交 `.env`、密钥、素材或生成结果。
@@ -100,7 +119,7 @@ copy .env.example .env
 
 ### 3. 启动
 
-双击根目录的 `start_dev.bat`，脚本会构建前端并启动 FastAPI。
+Windows 双击根目录的 `start_dev.bat`；macOS / Linux 执行 `./start_dev.sh`。脚本会构建前端并启动 FastAPI。
 
 | 地址 | 用途 |
 | --- | --- |
@@ -108,7 +127,9 @@ copy .env.example .env
 | `http://127.0.0.1:8015/workflow/assets` | 第一步：素材与菜品 |
 | `http://127.0.0.1:8015/docs` | FastAPI OpenAPI 文档 |
 
-> 修改 `frontend/` 后，请运行 `scripts\build_frontend.bat`，或重新执行 `start_dev.bat`。
+> 修改 `frontend/` 后需要重新构建：Windows 运行 `scripts\build_frontend.bat`，
+> macOS / Linux 在 `frontend/` 下运行 `npm run build`，或重新执行启动脚本。
+> 只改了后端 Python 时，可用 `./start_dev.sh --skip-build` 跳过前端构建。
 
 ## 日常使用
 
@@ -157,16 +178,20 @@ output/                   本地草稿、上传素材、片段与成片（不提
 ### 全量验证
 
 ```bat
-scripts\verify.bat
+scripts\verify.bat            :: Windows
+```
+
+```bash
+./scripts/verify.sh           # macOS / Linux
 ```
 
 ### 分项验证
 
-```bat
+```bash
 cd frontend
-npm.cmd run typecheck
-npm.cmd run test
-npm.cmd run build
+npm run typecheck             # Windows 用 npm.cmd
+npm run test
+npm run build
 cd ..
 pytest
 ```
@@ -197,7 +222,7 @@ pytest
 1. 前端交互改动放在 `frontend/src/`；业务服务放在 `web/services/` 或 `pipeline/`。
 2. API 路由只处理 HTTP 职责，耗时任务和文件处理不直接堆放在路由层。
 3. 不提交 `.env`、密钥、绝对素材路径、生成媒体、草稿或日志。
-4. 为行为变更加上适当的测试，并运行 `scripts\verify.bat`。
+4. 为行为变更加上适当的测试，并运行 `scripts\verify.bat`（macOS / Linux：`./scripts/verify.sh`）。
 5. UI 改动应在 `http://127.0.0.1:8015` 的实际页面验证。
 
 ## 相关文档

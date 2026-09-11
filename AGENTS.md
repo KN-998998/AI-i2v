@@ -31,6 +31,13 @@ set KLING_API_KEY=xxxx                # Kling 视频生成
 - 如平台或沙箱权限机制强制要求确认，仍按平台权限流程执行。
 
 ## 运行
-```bash
-start_dev.bat
+```bat
+start_dev.bat                 :: Windows
 ```
+```bash
+./start_dev.sh                # macOS / Linux
+```
+
+## 换行符
+仓库已用 `.gitattributes` 统一为 LF（`.bat` / `.cmd` 保留 CRLF）。
+不要为了改换行符而提交整文件变更。
