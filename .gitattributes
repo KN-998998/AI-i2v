@@ -1,0 +1,29 @@
+# 换行符策略
+# ---------------------------------------------------------------
+# 本项目由 Windows 与 macOS 两端协作开发。若不统一换行符，同一份文件
+# 会在两台机器上被 Git 判定为"整文件都改过"，淹没真实改动。
+#
+# 规则：所有文本文件在仓库中一律以 LF 存储；检出时除 Windows 批处理外
+# 也统一为 LF。批处理必须保留 CRLF，否则 Windows 下 goto / 标签跳转
+# 可能异常。
+
+* text=auto eol=lf
+
+# Windows 批处理：仓库存 LF，检出为 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制文件：不做任何换行符转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.mp4  binary
+*.mov  binary
+*.mp3  binary
+*.wav  binary
+*.sqlite3 binary
+*.woff  binary
+*.woff2 binary
