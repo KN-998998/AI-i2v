@@ -214,6 +214,10 @@ def test_invalid_batch_classification_falls_back_to_local(monkeypatch):
 
 
 def test_asset_library_selects_by_category_and_copies_files(monkeypatch, tmp_path):
+    # 本用例断言分类来源是"本地规则"，必须切断 Qwen 分支。不加这行时，
+    # 本机 .env 里配了 DASHSCOPE_API_KEY 就会真的发一次外部请求：
+    # CI 上没有 .env 所以能过，本地有 .env 就必挂，而且会消耗 API 额度。
+    monkeypatch.setattr(canvas_asset_library, "QWEN_API_KEY", "")
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
     monkeypatch.setattr(canvas_asset_library, "CANVAS_BACKGROUND_ROOT", tmp_path / "backgrounds")
     asset_root = tmp_path / "鮨政exp"
