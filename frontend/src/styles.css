@@ -1342,3 +1342,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .pipeline-step-row { display: flex; align-items: center; gap: 4px; }.pipeline-step-row .pipeline-item { flex: 1 1 auto; min-width: 0; }.pipeline-step-tutorial { display: grid; flex: 0 0 auto; width: 26px; height: 26px; place-items: center; padding: 0; border: 1px solid #e0dff0; border-radius: 8px; color: #706a9a; background: #fff; font-size: 12px; font-weight: 900; opacity: .72; transition: opacity .16s ease, color .16s ease, border-color .16s ease, background .16s ease, transform .16s ease; }.pipeline-step-row:hover .pipeline-step-tutorial, .pipeline-step-tutorial:focus-visible { opacity: 1; }.pipeline-step-tutorial:hover { border-color: #aaa5f4; color: #4f46e5; background: #f4f3ff; transform: translateY(-1px); }
 @media (min-width: 721px) { .pipeline-collapsed .pipeline-tutorial-button > span:last-child, .pipeline-collapsed .pipeline-step-tutorial { display: none; }.pipeline-collapsed .pipeline-tutorial-button { display: grid; width: 36px; margin: 0 auto 12px; padding: 6px; place-items: center; }.pipeline-collapsed .pipeline-tutorial-button > span:first-child { width: 24px; height: 24px; }.pipeline-collapsed .pipeline-step-row { display: block; }.pipeline-collapsed .pipeline-step-row .pipeline-item { display: flex; } }
 @media (max-width: 720px) { .pipeline-tutorial-button { flex: 0 0 auto; width: auto; margin: 0; padding: 7px 9px; }.pipeline-tutorial-button > span:last-child, .pipeline-step-tutorial { display: none; } }
+
+/* Keep the canvas as the primary viewport: summary cards are intentionally removed from above it. */
+.canvas-hero, .overview-stat-grid { display: none; }
+@media (min-width: 721px) {
+  .canvas-workspace-refresh { display: flex; flex-direction: column; min-height: 0; height: calc(100vh - 68px); padding: 18px clamp(24px, 3.4vw, 56px) 12px; overflow: hidden; }
+  .canvas-workspace-refresh > .canvas-view-tabs { flex: 0 0 auto; margin: 0 0 12px; }
+  .canvas-workspace-refresh > .main-column.canvas-main { flex: 1 1 0; min-height: 0; height: auto; padding: 0; }
+  .canvas-workspace-refresh .canvas-main .canvas-toolbar { margin-bottom: 10px; }
+  .canvas-workspace-refresh .canvas-main .flow-shell.flow-overview { min-height: 0; }
+}
