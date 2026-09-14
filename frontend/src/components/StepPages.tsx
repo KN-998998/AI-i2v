@@ -4,6 +4,7 @@ import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimin
 import { useWorkflowStore } from "../workflowStore";
 import { Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
+import { requestTutorial } from "../tutorial";
 import { deriveWorkflowProgress, isWorkflowRouteUnlocked } from "../workflowProgress";
 import { StoryboardTimeline } from "./StoryboardTimeline";
 import { AssetLibraryBatchPanel } from "./AssetLibraryBatchPanel";
@@ -405,5 +406,5 @@ function StepFrame({ route, title, description, children }: StepPageProps & { ro
     "/workflow/sound": "先在第 5 步完成至少一条无声成片，再配置多轨人声、文字和 BGM；文字与人声可分别拖动并允许重叠。",
     "/workflow/output": "无声成片用于检查片段顺序，有声成片用于发布；需要修改声音或文字时返回第 6 步。",
   };
-  return <main className="step-main"><div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>{title}</strong></div><div className="step-header"><div><span className="panel-label">WORKFLOW STEP</span><h1>{title}</h1><p>{description}</p></div></div>{guides[route] && <div className="step-guide"><span>操作提示</span><p>{guides[route]}</p></div>}{children}</main>;
+  return <main className="step-main"><div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>{title}</strong></div><div className="step-header"><div><span className="panel-label">WORKFLOW STEP</span><h1>{title}</h1><p>{description}</p></div><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial(route)}>查看本步骤教学</button></div>{guides[route] && <div className="step-guide"><span>操作提示</span><p>{guides[route]}</p></div>}{children}</main>;
 }

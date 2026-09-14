@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchBackgroundTemplates, uploadBackgroundTemplate } from "../api";
 import { navigate } from "../router";
+import { requestTutorial } from "../tutorial";
 import { useWorkflowStore } from "../workflowStore";
 import { ImageProcessControlFields } from "./ImageProcessControls";
 import { Inspector } from "./Inspector";
@@ -63,7 +64,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
 
   return <main className="step-main">
     <div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>图片处理</strong></div>
-    <div className="step-header"><div><span className="panel-label">WORKFLOW STEP 2</span><h1>图片处理</h1><p>{preserveOriginal ? "当前素材包含人物，保留原图并让 Kling 生成动作片段。" : "调用腾讯云 GoodsMatting 抠出菜品，再与本地背景模板合成为 Kling 视频首帧。"}</p></div></div>
+    <div className="step-header"><div><span className="panel-label">WORKFLOW STEP 2</span><h1>图片处理</h1><p>{preserveOriginal ? "当前素材包含人物，保留原图并让 Kling 生成动作片段。" : "调用腾讯云 GoodsMatting 抠出菜品，再与本地背景模板合成为 Kling 视频首帧。"}</p></div><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial("/workflow/image-processing")}>查看本步骤教学</button></div>
     <div className="step-guide"><span>操作提示</span><p>{preserveOriginal ? "手部或人物素材无需选背景，点击“保留原图并继续”即可。" : "先选一个背景模板，再点击“开始抠图并合成”；原图会始终保留，处理图可重复生成。"}</p></div>
     <div className="step-page-grid"><div className="step-page-main">
       <section className="step-panel"><div className="panel-section-head"><div><span className="panel-label">IMAGE PROCESSING NODE</span><h2>{node.data.title}</h2><p className="muted">原图不会被覆盖；{preserveOriginal ? "人物素材会保留原图，不使用背景模板。" : "处理后首帧单独保存，并优先用于后续视频生成。"}</p></div><div className="panel-actions"><select className="input compact-select" value={node.id} onChange={event => setSelection(event.target.value)}>{processingNodes.map(item => <option key={item.id} value={item.id}>{item.data.title}</option>)}</select><button type="button" className="btn btn-primary" disabled={busy} onClick={process}>{busy ? "正在处理..." : preserveOriginal ? "保留原图并继续" : node.data.processedImagePreview ? "重新处理图片" : "开始抠图并合成"}</button></div></div>

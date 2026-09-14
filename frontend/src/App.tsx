@@ -15,6 +15,8 @@ import { ManualAssetLibraryPage } from "./components/ManualAssetLibraryPage";
 import { TaskCenterPage } from "./components/TaskCenterPage";
 import { WeeklyPlanPage } from "./components/WeeklyPlanPage";
 import { ClipReviewPage } from "./components/ClipReviewPage";
+import { TutorialModal } from "./components/TutorialModal";
+import { chapterIndexForRoute, isTutorialDismissed } from "./tutorial";
 
 const nodeTypes = { workflow: WorkflowNodeCard };
 const pipelinePreferenceKey = "restaurant-video.pipeline-collapsed";
@@ -57,6 +59,9 @@ function App() {
   const candidateClips = useWorkflowStore(state => state.candidateClips);
   const composeWorkspaces = useWorkflowStore(state => state.composeWorkspaces);
   const [toast, setToast] = useState("");
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStartIndex, setTutorialStartIndex] = useState(0);
+  const tutorialAutoOpened = useRef(false);
   const [pipelineCollapsed, setPipelineCollapsed] = useState(loadPipelinePreference);
   const workflowProgress = useMemo(() => deriveWorkflowProgress(nodes, candidateClips, composeWorkspaces), [nodes, candidateClips, composeWorkspaces]);
   const toastTimer = useRef<number | null>(null);
@@ -86,6 +91,24 @@ function App() {
     window.history.replaceState({}, "", fallback);
     window.dispatchEvent(new Event("workflow:navigate"));
   }, [hydrated, path, workflowProgress]);
+  const openTutorial = useCallback((route: WorkflowRoute = path) => {
+    setTutorialStartIndex(chapterIndexForRoute(route));
+    setTutorialOpen(true);
+  }, [path]);
+  useEffect(() => {
+    const handleTutorialRequest = (event: Event) => {
+      const route = (event as CustomEvent<{ route?: WorkflowRoute }>).detail?.route;
+      openTutorial(route ?? path);
+    };
+    window.addEventListener("tutorial:open", handleTutorialRequest);
+    return () => window.removeEventListener("tutorial:open", handleTutorialRequest);
+  }, [openTutorial, path]);
+  useEffect(() => {
+    if (!hydrated || tutorialAutoOpened.current || isTutorialDismissed()) return;
+    tutorialAutoOpened.current = true;
+    setTutorialStartIndex(0);
+    setTutorialOpen(true);
+  }, [hydrated]);
   const save = () => saveDraft().then(() => notify("草稿已保存")).catch(() => notify("保存失败，请检查后端服务"));
   const workspaceLabel = path === "/canvas-mvp" ? "流程总览" : path === "/workflow/weekly-plan" ? "自动化生产" : "分步编辑";
   const overviewUnlocked = isWorkflowRouteUnlocked("/canvas-mvp", workflowProgress);
@@ -97,10 +120,12 @@ function App() {
         <span className="brand-copy"><span className="eyebrow">AI VIDEO WORKFLOW</span><h1>AI 图生视频工作流</h1></span>
       </button>
       <div className="topbar-context"><span className="context-label">当前模式</span><strong>{workspaceLabel}</strong><span className="context-divider" /><span className="context-label">自动化工作台</span></div>
-      <div className="top-actions"><span className="status-dot">{saving ? "保存中" : lastSavedAt ? "已保存" : hydrated ? "就绪" : "加载中"}</span><button type="button" className="btn" disabled={saving || !hydrated} onClick={save}>{saving ? "保存中..." : "保存草稿"}</button><button type="button" className="btn btn-primary" disabled={!outputUnlocked} title={outputUnlocked ? "查看成片" : "请先完成前序步骤"} onClick={() => navigate("/workflow/output")}>查看成片</button></div>
+      <div className="top-actions"><span className="status-dot">{saving ? "保存中" : lastSavedAt ? "已保存" : hydrated ? "就绪" : "加载中"}</span><button type="button" className="btn" onClick={() => openTutorial()}>使用教程</button><button type="button" className="btn" disabled={saving || !hydrated} onClick={save}>{saving ? "保存中..." : "保存草稿"}</button><button type="button" className="btn btn-primary" disabled={!outputUnlocked} title={outputUnlocked ? "查看成片" : "请先完成前序步骤"} onClick={() => navigate("/workflow/output")}>查看成片</button></div>
     </header>
     <div className={`workspace ${pipelineCollapsed ? "pipeline-collapsed" : ""}`}><Pipeline path={path} collapsed={pipelineCollapsed} onToggle={() => setPipelineCollapsed(value => !value)} /><RouteContent path={path} onToast={notify} /></div>
+    {workflowRoutes.some(item => item.path === path) && <button type="button" className="floating-step-tutorial" onClick={() => openTutorial(path)}>本步骤教学</button>}
     {toast && <div className="toast">{toast}</div>}
+    <TutorialModal open={tutorialOpen} startIndex={tutorialStartIndex} onClose={() => setTutorialOpen(false)} onDismiss={() => setTutorialOpen(false)} />
   </div>;
 }
 
