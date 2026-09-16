@@ -818,14 +818,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   deleteSelected: () => {
     let deleted = false;
     set(state => {
-      if (state.selectedEdgeId) {
-        deleted = true;
-        return { edges: state.edges.filter(edge => edge.id !== state.selectedEdgeId), selectedEdgeId: null, revision: state.revision + 1 };
-      }
-      if (!state.selectedNodeId || protectedNodeIds.has(state.selectedNodeId)) return {};
-      const next = removeNodeAndEdges(state.nodes, state.edges, state.selectedNodeId);
+      const removedNodeIds = new Set([
+        ...state.nodes.filter(node => node.selected && !protectedNodeIds.has(node.id)).map(node => node.id),
+        ...(state.selectedNodeId && !protectedNodeIds.has(state.selectedNodeId) ? [state.selectedNodeId] : []),
+      ]);
+      const removedEdgeIds = new Set([
+        ...state.edges.filter(edge => edge.selected).map(edge => edge.id),
+        ...(state.selectedEdgeId ? [state.selectedEdgeId] : []),
+      ]);
+      if (!removedNodeIds.size && !removedEdgeIds.size) return {};
+      const nodes = state.nodes.filter(node => !removedNodeIds.has(node.id));
+      const edges = state.edges.filter(edge => !removedEdgeIds.has(edge.id) && !removedNodeIds.has(edge.source) && !removedNodeIds.has(edge.target));
+      const artifacts = removedNodeIds.size ? removeNodeArtifacts(state, removedNodeIds) : {};
       deleted = true;
-      return { ...next, selectedNodeId: null, revision: state.revision + 1 };
+      return { nodes, edges, ...artifacts, selectedNodeId: null, selectedEdgeId: null, revision: state.revision + 1 };
     });
     return deleted;
   },
