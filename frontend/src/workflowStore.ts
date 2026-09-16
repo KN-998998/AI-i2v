@@ -5,9 +5,20 @@ import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
 import { browserDraftId } from "./draftIdentity";
-import { generatorGenerationBlockReason, generatorUpstreamNodes } from "./generatorReadiness";
+import { generatorGenerationBlockReason, generatorUpstreamNodes, hasSelectedGeneratedClip } from "./generatorReadiness";
 
 type NodeEditSnapshot = Pick<WorkflowState, "nodes" | "timeline" | "candidateClips" | "composeWorkspaces" | "bgmName" | "bgmUrl" | "composeJob" | "activePanel" | "selectedNodeId" | "selectedEdgeId">;
+
+export type BatchGenerationFailure = { generatorId: string; dish: string; stage: "图片处理" | "视频生成"; message: string };
+export type BatchGenerationProgress = { phase: "图片处理" | "视频生成"; completed: number; total: number; failures: number };
+export type BatchGenerationSummary = {
+  total: number;
+  processed: number;
+  alreadyProcessed: number;
+  generated: number;
+  alreadyGenerated: number;
+  failures: BatchGenerationFailure[];
+};
 
 type WorkflowState = {
   nodes: WorkflowNode[];
@@ -54,7 +65,7 @@ type WorkflowState = {
   addNode: (kind: NodeKind) => void;
   arrangeWorkflowNodes: () => void;
   createBatchWorkflows: (items: AssetLibraryPlanItem[]) => string[];
-  runBatchGeneration: (generatorIds: string[]) => Promise<void>;
+  runBatchGeneration: (generatorIds: string[], onProgress?: (progress: BatchGenerationProgress) => void) => Promise<BatchGenerationSummary>;
   deleteNode: (nodeId: string) => void;
   duplicateNode: (nodeId: string) => void;
   deleteSelected: () => boolean;
@@ -775,15 +786,59 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     });
     return createdIds;
   },
-  runBatchGeneration: async generatorIds => {
-    for (const generatorId of generatorIds) {
+  runBatchGeneration: async (generatorIds, onProgress) => {
+    const ids = [...new Set(generatorIds)];
+    const failures: BatchGenerationFailure[] = [];
+    const readyGeneratorIds: string[] = [];
+    let processed = 0;
+    let alreadyProcessed = 0;
+    let generated = 0;
+    let alreadyGenerated = 0;
+
+    for (let index = 0; index < ids.length; index += 1) {
+      const generatorId = ids[index];
       const state = get();
-      const promptEdge = state.edges.find(edge => edge.target === generatorId);
-      const processEdge = promptEdge && state.edges.find(edge => edge.target === promptEdge.source);
-      if (!processEdge) throw new Error(`生成节点 ${generatorId} 缺少图片处理节点连接`);
-      await get().processImageNode(processEdge.source);
-      await get().generateNode(generatorId);
+      const generator = state.nodes.find(node => node.id === generatorId && node.data.kind === "generator");
+      const dish = generator?.data.title ?? generatorId;
+      const process = generator ? generatorUpstreamNodes(generator, state.nodes, state.edges).process : undefined;
+      if (!generator || !process) {
+        failures.push({ generatorId, dish, stage: "图片处理", message: "缺少对应的图片处理节点连接" });
+      } else if (process.data.processedImagePreview) {
+        alreadyProcessed += 1;
+        readyGeneratorIds.push(generatorId);
+      } else {
+        try {
+          await get().processImageNode(process.id);
+          processed += 1;
+          readyGeneratorIds.push(generatorId);
+        } catch (error) {
+          failures.push({ generatorId, dish, stage: "图片处理", message: error instanceof Error ? error.message : "图片处理失败" });
+        }
+      }
+      onProgress?.({ phase: "图片处理", completed: index + 1, total: ids.length, failures: failures.length });
     }
+
+    for (let index = 0; index < readyGeneratorIds.length; index += 1) {
+      const generatorId = readyGeneratorIds[index];
+      const state = get();
+      const generator = state.nodes.find(node => node.id === generatorId && node.data.kind === "generator");
+      const dish = generator?.data.title ?? generatorId;
+      if (!generator) {
+        failures.push({ generatorId, dish, stage: "视频生成", message: "生成节点不存在" });
+      } else if (hasSelectedGeneratedClip(generatorId, state.candidateClips)) {
+        alreadyGenerated += 1;
+      } else {
+        try {
+          await get().generateNode(generatorId);
+          generated += 1;
+        } catch (error) {
+          failures.push({ generatorId, dish, stage: "视频生成", message: error instanceof Error ? error.message : "视频生成失败" });
+        }
+      }
+      onProgress?.({ phase: "视频生成", completed: index + 1, total: readyGeneratorIds.length, failures: failures.length });
+    }
+
+    return { total: ids.length, processed, alreadyProcessed, generated, alreadyGenerated, failures };
   },
   deleteNode: nodeId => set(state => {
     if (protectedNodeIds.has(nodeId)) return {};

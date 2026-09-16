@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import threading
 import uuid
@@ -38,6 +39,38 @@ _MIXED_MOJIBAKE_REPLACEMENTS = {
     "â€˜": "‘",
     "â€™": "’",
 }
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(_CHUNK_SIZE):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _background_candidates() -> list[Path]:
+    if not CANVAS_BACKGROUND_ROOT.exists():
+        return []
+    return [
+        path
+        for path in CANVAS_BACKGROUND_ROOT.iterdir()
+        if path.is_file() and path.suffix.lower() in _BACKGROUND_EXTENSIONS
+    ]
+
+
+def _existing_background_for_hash(content_hash: str) -> Path | None:
+    matches: list[Path] = []
+    for path in _background_candidates():
+        try:
+            if _file_sha256(path) == content_hash:
+                matches.append(path)
+        except OSError:
+            continue
+    if not matches:
+        return None
+    # Prefer a user-facing source filename over an old generated library copy.
+    return min(matches, key=lambda path: (path.name.startswith("library_"), path.name.casefold()))
 
 
 def _contains_cjk(value: str) -> bool:
@@ -352,18 +385,26 @@ async def save_background_upload(upload: UploadFile) -> dict[str, Any]:
         raise ValueError("背景模板仅支持 JPG、PNG、WEBP 或 GIF 图片")
 
     CANVAS_BACKGROUND_ROOT.mkdir(parents=True, exist_ok=True)
-    stored_name = f"{uuid.uuid4().hex}{extension}"
-    destination = CANVAS_BACKGROUND_ROOT / stored_name
+    temporary = CANVAS_BACKGROUND_ROOT / f".background-{uuid.uuid4().hex}{extension}.tmp"
     total = 0
+    digest = hashlib.sha256()
     try:
-        with destination.open("wb") as stream:
+        with temporary.open("wb") as stream:
             while chunk := await upload.read(_CHUNK_SIZE):
                 total += len(chunk)
                 if total > MAX_UPLOAD_SIZE:
                     raise ValueError(f"文件不能超过 {MAX_UPLOAD_SIZE // (1024 * 1024)} MB")
                 stream.write(chunk)
+                digest.update(chunk)
+        existing = _existing_background_for_hash(digest.hexdigest())
+        if existing is not None:
+            temporary.unlink(missing_ok=True)
+            stored_name = existing.name
+        else:
+            stored_name = f"{uuid.uuid4().hex}{extension}"
+            temporary.replace(CANVAS_BACKGROUND_ROOT / stored_name)
     except Exception:
-        destination.unlink(missing_ok=True)
+        temporary.unlink(missing_ok=True)
         raise
     finally:
         await upload.close()
@@ -385,10 +426,13 @@ def background_file(stored_name: str) -> Path | None:
 
 
 def list_background_files() -> list[Path]:
-    if not CANVAS_BACKGROUND_ROOT.exists():
-        return []
-    return sorted(
-        (path for path in CANVAS_BACKGROUND_ROOT.iterdir() if path.is_file() and path.suffix.lower() in _BACKGROUND_EXTENSIONS),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
+    unique: dict[str, Path] = {}
+    for path in _background_candidates():
+        try:
+            content_hash = _file_sha256(path)
+        except OSError:
+            continue
+        current = unique.get(content_hash)
+        if current is None or (path.name.startswith("library_"), path.name.casefold()) < (current.name.startswith("library_"), current.name.casefold()):
+            unique[content_hash] = path
+    return sorted(unique.values(), key=lambda path: path.stat().st_mtime, reverse=True)

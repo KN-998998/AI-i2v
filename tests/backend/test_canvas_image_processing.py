@@ -48,6 +48,24 @@ def test_background_template_upload_and_list(monkeypatch, tmp_path):
     assert item["name"] == "bar.png"
     assert client.get(item["url"]).status_code == 200
     assert client.get("/api/canvas/backgrounds").json()[0]["id"] == item["id"]
+    repeated = client.post(
+        "/api/canvas/backgrounds",
+        files={"file": ("copied-bar.png", _png_bytes((100, 60, 30, 255)), "image/png")},
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["id"] == item["id"]
+    assert len(client.get("/api/canvas/backgrounds").json()) == 1
+
+
+def test_background_template_list_hides_existing_content_duplicates(monkeypatch, tmp_path):
+    root = tmp_path / "backgrounds"
+    root.mkdir()
+    original = _png_bytes((100, 60, 30, 255))
+    (root / "table.png").write_bytes(original)
+    (root / "library_duplicate.png").write_bytes(original)
+    monkeypatch.setattr(canvas_state, "CANVAS_BACKGROUND_ROOT", root)
+
+    assert [path.name for path in canvas_state.list_background_files()] == ["table.png"]
 
 
 def test_image_processing_requires_a_connected_input_node(monkeypatch, tmp_path):

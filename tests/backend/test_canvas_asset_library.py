@@ -239,6 +239,8 @@ def test_asset_library_selects_by_category_and_copies_files(monkeypatch, tmp_pat
     for item in plan["selected"]:
         assert (canvas_state.draft_directory("default") / "files" / item["storedName"]).is_file()
         assert (tmp_path / "backgrounds" / item["background"]["id"]).is_file()
+    assert len({item["background"]["id"] for item in plan["selected"]}) == 1
+    assert len(list((tmp_path / "backgrounds").iterdir())) == 1
 
 
 def test_asset_library_finds_nested_dish_folders_from_parent_root(monkeypatch, tmp_path):

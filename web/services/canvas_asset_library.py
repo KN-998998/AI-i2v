@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import random
 import re
 import shutil
@@ -820,10 +821,32 @@ def _copy_into_draft(source: Path, draft_id: str) -> tuple[str, str]:
     return stored_name, f"/api/canvas/drafts/{draft_id}/files/{stored_name}"
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _copy_background(source: Path) -> dict[str, str]:
     CANVAS_BACKGROUND_ROOT.mkdir(parents=True, exist_ok=True)
-    stored_name = f"library_{uuid.uuid4().hex}{source.suffix.lower()}"
-    shutil.copy2(source, CANVAS_BACKGROUND_ROOT / stored_name)
+    digest = _file_sha256(source)
+    existing: list[Path] = []
+    for candidate in CANVAS_BACKGROUND_ROOT.iterdir():
+        if not candidate.is_file() or candidate.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        try:
+            if _file_sha256(candidate) == digest:
+                existing.append(candidate)
+        except OSError:
+            continue
+    if existing:
+        destination = min(existing, key=lambda path: (path.name.startswith("library_"), path.name.casefold()))
+        stored_name = destination.name
+    else:
+        stored_name = f"library_{uuid.uuid4().hex}{source.suffix.lower()}"
+        shutil.copy2(source, CANVAS_BACKGROUND_ROOT / stored_name)
     return {
         "id": stored_name,
         "name": source.name,
