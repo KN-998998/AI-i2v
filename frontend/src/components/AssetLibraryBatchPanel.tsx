@@ -197,10 +197,9 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
     const ids = createBatchWorkflows(selectedItems);
     setCreatedGeneratorIds(ids);
     await saveDraft();
-    const skipped = plan.selected.length - ids.length;
     onToast(ids.length
-      ? `已创建 ${ids.length} 条流程${skipped ? `，已同步 ${skipped} 个已有素材` : ""}`
-      : "所选素材均已有流程，已同步素材标签");
+      ? `已处理 ${ids.length} 条菜品流程（新建或更新）`
+      : "所选素材没有可应用的菜品流程");
   };
 
   const saveManagedRule = async (rule: AssetLibraryClassificationItem) => {

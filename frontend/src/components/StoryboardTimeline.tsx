@@ -186,7 +186,7 @@ export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOver
     return <TimelineRangeBlock key={item.id} className="storyboard-range-audio voice-track-block" tone="voice" total={total} locked={false} style={{ ...positionStyle(item.startSeconds, item.endSeconds, total), top: "6px", bottom: "6px" }} label={"人声 " + (index + 1) + " · " + (item.text || "未填写") + (paired ? " · 同步文字" : "")} removeLabel={`删除人声 ${index + 1}`} onRemove={onRemoveVoice ? () => onRemoveVoice(item.id) : undefined} onPointerDown={event => startRangeDrag(event, "voice", item.id, "move", item.startSeconds, item.endSeconds)} onResizeStart={event => startRangeDrag(event, "voice", item.id, "start", item.startSeconds, item.endSeconds)} onResizeEnd={event => startRangeDrag(event, "voice", item.id, "end", item.startSeconds, item.endSeconds)} onClick={() => { movePlayhead(item.startSeconds); onVoiceFocus?.(item.id); }} />;
   };
 
-  return <section className={`storyboard-editor ${showSoundTracks ? "" : "storyboard-editor-clip"}`}>
+  return <section className={`storyboard-editor ${showSoundTracks ? "storyboard-editor-sound" : "storyboard-editor-clip"}`}>
     <div className="storyboard-head"><div><span className="panel-label">STORYBOARD TIMELINE</span><strong>{showSoundTracks ? "视频分镜与文字对齐" : "视频片段选择与裁剪"}</strong><p>{showSoundTracks ? "先在下方胶片轨道定位原视频画面，再拖动入点和出点选择精彩片段。" : "拖动入点和出点选择精彩片段，确认后会保存并复用于后续方案。"}</p></div><span className="storyboard-current">当前 {formatSeconds(playhead)} / {formatSeconds(total)}</span></div>
     {outOfRangeOverlays.length > 0 && <div className="timeline-warning">有 {outOfRangeOverlays.length} 条文字超出当前成片时长，当前预览不会显示它们。</div>}
     <div className="storyboard-scroll"><div className="storyboard-track-stack" style={{ minWidth: `${trackWidth}px` }}>

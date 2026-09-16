@@ -18,6 +18,22 @@ def _png_bytes(color: tuple[int, int, int, int]) -> bytes:
     return output.getvalue()
 
 
+def test_matting_source_is_bounded_without_overwriting_original(tmp_path):
+    source = tmp_path / "large-source.png"
+    Image.new("RGB", (5000, 3000), (120, 80, 40)).save(source, "PNG")
+    original_bytes = source.read_bytes()
+
+    prepared, temporary = canvas_image_processing._prepare_matting_source(source)
+
+    assert temporary == prepared
+    assert prepared != source
+    assert prepared.stat().st_size <= canvas_image_processing._MATTING_MAX_BYTES
+    with Image.open(prepared) as image:
+        assert max(image.size) <= canvas_image_processing._MATTING_MAX_DIMENSION
+    assert source.read_bytes() == original_bytes
+    prepared.unlink(missing_ok=True)
+
+
 def test_background_template_upload_and_list(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_state, "CANVAS_BACKGROUND_ROOT", tmp_path / "backgrounds")
     client = TestClient(create_app())

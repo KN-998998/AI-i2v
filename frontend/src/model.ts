@@ -99,6 +99,18 @@ export type FoodType = typeof FOOD_TYPE_OPTIONS[number];
 export const VISUAL_SUBJECT_TYPE_OPTIONS = ["菜品主体", "手部", "厨师上半身", "手部+厨师上半身"] as const;
 export type VisualSubjectType = typeof VISUAL_SUBJECT_TYPE_OPTIONS[number];
 
+/** Stable workflow identity for one dish, independent of the sampled image. */
+export function assetIdForDishName(dishName: string): string {
+  const normalized = dishName
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^\p{L}\p{N}_-]+/gu, "_")
+    .replace(/^_+|_+$/g, "");
+  return `asset_dish_${normalized || "unknown"}`;
+}
+
 export type WorkflowData = {
   kind: NodeKind;
   title: string;
@@ -133,6 +145,8 @@ export type WorkflowData = {
   processingMode?: "matting_composite" | "preserve_original";
   processedImageMode?: "matting_composite" | "preserve_original";
   imageProcessingJobId?: string;
+  /** Active Kling job, used to distinguish a real pending task from a stale placeholder. */
+  generationJobId?: string;
   duration?: string;
   resolution?: string;
   audio?: string;
@@ -423,7 +437,7 @@ export type NodeCatalogItem = Pick<WorkflowData, "title" | "status" | "descripti
 export const nodeCatalog: Record<NodeKind, NodeCatalogItem> = {
   input: { kicker: "INPUT", title: "素材与菜品", status: "已就绪", description: "提供菜品图片、首帧或尾帧素材。" },
   image_process: { kicker: "IMAGE PROCESS", title: "图片处理", status: "待处理", description: "按素材主体类型执行抠图合成或保留原图。" },
-  prompt: { kicker: "PROMPT", title: "槽位化提示词", status: "可生成", description: "装配并校验图生视频提示词。" },
+  prompt: { kicker: "PROMPT", title: "基础提示词模板", status: "可生成", description: "配置所有菜品共用的画面元素、镜头和动作规则。" },
   generator: { kicker: "KLING 3.0", title: "3 秒视频片段", status: "待生成", description: "按当前提示词生成视频片段。" },
   output: { kicker: "OUTPUT", title: "成片合成", status: "草稿", description: "先将视频片段合成为无声成片。" },
   sound: { kicker: "SOUND", title: "声音与文字", status: "待配置", description: "在合成视频后添加 BGM、人声与画面文字。" },

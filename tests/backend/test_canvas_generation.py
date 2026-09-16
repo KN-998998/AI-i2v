@@ -58,6 +58,35 @@ def test_prompt_generation_inherits_mixed_food_type_from_input():
     assert "套餐整体与各组成餐品保持原位不动" in prompt
 
 
+def test_generation_rejects_an_unprocessed_image(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    monkeypatch.setattr(canvas_generation, "KLING_API_KEY", "test-key")
+    monkeypatch.setattr(canvas_generation, "KLING_ACCESS_KEY", "")
+    monkeypatch.setattr(canvas_generation, "KLING_SECRET_KEY", "")
+    canvas_state.save_draft("default", {
+        "nodes": [
+            {"id": "input", "data": {"kind": "input", "imagePreview": "/api/canvas/drafts/default/files/source.jpg"}},
+            {"id": "process", "data": {"kind": "image_process", "imagePreview": "/api/canvas/drafts/default/files/source.jpg"}},
+            {"id": "prompt", "data": {"kind": "prompt", "promptConfig": {"mode": "single_image"}}},
+            {"id": "generator", "data": {"kind": "generator"}},
+        ],
+        "edges": [
+            {"source": "input", "target": "process"},
+            {"source": "process", "target": "prompt"},
+            {"source": "prompt", "target": "generator"},
+        ],
+        "timeline": [],
+        "candidateClips": [],
+    })
+
+    try:
+        canvas_generation.start_generation("default", "generator")
+    except ValueError as error:
+        assert "图片处理" in str(error)
+    else:
+        raise AssertionError("generation unexpectedly accepted an unprocessed image")
+
+
 def test_completed_generation_persists_clip_and_node_status(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
     draft_id = "default"

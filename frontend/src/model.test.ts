@@ -1,7 +1,9 @@
-import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
+import { canAssemblePromptNode, promptAssemblyBlockReason, promptUpstreamNodes } from "./promptAssemblyReadiness.ts";
+import { generatorGenerationBlockReason } from "./generatorReadiness.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -12,19 +14,25 @@ const draftId = browserDraftId({ getItem: key => draftStorage.get(key) ?? null, 
 assert(/^draft_[A-Za-z0-9_-]{1,58}$/.test(draftId), "browser draft id is invalid");
 assert(draftStorage.get(DRAFT_ID_STORAGE_KEY) === draftId, "browser draft id was not persisted");
 assert(browserDraftId({ getItem: key => draftStorage.get(key) ?? null, setItem: (key, value) => draftStorage.set(key, value) }) === draftId, "browser draft id was not reused");
+assert(assetIdForDishName(" 玉子寿司 ") === assetIdForDishName("玉子寿司"), "dish asset identity should ignore surrounding whitespace");
+assert(assetIdForDishName("玉子  寿司") === assetIdForDishName("玉子 寿司"), "dish asset identity should collapse spacing differences");
+assert(assetIdForDishName("ＡＢＣ") === assetIdForDishName("abc"), "dish asset identity should normalize full-width and case variants");
 
 assert(connectWouldCycle(initialEdges, "sound", "assets") === true, "cycle connection was accepted");
 assert(connectWouldCycle(initialEdges, "assets", "sound") === false, "acyclic connection was rejected");
 
-const lockedProgress = deriveWorkflowProgress(initialNodes, [], []);
+const lockedProgress = deriveWorkflowProgress(initialNodes, [], [], initialEdges);
 assert(lockedProgress.steps[0].unlocked && !lockedProgress.steps[0].complete, "first workflow step should be the only initial entry point");
 assert(!lockedProgress.steps[1].unlocked && !isWorkflowRouteUnlocked("/canvas-mvp", lockedProgress), "new users should not access later workflow or overview routes");
 assert(firstIncompleteWorkflowRoute(lockedProgress) === "/workflow/assets", "new users should be directed to the asset step");
+const initialGenerator = initialNodes.find(node => node.id === "clips");
+if (!initialGenerator) throw new Error("workflow seed is missing the generator node");
+assert(generatorGenerationBlockReason(initialGenerator, initialNodes, initialEdges)?.includes("原始图片") === true, "generator without an image must be blocked");
 const outOfOrderNodes = initialNodes.map(node => ({ ...node, data: { ...node.data } }));
 const outOfOrderPrompt = outOfOrderNodes.find(node => node.data.kind === "prompt");
 if (!outOfOrderPrompt) throw new Error("workflow seed is missing the prompt node");
 outOfOrderPrompt.data.status = "已装配";
-const outOfOrderProgress = deriveWorkflowProgress(outOfOrderNodes, [], []);
+const outOfOrderProgress = deriveWorkflowProgress(outOfOrderNodes, [], [], initialEdges);
 assert(!outOfOrderProgress.steps[3].unlocked, "a completed prompt must not unlock generation before assets and image processing are complete");
 const completedNodes = initialNodes.map(node => ({ ...node, data: { ...node.data } }));
 const completedInput = completedNodes.find(node => node.data.kind === "input");
@@ -34,8 +42,46 @@ if (!completedInput || !completedImageProcess || !completedPrompt) throw new Err
 completedInput.data.imagePreview = "/assets/dish.png";
 completedImageProcess.data.processedImagePreview = "/assets/dish-processed.png";
 completedPrompt.data.status = "已装配";
-const generatedProgress = deriveWorkflowProgress(completedNodes, [{ id: "generated", dish: "dish", label: "", tone: "", timelineDuration: 3, generatorNodeId: "clips", sourcePath: "clip.mp4", isSelected: true }], []);
+const generatedProgress = deriveWorkflowProgress(completedNodes, [{ id: "generated", dish: "dish", label: "", tone: "", timelineDuration: 3, generatorNodeId: "clips", sourcePath: "clip.mp4", isSelected: true }], [], initialEdges);
 assert(generatedProgress.steps[4].unlocked && !generatedProgress.steps[5].unlocked, "completed clips should unlock composition but not sound");
+const partialNodes = initialNodes.map(node => ({ ...node, data: { ...node.data } }));
+const secondaryInput = createWorkflowNode("input", "secondary_input", { x: 0, y: 0 });
+secondaryInput.data = { ...secondaryInput.data, dishName: "secondary dish", imagePreview: "/assets/secondary.png" };
+const secondaryProcess = createWorkflowNode("image_process", "secondary_process", { x: 0, y: 0 });
+secondaryProcess.data = { ...secondaryProcess.data, processedImagePreview: "/assets/secondary-processed.png" };
+const secondaryPrompt = createWorkflowNode("prompt", "secondary_prompt", { x: 0, y: 0 });
+secondaryPrompt.data = { ...secondaryPrompt.data, status: "已装配" };
+const secondaryGenerator = createWorkflowNode("generator", "secondary_generator", { x: 0, y: 0 });
+partialNodes.push(secondaryInput, secondaryProcess, secondaryPrompt, secondaryGenerator);
+const partialEdges = [
+  ...initialEdges,
+  { id: "secondary-input-process", source: "secondary_input", target: "secondary_process" },
+  { id: "secondary-process-prompt", source: "secondary_process", target: "secondary_prompt" },
+  { id: "secondary-prompt-generator", source: "secondary_prompt", target: "secondary_generator" },
+];
+const partialProgress = deriveWorkflowProgress(partialNodes, [{ id: "secondary-clip", dish: "secondary dish", label: "", tone: "", timelineDuration: 3, generatorNodeId: "secondary_generator", sourcePath: "secondary.mp4", isSelected: true }], [], partialEdges);
+assert(partialProgress.steps[4].unlocked, "one completed dish chain should unlock composition despite untouched example nodes");
+
+const readyPromptNodes = initialNodes.map(node => ({ ...node, data: { ...node.data } }));
+const readyInput = readyPromptNodes.find(node => node.data.kind === "input");
+const readyProcess = readyPromptNodes.find(node => node.data.kind === "image_process");
+const readyPrompt = readyPromptNodes.find(node => node.data.kind === "prompt");
+if (!readyInput || !readyProcess || !readyPrompt) throw new Error("workflow seed is missing prompt chain");
+readyInput.data.imagePreview = "/assets/dish.png";
+readyProcess.data.processedImagePreview = "/assets/dish-processed.png";
+assert(promptUpstreamNodes(readyPrompt, readyPromptNodes, initialEdges).input?.id === readyInput.id, "prompt readiness used the wrong input ancestor");
+assert(promptUpstreamNodes(readyPrompt, readyPromptNodes, initialEdges).process?.id === readyProcess.id, "prompt readiness used the wrong processing ancestor");
+assert(canAssemblePromptNode(readyPrompt, readyPromptNodes, initialEdges), "a ready prompt chain should be assembleable");
+const unrelatedNodes = readyPromptNodes.map(node => ({ ...node, data: { ...node.data } }));
+const unrelatedInput = unrelatedNodes.find(node => node.data.kind === "input");
+const unrelatedProcess = unrelatedNodes.find(node => node.data.kind === "image_process");
+if (!unrelatedInput || !unrelatedProcess) throw new Error("workflow seed is missing unrelated chain nodes");
+unrelatedInput.data.imagePreview = undefined;
+unrelatedProcess.data.processedImagePreview = undefined;
+assert(canAssemblePromptNode(readyPrompt, unrelatedNodes, initialEdges) === false, "prompt readiness should require its own upstream chain");
+readyProcess.data.status = "处理失败";
+readyProcess.data.processedImagePreview = undefined;
+assert(promptAssemblyBlockReason(readyPrompt, readyPromptNodes, initialEdges)?.includes("图片处理失败") === true, "failed image processing should explain why prompt assembly is disabled");
 
 const next = removeNodeAndEdges(initialNodes, initialEdges, "prompt");
 assert(!next.nodes.some(node => node.id === "prompt"), "node was not removed");

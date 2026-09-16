@@ -1,11 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getCanvasComposeStatus, isActiveTaskStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
 import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, nodeCatalog, repairCaptionVoiceSegments, totalTimelineDuration, type ComposeJob, type NodeKind, type TimelineClip, type WorkflowNode } from "../model";
+import { promptConfigFromData } from "../promptAssembler";
+import { canAssemblePromptNode, promptAssemblyBlockReason } from "../promptAssemblyReadiness";
 import { useWorkflowStore } from "../workflowStore";
-import { Inspector } from "./Inspector";
+import { InlineSoundEditor, Inspector } from "./Inspector";
 import { navigate, type WorkflowRoute } from "../router";
 import { requestTutorial } from "../tutorial";
 import { deriveWorkflowProgress, isWorkflowRouteUnlocked } from "../workflowProgress";
+import { generatorGenerationBlockReason } from "../generatorReadiness";
 import { StoryboardTimeline } from "./StoryboardTimeline";
 import { AssetLibraryBatchPanel } from "./AssetLibraryBatchPanel";
 
@@ -30,8 +33,17 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
   if (route === "/workflow/prompts") return <><StepFrame route={route} title={title} description={description} onToast={onToast}>
     <div className="prompt-step-layout"><PromptNodeWorkspace onToast={onToast} /><div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div>
   </StepFrame><Inspector onToast={onToast} /></>;
+  if (route === "/workflow/sound") return <StepFrame route={route} title={title} description={description} onToast={onToast}>
+    <div className="step-page-main step-page-main-sound">
+      <div className="sound-step-layout">
+        <div className="sound-step-display"><SoundTextPreview /><SoundComposePanel onToast={onToast} /></div>
+        <InlineSoundEditor onToast={onToast} />
+      </div>
+      <div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div>
+    </div>
+  </StepFrame>;
   return <StepFrame route={route} title={title} description={description} onToast={onToast}>
-    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}{route === "/workflow/sound" && <><SoundTextPreview /><SoundComposePanel onToast={onToast} /></>}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div></div>
+    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div></div>
     <Inspector onToast={onToast} />
   </StepFrame>;
 }
@@ -52,19 +64,23 @@ function resolveStepNodeId(kind: ManagedNodeKind | null, nodes: WorkflowNode[], 
 }
 
 function PromptNodeWorkspace({ onToast }: { onToast: (message: string) => void }) {
-  const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === "prompt");
+  const allNodes = useWorkflowStore(state => state.nodes);
+  const nodes = allNodes.filter(node => node.data.kind === "prompt");
+  const edges = useWorkflowStore(state => state.edges);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
+  const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const addNode = useWorkflowStore(state => state.addNode);
   return <section className="prompt-node-workspace">
-    <div className="panel-section-head"><div><span className="panel-label">PROMPT NODES</span><h2>提示词节点 · {nodes.length} 个</h2><p className="muted">每个节点独立配置 L0/L1/L2、镜头与动作；点击节点卡片展开对应编辑区。</p></div><button type="button" className="btn btn-primary" onClick={() => { addNode("prompt"); onToast("已新增提示词节点"); }}>＋ 新增提示词节点</button></div>
+    <div className="panel-section-head"><div><span className="panel-label">PROMPT NODES</span><h2>提示词节点 · {nodes.length} 个</h2><p className="muted">“槽位”就是可分别编辑的提示词字段：画面元素、主运动、次级动态、镜头和主体类型。01 是通用模板序号，不是版本或质量等级；带菜品名的节点才对应具体菜品。</p></div><button type="button" className="btn btn-primary" onClick={() => { addNode("prompt"); onToast("已新增提示词节点"); }}>＋ 新增提示词节点</button></div>
     <div className="prompt-node-list">{nodes.map((node, index) => {
+      const assemblyReason = promptAssemblyBlockReason(node, allNodes, edges);
       return <article className="prompt-node-card" key={node.id}>
         <div className="prompt-node-card-head" onClick={() => setSelection(node.id)}>
           <span className="node-record-index">{String(index + 1).padStart(2, "0")}</span>
           <div><strong>{node.data.title}</strong><small>{node.data.description || "配置画面元素、镜头和动作"}</small></div>
-          <div className="prompt-node-card-meta"><span className="node-status">{node.data.status}</span><span>L0 {node.data.promptL0?.length ?? 0}</span></div>
-          <button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); beginNodeEdit(node.id); }}>编辑节点</button>
+          <div className="prompt-node-card-meta"><span className="node-status">{node.data.status}</span><span>L0 {promptConfigFromData(node.data).elements.length}</span></div>
+          <div className="node-record-actions"><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); beginNodeEdit(node.id); }}>编辑节点</button><button type="button" className="btn btn-primary" disabled={Boolean(assemblyReason)} title={assemblyReason ?? "校验并完成提示词装配"} onClick={event => { event.stopPropagation(); updateNodeData(node.id, { status: "已装配" }); onToast(`${node.data.title} 已装配`); }}>实时装配</button>{assemblyReason && <small className="action-hint">{assemblyReason}</small>}</div>
         </div>
       </article>;
     })}</div>
@@ -110,6 +126,8 @@ function NodeManager({ kind, onToast }: { kind: ManagedNodeKind; onToast: (messa
 
 function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void }) {
   const nodes = useWorkflowStore(state => state.nodes).filter(node => node.data.kind === "generator");
+  const allNodes = useWorkflowStore(state => state.nodes);
+  const edges = useWorkflowStore(state => state.edges);
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
@@ -152,10 +170,12 @@ function GeneratorNodeManager({ onToast }: { onToast: (message: string) => void 
       const generated = node.data.status === "已生成";
       const generating = node.data.status === "生成中";
       const failed = node.data.status === "生成失败";
+      const blockReason = generatorGenerationBlockReason(node, allNodes, edges);
+      const disabled = generating || Boolean(blockReason);
       return <article className={`node-record ${selected ? "selected" : ""}`} key={node.id} onClick={() => setSelection(node.id)}>
         <div className="node-record-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{node.data.title}</strong><small>{node.id}</small></div><span className="node-status">{node.data.status}</span></div>
         <div className="node-record-body"><span>规格：{node.data.duration || "3s"} · {node.data.resolution || "1080p"}</span><span>音频：{node.data.audio || "无声"}</span></div>
-        <div className="node-record-actions"><button type="button" disabled={generating} className={`btn ${generated || failed ? "" : "btn-primary"}`} onClick={event => { event.stopPropagation(); void generate(node); }}>{generating ? "生成中..." : failed ? "重试生成" : generated ? "再次生成" : "生成片段"}</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); beginNodeEdit(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button></div>
+        <div className="node-record-actions"><button type="button" disabled={disabled} title={blockReason ?? "校验通过，可以生成视频片段"} className={`btn ${generated || failed ? "" : "btn-primary"}`} onClick={event => { event.stopPropagation(); void generate(node); }}>{generating ? "生成中..." : failed ? "重试生成" : generated ? "再次生成" : "生成片段"}</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); beginNodeEdit(node.id); }}>编辑</button><button type="button" className="btn" onClick={event => { event.stopPropagation(); duplicate(node); }}>复制</button><button type="button" className="btn btn-danger" disabled={protectedNode} onClick={event => { event.stopPropagation(); remove(node); }}>{protectedNode ? "核心节点" : "删除"}</button>{blockReason && <small className="action-hint">{blockReason}</small>}</div>
       </article>;
     })}</div>
   </section>;
@@ -175,7 +195,7 @@ function StepSummary({ route, nodeId }: { route: WorkflowRoute; nodeId: string |
   const firstOverlay = soundSegments.find(segment => segment.overlay.enabled !== false)?.overlay;
   const summaries: Record<string, string> = {
     "/workflow/assets": `${node?.dishName || "未选择菜品"} · 素材待确认`,
-    "/workflow/prompts": `已选择 ${node?.promptL0?.length ?? 0} 个 L0 画面元素`,
+    "/workflow/prompts": `已选择 ${node?.kind === "prompt" ? promptConfigFromData(node).elements.length : 0} 个 L0 画面元素`,
     "/workflow/sound": `${firstVoice?.voiceName || "未配置音色"} · ${firstOverlay?.text || "未配置画面文字"}`,
     "/workflow/output": `${timeline.length} 个片段 · ${totalTimelineDuration(timeline).toFixed(1)}s 时间线`,
   };
@@ -184,6 +204,7 @@ function StepSummary({ route, nodeId }: { route: WorkflowRoute; nodeId: string |
 
 function StepNext({ route }: { route: WorkflowRoute }) {
   const nodes = useWorkflowStore(state => state.nodes);
+  const edges = useWorkflowStore(state => state.edges);
   const candidateClips = useWorkflowStore(state => state.candidateClips);
   const composeWorkspaces = useWorkflowStore(state => state.composeWorkspaces);
   const next: Record<string, { path: WorkflowRoute; label: string }> = {
@@ -193,14 +214,12 @@ function StepNext({ route }: { route: WorkflowRoute }) {
   };
   const item = next[route];
   if (!item) return null;
-  const unlocked = isWorkflowRouteUnlocked(item.path, deriveWorkflowProgress(nodes, candidateClips, composeWorkspaces));
+  const unlocked = isWorkflowRouteUnlocked(item.path, deriveWorkflowProgress(nodes, candidateClips, composeWorkspaces, edges));
   return <button type="button" disabled={!unlocked} title={unlocked ? item.label : "请先完成当前步骤"} className="btn btn-primary step-next" onClick={() => navigate(item.path)}>{item.label}</button>;
 }
 
 function SoundTextPreview() {
-  const workspaces = useWorkflowStore(state => state.composeWorkspaces);
   const activeWorkspaceId = useWorkflowStore(state => state.activeComposeWorkspaceId);
-  const setActiveWorkspace = useWorkflowStore(state => state.setActiveComposeWorkspace);
   const timeline = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId)?.clips ?? state.timeline);
   const soundNode = useWorkflowStore(state => state.nodes.find(node => node.data.kind === "sound"));
   const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
@@ -284,18 +303,7 @@ function SoundTextPreview() {
     });
   };
 
-  return <>
-    <div className="workspace-picker" role="group" aria-label="选择要配置声音与文字的成片">
-      <span className="panel-label">TARGET COMPOSITION</span>
-      <div className="workspace-picker-list">{workspaces.map(workspace => <button type="button" key={workspace.id} className={`workspace-chip ${workspace.id === activeWorkspaceId ? "active" : ""}`} onClick={() => setActiveWorkspace(workspace.id)}>{workspace.title}<small>{workspace.clips.length} 段 · {workspace.finalJob?.status === "done" ? "有声完成" : workspace.job?.status === "done" ? "无声完成" : "未合成"}</small></button>)}</div>
-    </div>
-    <div className="sound-text-explainer">
-      <div><span className="panel-label">TEXT OVERLAY LOGIC</span><strong>文字 1、文字 2 是同一个声音与文字节点里的多条文字轨道</strong></div>
-      <p>每条文字单独设置文案、开始秒数、结束秒数和画面位置；它只会在自己的时间段出现，不会新增流程节点。拖动下方播放指针，查看它对应哪一个视频片段。</p>
-      <div className="sound-text-legend"><span><i className="legend-dot legend-top" />上方品牌区</span><span><i className="legend-dot legend-upper" />中上钩子区</span><span><i className="legend-dot legend-center" />画面中央</span><span><i className="legend-dot legend-bottom" />底部安全区</span></div>
-    </div>
-    <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceItems={voiceItems} bgmName={bgmName} onRemoveBgm={clearBgm} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} onVoiceFocus={() => setActivePanel("voice")} onOverlayFocus={() => setActivePanel("overlay")} />
-  </>;
+  return <StoryboardTimeline clips={timeline} overlayItems={overlayItems} voiceItems={voiceItems} bgmName={bgmName} onRemoveBgm={clearBgm} onUpdateOverlay={updateOverlayTimeline} onRemoveOverlay={removeOverlayTimeline} onUpdateVoice={updateVoiceTimeline} onRemoveVoice={removeVoiceTimeline} onVoiceFocus={() => setActivePanel("voice")} onOverlayFocus={() => setActivePanel("overlay")} />;
 }
 
 function SoundComposePanel({ onToast }: StepPageProps) {
@@ -328,6 +336,11 @@ function SoundComposePanel({ onToast }: StepPageProps) {
       if (soundNode && job.voice_timings) {
         const synced = captionSegmentsWithTimings(captionSegmentsFromData(soundNode.data), job.voice_timings);
         updateNodeData(soundNode.id, captionSegmentsPatch(synced));
+        // Updating the sound node intentionally invalidates a previous render
+        // when the operator edits it. Here the update only persists timings
+        // returned by the render that just completed, so restore that completed
+        // job after the node patch; otherwise the result button stays disabled.
+        setWorkspaceJob(activeWorkspaceId ?? "compose_1", job);
         await saveDraft();
       }
       onToast("最终有声成片已生成");
@@ -406,5 +419,5 @@ function StepFrame({ route, title, description, children }: StepPageProps & { ro
     "/workflow/sound": "先在第 5 步完成至少一条无声成片，再配置多轨人声、文字和 BGM；文字与人声可分别拖动并允许重叠。",
     "/workflow/output": "无声成片用于检查片段顺序，有声成片用于发布；需要修改声音或文字时返回第 6 步。",
   };
-  return <main className="step-main"><div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>{title}</strong></div><div className="step-header"><div><span className="panel-label">WORKFLOW STEP</span><h1>{title}</h1><p>{description}</p></div><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial(route)}>查看本步骤教学</button></div>{guides[route] && <div className="step-guide"><span>操作提示</span><p>{guides[route]}</p></div>}{children}</main>;
+  return <main className={`step-main ${route === "/workflow/sound" ? "step-main-sound" : ""}`}><div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>{title}</strong></div><div className="step-header"><div><span className="panel-label">WORKFLOW STEP</span><h1>{title}</h1><p>{description}</p></div><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial(route)}>查看本步骤教学</button></div>{guides[route] && <div className="step-guide"><span>操作提示</span><p>{guides[route]}</p></div>}{children}</main>;
 }

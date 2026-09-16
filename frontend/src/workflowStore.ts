@@ -1,10 +1,11 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, resolveGeneratorNodeStatus, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
+import { assetIdForDishName, clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
 import { browserDraftId } from "./draftIdentity";
+import { generatorGenerationBlockReason, generatorUpstreamNodes } from "./generatorReadiness";
 
 type NodeEditSnapshot = Pick<WorkflowState, "nodes" | "timeline" | "candidateClips" | "composeWorkspaces" | "bgmName" | "bgmUrl" | "composeJob" | "activePanel" | "selectedNodeId" | "selectedEdgeId">;
 
@@ -56,7 +57,7 @@ type WorkflowState = {
   runBatchGeneration: (generatorIds: string[]) => Promise<void>;
   deleteNode: (nodeId: string) => void;
   duplicateNode: (nodeId: string) => void;
-  deleteSelected: () => void;
+  deleteSelected: () => boolean;
   duplicateSelected: () => void;
   reorderTimeline: (sourceId: string, targetId: string) => void;
   removeTimelineClip: (clipId: string) => void;
@@ -85,6 +86,30 @@ type WorkflowState = {
 };
 
 const protectedNodeIds = new Set(["assets", "image_process", "prompt", "clips", "output", "sound"]);
+
+const promptConfigurationFields = new Set<keyof WorkflowData>([
+  "promptConfig",
+  "promptMode",
+  "promptL0",
+  "promptMotion",
+  "promptAmplitude",
+  "promptShotSize",
+  "promptL1",
+  "promptL2Type1",
+  "promptL2Target1",
+  "promptL2Type2",
+  "promptL2Target2",
+  "promptL1ActionLevel",
+  "promptL1ActionVerb",
+  "promptSpeedCurve",
+  "promptSeamlessLoop",
+  "promptEndImageName",
+  "promptEndImagePreview",
+]);
+
+function promptConfigurationChanged(patch: Partial<WorkflowData>): boolean {
+  return Object.keys(patch).some(key => promptConfigurationFields.has(key as keyof WorkflowData));
+}
 
 function normalizedVisualSubjectType(value: string | undefined): VisualSubjectType {
   return value === "手部" || value === "厨师上半身" || value === "手部+厨师上半身" ? value : "菜品主体";
@@ -213,12 +238,18 @@ function syncGeneratorNodeStatuses(nodes: WorkflowNode[], candidateClips: Timeli
   return nodes.map(node => {
     if (node.data.kind !== "generator") return node;
     const linked = candidateClips.filter(item => item.generatorNodeId === node.id);
-    const clip = linked.find(item => item.status === "pending")
-      ?? linked.find(item => item.id === node.data.selectedClipId)
+    const clip = linked.find(item => item.id === node.data.selectedClipId && item.sourcePath)
       ?? linked.find(item => item.isSelected !== false && item.sourcePath)
+      ?? linked.find(item => item.sourcePath)
       ?? linked.find(item => item.status === "pending")
       ?? linked[0];
-    const status = resolveGeneratorNodeStatus(node.data.status, clip);
+    const status = clip?.sourcePath
+      ? "已生成"
+      : clip?.status === "pending" && node.data.generationJobId
+        ? "生成中"
+        : node.data.status === "生成失败"
+          ? "生成失败"
+          : "待生成";
     return status === node.data.status ? node : { ...node, data: { ...node.data, status } };
   });
 }
@@ -239,6 +270,54 @@ function removeNodeArtifacts(state: Pick<WorkflowState, "candidateClips" | "comp
   }));
   const timeline = composeWorkspaces[0]?.clips ?? state.timeline.filter(clip => !clip.generatorNodeId || !nodeIds.has(clip.generatorNodeId));
   return { candidateClips, composeWorkspaces, timeline };
+}
+
+type DishNodeDedupeResult = { nodes: WorkflowNode[]; edges: Edge[]; removedGeneratorIds: Set<string> };
+
+function workflowChainForInput(inputId: string, nodes: WorkflowNode[], edges: Edge[]): Set<string> {
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const ids = new Set<string>([inputId]);
+  let current = inputId;
+  for (const kind of ["image_process", "prompt", "generator"] as const) {
+    const next = edges
+      .filter(edge => edge.source === current)
+      .map(edge => nodeById.get(edge.target))
+      .find(node => node?.data.kind === kind);
+    if (!next) break;
+    ids.add(next.id);
+    current = next.id;
+  }
+  return ids;
+}
+
+/** Keep one connected workflow chain per dish, preserving the latest input node. */
+export function dedupeDishWorkflowNodes(nodes: WorkflowNode[], edges: Edge[]): DishNodeDedupeResult {
+  const groups = new Map<string, WorkflowNode[]>();
+  nodes.filter(node => node.data.kind === "input" && node.data.dishName?.trim()).forEach(node => {
+    const key = node.data.dishName!.normalize("NFKC").trim().toLocaleLowerCase();
+    groups.set(key, [...(groups.get(key) ?? []), node]);
+  });
+  const removeIds = new Set<string>();
+  const removedGeneratorIds = new Set<string>();
+  groups.forEach(inputs => {
+    const canonical = inputs.at(-1)!;
+    inputs.slice(0, -1).forEach(input => {
+      const chain = workflowChainForInput(input.id, nodes, edges);
+      chain.forEach(id => {
+        removeIds.add(id);
+        if (nodes.find(node => node.id === id)?.data.kind === "generator") removedGeneratorIds.add(id);
+      });
+    });
+    const canonicalIndex = nodes.findIndex(node => node.id === canonical.id);
+    if (canonicalIndex >= 0 && canonical.data.assetId !== assetIdForDishName(canonical.data.dishName ?? "")) {
+      nodes[canonicalIndex] = { ...canonical, data: { ...canonical.data, assetId: assetIdForDishName(canonical.data.dishName ?? "") } };
+    }
+  });
+  return {
+    nodes: nodes.filter(node => !removeIds.has(node.id)),
+    edges: edges.filter(edge => !removeIds.has(edge.source) && !removeIds.has(edge.target)),
+    removedGeneratorIds,
+  };
 }
 
 function arrangedWorkflowNodes(nodes: WorkflowNode[], edges: Edge[]): WorkflowNode[] {
@@ -408,7 +487,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           ...(item.data.promptConfig ?? DEFAULT_PROMPT_CONFIG),
           food_type: data.foodType,
         } as typeof DEFAULT_PROMPT_CONFIG, visualSubjectType);
-        return { ...item, data: { ...item.data, promptConfig, ...promptLegacyPatch(promptConfig) } };
+        return { ...item, data: { ...item.data, promptConfig, ...promptLegacyPatch(promptConfig), status: "可生成" } };
       });
       return { nodes, revision: state.revision + 1 };
     }
@@ -417,7 +496,40 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       && primaryInput?.id === nodeId
       && ("dishName" in patch || "dishCategory" in patch || "foodType" in patch || "visualSubjectType" in patch);
     if (!shouldSyncClipMetadata || !data) {
-      const nodes = state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, ...patch } } : item);
+      const inputMediaChanged = node?.data.kind === "input"
+        && ("imagePreview" in patch || "imageName" in patch || "assetMode" in patch);
+      const processIds = inputMediaChanged
+        ? new Set(state.edges
+          .filter(edge => edge.source === nodeId && state.nodes.find(item => item.id === edge.target)?.data.kind === "image_process")
+          .map(edge => edge.target))
+        : new Set<string>();
+      const promptIds = inputMediaChanged
+        ? new Set(state.edges
+          .filter(edge => processIds.has(edge.source) && state.nodes.find(item => item.id === edge.target)?.data.kind === "prompt")
+          .map(edge => edge.target))
+        : new Set<string>();
+      const nodes = state.nodes.map(item => {
+        if (inputMediaChanged && processIds.has(item.id)) {
+          return {
+            ...item,
+            data: {
+              ...item.data,
+              imagePreview: data?.imagePreview,
+              status: "待处理",
+              processedImagePreview: undefined,
+              processedImageName: undefined,
+              processedImageAnalysis: undefined,
+              processedImageMode: undefined,
+              imageProcessingJobId: undefined,
+            },
+          };
+        }
+        if (inputMediaChanged && promptIds.has(item.id)) return { ...item, data: { ...item.data, status: "可生成" } };
+        if (item.id !== nodeId) return item;
+        const nextData = { ...item.data, ...patch };
+        if (item.data.kind === "prompt" && promptConfigurationChanged(patch) && !("status" in patch)) nextData.status = "可生成";
+        return { ...item, data: nextData };
+      });
       if (node?.data.kind !== "sound") return { nodes, revision: state.revision + 1 };
       const activeWorkspace = state.composeWorkspaces.find(item => item.id === state.activeComposeWorkspaceId);
       const fallback = soundConfigFromData({ ...node.data, ...patch }, state.bgmName, state.bgmUrl);
@@ -442,7 +554,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
       if (item.data.kind !== "prompt") return item;
       const promptConfig = promptConfigForVisualSubject({ ...(item.data.promptConfig ?? DEFAULT_PROMPT_CONFIG), food_type: foodType } as typeof DEFAULT_PROMPT_CONFIG, data.visualSubjectType);
-      return { ...item, data: { ...item.data, promptConfig, ...promptLegacyPatch(promptConfig) } };
+      return { ...item, data: { ...item.data, promptConfig, ...promptLegacyPatch(promptConfig), status: "可生成" } };
     });
     return {
       nodes,
@@ -456,7 +568,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const node = state.nodes.find(item => item.id === nodeId && item.data.kind === "generator");
     if (!node) return {};
     const existing = state.candidateClips.find(item => item.generatorNodeId === nodeId && item.status === "pending");
-    const input = state.nodes.find(item => item.data.kind === "input");
+    const input = generatorUpstreamNodes(node, state.nodes, state.edges).input;
     const dish = input?.data.dishName || existing?.dish || "待配置菜品";
     const dishCategory = normalizeDishCategory(input?.data.dishCategory ?? existing?.dishCategory, input?.data.dishName ? dish : "");
     const foodType = dishCategory === "套餐" ? "混合/多温" : input?.data.foodType as FoodType | undefined;
@@ -497,7 +609,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       timeline: replace(state.timeline),
       composeWorkspaces,
       availableClips: [...state.availableClips.filter(item => item.sourcePath !== nextClip.sourcePath), nextClip as ClipLibraryItem],
-      nodes: state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, assetId: nextClip.assetId ?? item.data.assetId, selectedClipId: nextClip.id, status: "已生成" } } : item),
+       nodes: state.nodes.map(item => item.id === nodeId ? { ...item, data: { ...item.data, assetId: nextClip.assetId ?? item.data.assetId, selectedClipId: nextClip.id, generationJobId: undefined, status: "已生成" } } : item),
       revision: state.revision + 1,
     };
   }),
@@ -517,11 +629,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   }),
   generateNode: async nodeId => {
     const state = get();
+    const node = state.nodes.find(item => item.id === nodeId && item.data.kind === "generator");
+    if (!node) throw new Error("生成节点不存在");
+    const blockReason = generatorGenerationBlockReason(node, state.nodes, state.edges);
+    if (blockReason) throw new Error(blockReason);
     state.registerGeneratorClip(nodeId);
     state.updateNodeData(nodeId, { status: "生成中" });
     await get().saveDraft();
     try {
       const started = await startCanvasGeneration(get().draftId, nodeId);
+      get().updateNodeData(nodeId, { generationJobId: started.job_id });
+      await get().saveDraft();
       const completed = await waitForCanvasGeneration(get().draftId, started);
       if (completed.status === "error") throw new Error(completed.error || "Kling 生成失败");
       if (completed.status !== "done" || !completed.clip) throw new Error("生成任务超时，请检查后端日志");
@@ -529,7 +647,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       await get().saveDraft();
       return completed;
     } catch (error) {
-      get().updateNodeData(nodeId, { status: "生成失败" });
+      get().updateNodeData(nodeId, { status: "生成失败", generationJobId: undefined });
       throw error;
     }
   },
@@ -576,62 +694,43 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   createBatchWorkflows: items => {
     const createdIds: string[] = [];
     set(state => {
-      const nodes = [...state.nodes];
-      const edges = [...state.edges];
-      const existingAssetIds = new Set(nodes
-        .filter(node => node.data.kind === "input")
-        .map(node => node.data.assetId)
-        .filter((assetId): assetId is string => Boolean(assetId)));
+      const deduped = dedupeDishWorkflowNodes([...state.nodes], [...state.edges]);
+      let nodes = deduped.nodes;
+      let edges = deduped.edges;
+      let artifacts: Pick<WorkflowState, "candidateClips" | "composeWorkspaces" | "timeline"> = removeNodeArtifacts(state, deduped.removedGeneratorIds);
       let nextNodeNumber = state.nextNodeNumber;
-      items.forEach(item => {
-        const assetId = `asset_${item.storedName || item.imageName || nextNodeNumber}`.replace(/[^A-Za-z0-9_-]+/g, "_");
-        if (existingAssetIds.has(assetId)) {
+      let newNodeIndex = 0;
+      const latestItems = new Map<string, AssetLibraryPlanItem>();
+      items.forEach(item => latestItems.set(item.dishName.normalize("NFKC").trim().toLocaleLowerCase(), item));
+      latestItems.forEach(item => {
+        const assetId = assetIdForDishName(item.dishName);
+        const dishKey = item.dishName.normalize("NFKC").trim().toLocaleLowerCase();
+        const existingInput = nodes.find(node => node.data.kind === "input" && node.data.dishName?.normalize("NFKC").trim().toLocaleLowerCase() === dishKey);
+        if (existingInput) {
+          const chainIds = workflowChainForInput(existingInput.id, nodes, edges);
+          const processNode = [...chainIds].map(id => nodes.find(node => node.id === id)).find(node => node?.data.kind === "image_process");
+          const promptNode = [...chainIds].map(id => nodes.find(node => node.id === id)).find(node => node?.data.kind === "prompt");
+          const generatorNode = [...chainIds].map(id => nodes.find(node => node.id === id)).find(node => node?.data.kind === "generator");
           const visualSubjectType = normalizedVisualSubjectType(item.visualSubjectType);
           const processingMode = imageProcessingModeForVisualSubject(visualSubjectType);
-          const existingInputIds = new Set(nodes
-            .filter(node => node.data.kind === "input" && node.data.assetId === assetId)
-            .map(node => node.id));
-          const processIds = new Set(edges
-            .filter(edge => existingInputIds.has(edge.source) && nodes.find(node => node.id === edge.target)?.data.kind === "image_process")
-            .map(edge => edge.target));
-          const promptIds = new Set(edges
-            .filter(edge => processIds.has(edge.source) && nodes.find(node => node.id === edge.target)?.data.kind === "prompt")
-            .map(edge => edge.target));
-          nodes.forEach((node, index) => {
-            if (existingInputIds.has(node.id)) {
-              nodes[index] = { ...node, data: { ...node.data, visualSubjectType } };
-              return;
+          if (generatorNode) artifacts = removeNodeArtifacts(artifacts, new Set([generatorNode.id]));
+          nodes = nodes.map(node => {
+            if (node.id === existingInput.id) return { ...node, data: { ...node.data, assetId, title: item.dishName, dishName: item.dishName, sourceLibraryCategory: item.sourceCategory, dishCategory: item.dishCategory as typeof node.data.dishCategory, foodType: item.foodType, visualSubjectType, imageName: item.imageName, imagePreview: item.imagePreview, status: "已就绪", selectedClipId: undefined } };
+            if (node.id === processNode?.id) return { ...node, data: { ...node.data, imagePreview: item.imagePreview, backgroundTemplateId: item.background.id, backgroundTemplateName: item.background.name, backgroundPreview: item.background.url, status: "待处理", visualSubjectType, processingMode, processedImagePreview: undefined, processedImageName: undefined, processedImageAnalysis: undefined, processedImageMode: undefined, imageProcessingJobId: undefined } };
+            if (node.id === promptNode?.id) {
+              const promptConfig = promptConfigForVisualSubject({ ...(node.data.promptConfig ?? DEFAULT_PROMPT_CONFIG), food_type: item.foodType } as typeof DEFAULT_PROMPT_CONFIG, visualSubjectType);
+              return { ...node, data: { ...node.data, title: `${item.dishName} 提示词`, promptConfig, ...promptLegacyPatch(promptConfig), status: "可生成" } };
             }
-            if (processIds.has(node.id) && (node.data.visualSubjectType !== visualSubjectType || node.data.processingMode !== processingMode)) {
-              nodes[index] = {
-                ...node,
-                data: {
-                  ...node.data,
-                  status: nodeCatalog.image_process.status,
-                  visualSubjectType,
-                  processingMode,
-                  processedImagePreview: undefined,
-                  processedImageName: undefined,
-                  processedImageAnalysis: undefined,
-                  processedImageMode: undefined,
-                  imageProcessingJobId: undefined,
-                },
-              };
-              return;
-            }
-            if (!promptIds.has(node.id)) return;
-            const promptConfig = promptConfigForVisualSubject({
-              ...(node.data.promptConfig ?? DEFAULT_PROMPT_CONFIG),
-              food_type: item.foodType,
-            } as typeof DEFAULT_PROMPT_CONFIG, visualSubjectType);
-            nodes[index] = { ...node, data: { ...node.data, promptConfig, ...promptLegacyPatch(promptConfig) } };
+            if (node.id === generatorNode?.id) return { ...node, data: { ...node.data, assetId, title: `${item.dishName} 视频片段`, status: "待生成", selectedClipId: undefined } };
+            return node;
           });
+          if (generatorNode) createdIds.push(generatorNode.id);
           return;
         }
-        existingAssetIds.add(assetId);
         const base = nextNodeNumber;
         nextNodeNumber += 4;
-        const y = 520 + createdIds.length * 250;
+        const y = 520 + newNodeIndex * 250;
+        newNodeIndex += 1;
         const inputId = `node_input_${base}`;
         const processId = `node_image_process_${base + 1}`;
         const promptId = `node_prompt_${base + 2}`;
@@ -672,7 +771,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         );
         createdIds.push(generatorId);
       });
-      return { nodes, edges, nextNodeNumber, selectedNodeId: createdIds.at(-1) ?? state.selectedNodeId, selectedEdgeId: null, revision: state.revision + 1 };
+      return { nodes, edges, ...artifacts, nextNodeNumber, selectedNodeId: createdIds.at(-1) ?? state.selectedNodeId, selectedEdgeId: null, revision: state.revision + 1 };
     });
     return createdIds;
   },
@@ -716,12 +815,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       revision: state.revision + 1,
     };
   }),
-  deleteSelected: () => set(state => {
-    if (state.selectedEdgeId) return { edges: state.edges.filter(edge => edge.id !== state.selectedEdgeId), selectedEdgeId: null, revision: state.revision + 1 };
-    if (!state.selectedNodeId || protectedNodeIds.has(state.selectedNodeId)) return {};
-    const next = removeNodeAndEdges(state.nodes, state.edges, state.selectedNodeId);
-    return { ...next, selectedNodeId: null, revision: state.revision + 1 };
-  }),
+  deleteSelected: () => {
+    let deleted = false;
+    set(state => {
+      if (state.selectedEdgeId) {
+        deleted = true;
+        return { edges: state.edges.filter(edge => edge.id !== state.selectedEdgeId), selectedEdgeId: null, revision: state.revision + 1 };
+      }
+      if (!state.selectedNodeId || protectedNodeIds.has(state.selectedNodeId)) return {};
+      const next = removeNodeAndEdges(state.nodes, state.edges, state.selectedNodeId);
+      deleted = true;
+      return { ...next, selectedNodeId: null, revision: state.revision + 1 };
+    });
+    return deleted;
+  },
   duplicateSelected: () => set(state => {
     const source = state.nodes.find(node => node.id === state.selectedNodeId);
     if (!source) return {};
@@ -918,16 +1025,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         ? { ...node, data: { ...portableData, dishCategory: portableData.dishName ? inferDishCategory(portableData.dishName) : "其他" } }
         : portableData === node.data ? node : { ...node, data: portableData };
     });
-    const nodes = syncGeneratorNodeStatuses(normalizedNodes, normalizedCandidates);
-    const nodesChanged = nodes.some((node, index) => node !== migrated.nodes[index]);
+    const deduped = dedupeDishWorkflowNodes(normalizedNodes, migrated.edges);
+    const migratedNodes = deduped.nodes.map(node => node.data.kind === "prompt" && (node.id === "prompt" || node.data.title === "槽位化提示词")
+      ? { ...node, data: { ...node.data, title: "基础提示词模板", description: node.data.description || nodeCatalog.prompt.description } }
+      : node);
+    const normalizedCandidatesAfterDedupe = deduped.removedGeneratorIds.size
+      ? removeNodeArtifacts({ candidateClips: normalizedCandidates, composeWorkspaces: (draft.composeWorkspaces ?? []).map(workspace => ({ ...workspace, clips: workspace.clips.map(normalizeTimelineClip) })), timeline: draft.timeline.map(normalizeTimelineClip) }, deduped.removedGeneratorIds)
+      : { candidateClips: normalizedCandidates, composeWorkspaces: (draft.composeWorkspaces ?? []).map(workspace => ({ ...workspace, clips: workspace.clips.map(normalizeTimelineClip) })), timeline: draft.timeline.map(normalizeTimelineClip) };
+    const nodes = syncGeneratorNodeStatuses(migratedNodes, normalizedCandidatesAfterDedupe.candidateClips);
+    const nodesChanged = nodes.length !== migrated.nodes.length || nodes.some((node, index) => node !== migrated.nodes[index]);
     set({
       nodes,
-      edges: migrated.edges,
-      timeline: draft.timeline.map(normalizeTimelineClip),
-      candidateClips: normalizedCandidates,
+      edges: deduped.edges,
+      timeline: normalizedCandidatesAfterDedupe.timeline,
+      candidateClips: normalizedCandidatesAfterDedupe.candidateClips,
       composeBatchCount: draft.composeBatchCount ?? 1,
       composeClipCount: draft.composeClipCount ?? draft.timeline.length,
-       composeWorkspaces: (draft.composeWorkspaces ?? [{ id: "compose_1", title: "成片 1", clips: draft.timeline, job: draft.composeJob ?? null }]).map(workspace => ({ ...workspace, clips: workspace.clips.map(normalizeTimelineClip), finalJob: workspace.finalJob ?? null, soundConfig: workspace.soundConfig ?? soundConfigFromData(normalizedNodes.find(node => node.data.kind === "sound")?.data ?? {}, draft.bgmName ?? "", draft.bgmUrl ?? "") })),
+       composeWorkspaces: (draft.composeWorkspaces ?? [{ id: "compose_1", title: "成片 1", clips: draft.timeline, job: draft.composeJob ?? null }]).map(workspace => ({ ...workspace, clips: normalizedCandidatesAfterDedupe.composeWorkspaces.find(item => item.id === workspace.id)?.clips ?? workspace.clips.map(normalizeTimelineClip), finalJob: workspace.finalJob ?? null, soundConfig: workspace.soundConfig ?? soundConfigFromData(nodes.find(node => node.data.kind === "sound")?.data ?? {}, draft.bgmName ?? "", draft.bgmUrl ?? "") })),
       activeComposeWorkspaceId: draft.activeComposeWorkspaceId ?? draft.composeWorkspaces?.[0]?.id ?? "compose_1",
        bgmName: draft.bgmName ?? "",
       bgmUrl: draft.bgmUrl ?? "",

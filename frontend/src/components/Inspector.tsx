@@ -164,7 +164,7 @@ function VoiceModelSelectors({ item, options, update }: { item: VoiceItem; optio
   </div>;
 }
 
-function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message: string) => void }) {
+export function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message: string) => void }) {
   const activePanel = useWorkflowStore(state => state.activePanel);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
@@ -296,7 +296,6 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
         <div className="caption-bulk-actions"><button type="button" className="btn" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(false)}>本地规则拆分</button><button type="button" className="btn btn-primary" disabled={captionSplitBusy || !bulkCaptionText.trim()} onClick={() => applyBulkCaptionSplit(true)}>{captionSplitBusy ? "拆分中..." : "AI 优化拆分"}</button></div>
         <small className="caption-bulk-hint">逗号、句号用于拆分且默认不显示在画面；人声保留原文停顿。引号、破折号、省略号等表达符号会保留。AI 优化只在点击后调用 Qwen。</small>
       </div>
-      <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面；绑定人声可选择自动匹配、不绑定或指定某一段人声。</span></div>
       <div className="overlay-editor-list" onClick={event => { const target = event.target as HTMLElement; if (target.closest(".clip-remove")) return; const header = target.closest(".overlay-editor-head"); if (!header) return; const index = Array.from(event.currentTarget.querySelectorAll(".overlay-editor-head")).indexOf(header); const item = overlayItems[index]; if (item) toggleCard(item.id); }}>{overlayItems.map((item, index) => { const style = overlayStyleFromItem(item); const collapsed = Boolean(collapsedCards[item.id]); return <div className={`overlay-editor-item ${collapsed ? "is-collapsed" : ""}`} key={item.id}>
         <div className="overlay-editor-head" role="button" tabIndex={0} aria-expanded={!collapsed} onClick={event => { event.stopPropagation(); toggleCard(item.id); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCard(item.id); } }}><span className="overlay-collapse-icon" aria-hidden="true">{collapsed ? "▸" : "▾"}</span><div><strong>文案段 {index + 1}</strong><small>{positionLabel(item.position)} · {item.startSeconds.toFixed(1)}s - {item.endSeconds.toFixed(1)}s · {item.text.trim() || "未填写文案"}</small></div><button type="button" className="clip-remove" aria-label={`删除文案段 ${index + 1}`} onClick={event => { event.stopPropagation(); removeOverlay(item.id); }}>×</button></div>
          <textarea className="input textarea overlay-text-input" rows={3} value={item.text} placeholder="输入画面文案" onChange={event => updateOverlay(item.id, { text: event.target.value })} />
@@ -307,6 +306,7 @@ function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
         <div className="style-editor"><span className="style-editor-label">文字样式</span><Field label="样式模板"><Select value={stylePresetValue(style)} options={["自定义", ...OVERLAY_STYLE_PRESETS.map(preset => preset.label)]} onChange={value => { const preset = OVERLAY_STYLE_PRESETS.find(item => item.label === value); if (preset) updateOverlayStyle(item.id, preset.style); }} /></Field><div className="field-grid"><Field label="字体"><Select value={style.fontFamily} options={[...OVERLAY_FONT_OPTIONS]} onChange={value => updateOverlayStyle(item.id, { fontFamily: value as OverlayStyle["fontFamily"] })} /></Field><Field label="字号"><input className="input" type="number" min="12" max="120" step="1" value={style.fontSize} onChange={event => updateOverlayStyle(item.id, { fontSize: Math.min(120, Math.max(12, Number(event.target.value) || 42)) })} /></Field></div><div className="field-grid"><Field label="文本框宽度 (%)"><input className="input" type="number" min="30" max="95" step="5" value={Math.round(style.textBoxWidth * 100)} onChange={event => updateOverlayStyle(item.id, { textBoxWidth: Math.min(0.95, Math.max(0.3, (Number(event.target.value) || 84) / 100)) })} /></Field><label className={`check ${style.singleLine ? "checked" : ""}`}><input type="checkbox" checked={style.singleLine} onChange={event => updateOverlayStyle(item.id, { singleLine: event.target.checked })} />单行显示</label></div><div className="field-grid"><label className="field"><span>文字颜色</span><input className="color-input" type="color" value={style.color} onChange={event => updateOverlayStyle(item.id, { color: event.target.value.toUpperCase() })} /></label><Field label="字重"><Select value={style.fontWeight === "bold" ? "粗体" : "常规"} options={["常规", "粗体"]} onChange={value => updateOverlayStyle(item.id, { fontWeight: value === "粗体" ? "bold" : "normal" })} /></Field></div><div className="field-grid"><label className="field"><span>描边颜色</span><input className="color-input" type="color" value={style.strokeColor} onChange={event => updateOverlayStyle(item.id, { strokeColor: event.target.value.toUpperCase() })} /></label><Field label="描边宽度"><input className="input" type="number" min="0" max="12" step="1" value={style.strokeWidth} onChange={event => updateOverlayStyle(item.id, { strokeWidth: Math.min(12, Math.max(0, Number(event.target.value) || 0)) })} /></Field></div><label className={`check ${style.backgroundEnabled ? "checked" : ""}`}><input type="checkbox" checked={style.backgroundEnabled} onChange={event => updateOverlayStyle(item.id, { backgroundEnabled: event.target.checked })} />显示文字背景框</label>{style.backgroundEnabled && <div className="field-grid"><label className="field"><span>背景颜色</span><input className="color-input" type="color" value={style.backgroundColor} onChange={event => updateOverlayStyle(item.id, { backgroundColor: event.target.value.toUpperCase() })} /></label><Field label="背景透明度"><input className="input" type="number" min="0" max="100" step="5" value={Math.round(style.backgroundOpacity * 100)} onChange={event => updateOverlayStyle(item.id, { backgroundOpacity: Math.min(1, Math.max(0, (Number(event.target.value) || 0) / 100)) })} /></Field></div>}</div>
       </div>; })}</div>
       {overlayItems.length === 0 && <div className="empty-state compact">还没有文字，点击“添加文字”创建第一条。</div>}
+      <div className="overlay-logic-callout"><strong>文字 1、文字 2 不是两个节点</strong><span>它们是同一个“声音与文字”节点里的多条画面文字轨道。每条文字只在自己的开始到结束时间内显示，并按下方位置设置叠加到画面；绑定人声可选择自动匹配、不绑定或指定某一段人声。</span></div>
     </> : <>
       <div className="panel-section-head"><SectionTitle>文案段人声配置</SectionTitle><button type="button" className="btn" onClick={addVoice}>＋ 添加文案段</button></div>
       <div className="overlay-logic-callout"><strong>人声和文字一样按时间段播放</strong><span>每段人声独立设置文案、开始时间、结束时间、音色和音量；例如第一段 0-4 秒，第二段 10-15 秒。</span></div>
@@ -358,5 +358,33 @@ export function Inspector({ onToast }: { onToast: (message: string) => void }) {
   if (!node) return null;
   const selectCurrentNode = () => setSelection(node.id);
   const closeWithoutSaving = () => { discardNodeEdit(); onToast("已放弃本次节点修改"); };
-  return <div className="node-edit-drawer-layer"><button type="button" className="node-edit-drawer-backdrop" aria-label="关闭节点编辑" onClick={closeWithoutSaving} /><aside className="inspector node-edit-drawer" role="dialog" aria-modal="true" aria-label={`编辑节点：${node.data.title}`}><div className="inspector-head"><div><span className="panel-label">NODE EDITOR</span><h2>编辑节点</h2><p>{node.data.title} · 仅在保存后保留本次修改</p></div><div className="drawer-head-actions"><Tag>{node.data.kind}</Tag><button type="button" className="drawer-close" aria-label="不保存并关闭" title="不保存并关闭" onClick={closeWithoutSaving}>×</button></div></div><div className="node-edit-drawer-body"><BasicFields node={node} /><TypeFields node={node} onToast={onToast} /></div><div className="inspector-actions node-edit-drawer-actions"><button type="button" className="btn" onClick={closeWithoutSaving}>不保存</button><button type="button" className="btn btn-primary" onClick={() => { saveNodeEdit(); onToast("节点修改已保存"); }}>保存并收起</button><button type="button" className="btn" onClick={() => { selectCurrentNode(); duplicateSelected(); saveNodeEdit(); onToast("节点已复制"); }}>复制节点</button><button type="button" className="btn btn-danger" onClick={() => { selectCurrentNode(); deleteSelected(); saveNodeEdit(); setSelection(null); onToast("节点已删除"); }}>删除节点</button></div></aside></div>;
+  const removeCurrentNode = () => {
+    selectCurrentNode();
+    const deleted = deleteSelected();
+    if (deleted) {
+      saveNodeEdit();
+      setSelection(null);
+      onToast("节点已删除");
+      return;
+    }
+    onToast("流程核心节点不能删除");
+  };
+  return <div className="node-edit-drawer-layer"><button type="button" className="node-edit-drawer-backdrop" aria-label="关闭节点编辑" onClick={closeWithoutSaving} /><aside className="inspector node-edit-drawer" role="dialog" aria-modal="true" aria-label={`编辑节点：${node.data.title}`}><div className="inspector-head"><div><span className="panel-label">NODE EDITOR</span><h2>编辑节点</h2><p>{node.data.title} · 仅在保存后保留本次修改</p></div><div className="drawer-head-actions"><Tag>{node.data.kind}</Tag><button type="button" className="drawer-close" aria-label="不保存并关闭" title="不保存并关闭" onClick={closeWithoutSaving}>×</button></div></div><div className="node-edit-drawer-body"><BasicFields node={node} /><TypeFields node={node} onToast={onToast} /></div><div className="inspector-actions node-edit-drawer-actions"><button type="button" className="btn" onClick={closeWithoutSaving}>不保存</button><button type="button" className="btn btn-primary" onClick={() => { saveNodeEdit(); onToast("节点修改已保存"); }}>保存并收起</button><button type="button" className="btn" onClick={() => { selectCurrentNode(); duplicateSelected(); saveNodeEdit(); onToast("节点已复制"); }}>复制节点</button><button type="button" className="btn btn-danger" onClick={removeCurrentNode}>删除节点</button></div></aside></div>;
+}
+
+/**
+ * Full-page sound editor used by step 6. It intentionally starts at the
+ * voice/text tabs and omits the generic node metadata fields shown in the
+ * canvas inspector drawer.
+ */
+export function InlineSoundEditor({ onToast }: { onToast: (message: string) => void }) {
+  const node = useWorkflowStore(state => state.nodes.find(item => item.data.kind === "sound"));
+  if (!node) return null;
+  return <section className="step-panel sound-inline-editor" aria-label="声音与文字编辑">
+    <div className="sound-inline-editor-head">
+      <div><span className="panel-label">SOUND & TEXT EDITOR</span><h2>声音与文字设置</h2><p className="muted">直接编辑文字、人声、BGM 和时间轨道，修改会自动保存到当前成片方案。</p></div>
+      <Tag>sound</Tag>
+    </div>
+    <div className="sound-inline-editor-body"><SoundFields node={node} onToast={onToast} /></div>
+  </section>;
 }

@@ -5,9 +5,10 @@ import { requestTutorial } from "../tutorial";
 
 export function Pipeline({ path, collapsed, onToggle }: { path: WorkflowRoute; collapsed: boolean; onToggle: () => void }) {
   const nodes = useWorkflowStore(state => state.nodes);
+  const edges = useWorkflowStore(state => state.edges);
   const candidates = useWorkflowStore(state => state.candidateClips);
   const workspaces = useWorkflowStore(state => state.composeWorkspaces);
-  const progress = deriveWorkflowProgress(nodes, candidates, workspaces);
+  const progress = deriveWorkflowProgress(nodes, candidates, workspaces, edges);
   const overviewUnlocked = true;
   const tasksUnlocked = true;
   const weeklyPlanUnlocked = true;

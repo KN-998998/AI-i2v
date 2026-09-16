@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
+import tempfile
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -31,6 +33,10 @@ _JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _JOB_LOCK = threading.RLock()
 _CANVAS_SIZE = (1080, 1920)
 _VISUAL_SUBJECT_TYPES = {"菜品主体", "手部", "厨师上半身", "手部+厨师上半身"}
+# GoodsMatting rejects some high-resolution originals before processing. Keep
+# the user's uploaded file untouched and send a conservative JPEG copy instead.
+_MATTING_MAX_DIMENSION = 2048
+_MATTING_MAX_BYTES = 5 * 1024 * 1024
 
 
 def _now() -> str:
@@ -190,24 +196,60 @@ def _response_image(client: Any, response: Any, bucket: str) -> bytes:
     raise RuntimeError("GoodsMatting 未返回可下载的透明 PNG；请确认数据万象接口权限和 SDK 版本")
 
 
+def _prepare_matting_source(source: Path) -> tuple[Path, Path | None]:
+    """Prepare a bounded temporary copy for GoodsMatting without changing the original."""
+    source_size = source.stat().st_size
+    with Image.open(source) as image:
+        width, height = image.size
+        if max(width, height) <= _MATTING_MAX_DIMENSION and source_size <= _MATTING_MAX_BYTES:
+            return source, None
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        scale = min(1.0, _MATTING_MAX_DIMENSION / max(image.size))
+        if scale < 1:
+            image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))), Image.LANCZOS)
+        fd, temporary_name = tempfile.mkstemp(prefix="matting-input-", suffix=".jpg")
+        os.close(fd)
+        Path(temporary_name).unlink(missing_ok=True)
+        temporary = Path(temporary_name)
+        quality = 88
+        while True:
+            image.save(temporary, "JPEG", quality=quality, optimize=True, progressive=True)
+            if temporary.stat().st_size <= _MATTING_MAX_BYTES:
+                break
+            if quality > 60:
+                quality -= 8
+                continue
+            resized = image.resize((max(1, round(image.width * 0.8)), max(1, round(image.height * 0.8))), Image.LANCZOS)
+            if resized.size == image.size:
+                break
+            image = resized
+            quality = 88
+        return temporary, temporary
+
+
 def _goods_matting(source: Path, destination: Path, draft_id: str) -> None:
     if not tencent_matting_configured():
         raise ValueError("未配置腾讯云抠图。请在 .env 填写 SecretId、SecretKey、Region 和 COS Bucket")
-    client = _create_cos_client()
-    suffix = source.suffix.lower() if source.suffix else ".jpg"
-    object_key = f"canvas-matting/{draft_id}/{uuid.uuid4().hex}{suffix}"
-    client.upload_file(Bucket=TENCENT_COS_BUCKET, LocalFilePath=str(source), Key=object_key)
+    prepared_source, temporary_source = _prepare_matting_source(source)
     try:
-        response = client.ci_process(
-            Bucket=TENCENT_COS_BUCKET,
-            Key=object_key,
-            CiProcess=TENCENT_COS_MODEL or "GoodsMatting",
-        )
-    except AttributeError as exc:  # pragma: no cover - protects incompatible SDK releases
-        raise RuntimeError("当前 COS SDK 不支持数据万象处理，请升级 cos-python-sdk-v5") from exc
-    png_bytes = _response_image(client, response, TENCENT_COS_BUCKET)
-    with Image.open(io.BytesIO(png_bytes)) as image:
-        image.convert("RGBA").save(destination, "PNG")
+        client = _create_cos_client()
+        suffix = prepared_source.suffix.lower() if prepared_source.suffix else ".jpg"
+        object_key = f"canvas-matting/{draft_id}/{uuid.uuid4().hex}{suffix}"
+        client.upload_file(Bucket=TENCENT_COS_BUCKET, LocalFilePath=str(prepared_source), Key=object_key)
+        try:
+            response = client.ci_process(
+                Bucket=TENCENT_COS_BUCKET,
+                Key=object_key,
+                CiProcess=TENCENT_COS_MODEL or "GoodsMatting",
+            )
+        except AttributeError as exc:  # pragma: no cover - protects incompatible SDK releases
+            raise RuntimeError("当前 COS SDK 不支持数据万象处理，请升级 cos-python-sdk-v5") from exc
+        png_bytes = _response_image(client, response, TENCENT_COS_BUCKET)
+        with Image.open(io.BytesIO(png_bytes)) as image:
+            image.convert("RGBA").save(destination, "PNG")
+    finally:
+        if temporary_source is not None:
+            temporary_source.unlink(missing_ok=True)
 
 
 def _cover_background(source: Image.Image) -> Image.Image:

@@ -3,6 +3,8 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { normalizeDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
 import { ACTION_VERB_OPTIONS, assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData, SHOT_SIZE_OPTIONS } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
+import { canAssemblePromptNode, promptAssemblyBlockReason } from "../promptAssemblyReadiness";
+import { generatorGenerationBlockReason } from "../generatorReadiness";
 import { navigate } from "../router";
 import { ActionButton, Footer, formatNodeValue, Row, Tag } from "./ui";
 
@@ -12,7 +14,21 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const setSelection = useWorkflowStore(state => state.setSelection);
   const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
-  const canAssemblePrompt = useWorkflowStore(state => state.nodes.some(node => node.data.kind === "input" && Boolean(node.data.imagePreview)) && state.nodes.some(node => node.data.kind === "image_process" && Boolean(node.data.processedImagePreview)));
+  const canAssemblePrompt = useWorkflowStore(state => {
+    if (data.kind !== "prompt") return false;
+    const promptNode = state.nodes.find(node => node.id === id);
+    return promptNode ? canAssemblePromptNode(promptNode, state.nodes, state.edges) : false;
+  });
+  const promptAssemblyReason = useWorkflowStore(state => {
+    if (data.kind !== "prompt") return null;
+    const promptNode = state.nodes.find(node => node.id === id);
+    return promptNode ? promptAssemblyBlockReason(promptNode, state.nodes, state.edges) : "未找到当前提示词节点";
+  });
+  const generatorBlockReason = useWorkflowStore(state => {
+    if (data.kind !== "generator") return null;
+    const generatorNode = state.nodes.find(node => node.id === id);
+    return generatorNode ? generatorGenerationBlockReason(generatorNode, state.nodes, state.edges) : "生成节点不存在";
+  });
   const activeWorkspace = useWorkflowStore(state => state.composeWorkspaces.find(workspace => workspace.id === state.activeComposeWorkspaceId));
   const legacyBgmName = useWorkflowStore(state => state.bgmName);
   const [generating, setGenerating] = useState(false);
@@ -68,13 +84,13 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <Row label="L1 主运动" value={promptConfig?.l1_subject === "none" ? "无（纯运镜）" : `${ELEMENT_OPTIONS.find(item => item.id === promptConfig?.l1_subject)?.label ?? "待配置"}${actionLabel ? ` · ${actionLabel}` : ""}`} />
       <Row label="L2 次级动态" value={`${promptConfig?.l2_dynamics.length ?? 0} / 2 项`} />
       <div className="tag-list"><Tag good={!promptResult?.blocked} warn={Boolean(promptResult?.blocked)}>{promptResult?.blocked ? `阻断 ${promptResult.errors[0]?.code ?? ""}` : "校验通过"}</Tag>{promptResult?.warnings.slice(0, 1).map(warning => <Tag warn key={warning.code}>{warning.code}</Tag>)}</div>
-      <Footer><ActionButton onClick={() => action("prompt")}>编辑槽位</ActionButton><ActionButton primary disabled={!canAssemblePrompt} title={canAssemblePrompt ? "校验并完成提示词装配" : "请先上传图片素材并完成图片处理"} onClick={() => updateNodeData(id, { status: "已装配" })}>实时装配</ActionButton></Footer>
+      <Footer><ActionButton onClick={() => action("prompt")}>编辑槽位</ActionButton><ActionButton primary disabled={!canAssemblePrompt} title={canAssemblePrompt ? "校验并完成提示词装配" : promptAssemblyReason ?? "当前暂不可装配"} onClick={() => updateNodeData(id, { status: "已装配" })}>实时装配</ActionButton>{promptAssemblyReason && <small className="action-hint">{promptAssemblyReason}</small>}</Footer>
     </>,
     generator: <>
       <Row label="规格" value={`${formatNodeValue(data.duration, "3s")} · ${formatNodeValue(data.resolution, "1080p")}`} />
       <Row label="音频 / 分镜" value={`${formatNodeValue(data.audio, "无声")} / ${formatNodeValue(data.storyboard, "单分镜")}`} />
       {generationError && <Tag warn>{generationError}</Tag>}
-      <Footer><ActionButton primary onClick={generate}>{generating ? "生成中..." : data.status === "已生成" ? "再次生成" : "生成片段"}</ActionButton></Footer>
+      <Footer><ActionButton primary disabled={generating || Boolean(generatorBlockReason)} title={generatorBlockReason ?? "校验通过，可以生成视频片段"} onClick={generate}>{generating ? "生成中..." : data.status === "已生成" ? "再次生成" : "生成片段"}</ActionButton>{generatorBlockReason && <small className="action-hint">{generatorBlockReason}</small>}</Footer>
     </>,
     output: <>
       <Row label="目标" value={formatNodeValue(data.outputTarget, "5-6 道菜")} />

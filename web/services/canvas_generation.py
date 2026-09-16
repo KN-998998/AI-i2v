@@ -500,7 +500,7 @@ def recover_generation_jobs() -> int:
     return scheduled
 
 
-def _persist_generator_status(draft_id: str, node_id: str, status: str) -> None:
+def _persist_generator_status(draft_id: str, node_id: str, status: str, generation_job_id: str | None = None) -> None:
     """Keep the persisted canvas node in sync when the browser is no longer open."""
     draft = load_draft(draft_id)
     if draft is None:
@@ -511,6 +511,12 @@ def _persist_generator_status(draft_id: str, node_id: str, status: str) -> None:
             continue
         if node["data"].get("status") != status:
             node["data"]["status"] = status
+            changed = True
+        if generation_job_id is not None and node["data"].get("generationJobId") != generation_job_id:
+            node["data"]["generationJobId"] = generation_job_id
+            changed = True
+        elif status in {"已生成", "生成失败"} and node["data"].get("generationJobId") is not None:
+            node["data"].pop("generationJobId", None)
             changed = True
         break
     if changed:
@@ -558,6 +564,7 @@ def _persist_generated_clip(draft_id: str, node_id: str, clip: dict[str, Any]) -
             node["data"]["status"] = "已生成"
             node["data"]["selectedClipId"] = persisted_clip["id"]
             node["data"]["assetId"] = persisted_clip.get("assetId")
+            node["data"].pop("generationJobId", None)
             break
     save_draft(draft_id, draft)
 
@@ -576,10 +583,8 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
     processing_data = _upstream_data(draft, node_id, "image_process", allow_legacy_fallback=False)
     prompt_data = _upstream_data(draft, node_id, "prompt")
     image_path = _uploaded_image(draft_id, processing_data.get("processedImagePreview"))
-    if image_path is None:
-        image_path = _uploaded_image(draft_id, input_data.get("imagePreview"))
     if image_path is None or not image_path.is_file():
-        raise ValueError("请先在素材与菜品节点上传首帧图片")
+        raise ValueError("请先完成该菜品的图片处理")
     input_food_type = str(input_data.get("foodType") or "").strip()
     visual_subject_type = str(input_data.get("visualSubjectType") or "菜品主体")
     prompt, negative_prompt, keyframe_mode = _prompt_from_node(_prompt_data_for_asset(prompt_data, input_data))
@@ -624,7 +629,7 @@ def start_generation(draft_id: str, node_id: str, force: bool = False) -> dict[s
     job.update(task_metadata("kling_generation"))
     with _JOB_LOCK:
         _save_job(draft_id, job)
-        _persist_generator_status(draft_id, node_id, "生成中")
+        _persist_generator_status(draft_id, node_id, "生成中", generation_job_id=job_id)
 
     def worker() -> None:
         try:

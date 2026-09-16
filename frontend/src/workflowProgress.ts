@@ -1,4 +1,6 @@
+import type { Edge } from "@xyflow/react";
 import type { ComposeWorkspace, TimelineClip, WorkflowNode } from "./model";
+import { generatorGenerationBlockReason, generatorUpstreamNodes } from "./generatorReadiness.ts";
 
 export type GuidedWorkflowRoute =
   | "/canvas-mvp"
@@ -34,10 +36,19 @@ export type WorkflowProgress = {
   allStepsComplete: boolean;
 };
 
-export function deriveWorkflowProgress(nodes: WorkflowNode[], candidateClips: TimelineClip[], workspaces: ComposeWorkspace[]): WorkflowProgress {
-  const assetsComplete = nodes.some(node => node.data.kind === "input" && Boolean(node.data.imagePreview));
-  const imageProcessingComplete = nodes.some(node => node.data.kind === "image_process" && Boolean(node.data.processedImagePreview));
-  const promptsComplete = nodes.some(node => node.data.kind === "prompt" && node.data.status === "已装配");
+export function deriveWorkflowProgress(nodes: WorkflowNode[], candidateClips: TimelineClip[], workspaces: ComposeWorkspace[], edges: Edge[] = []): WorkflowProgress {
+  const generators = nodes.filter(node => node.data.kind === "generator");
+  const chains = generators.map(generator => ({ generator, ...generatorUpstreamNodes(generator, nodes, edges) }));
+  // A draft can contain several dishes at different stages. The workflow step
+  // is unlocked once at least one real chain reaches that stage; each card
+  // still enforces its own upstream checks before it can be processed/generated.
+  const assetsComplete = chains.some(chain => Boolean(chain.input?.data.imagePreview));
+  const imageProcessingComplete = chains.some(chain => Boolean(chain.process?.data.processedImagePreview));
+  const promptsComplete = chains.some(chain => Boolean(
+    chain.prompt
+    && chain.prompt.data.status === "已装配"
+    && generatorGenerationBlockReason(chain.generator, nodes, edges) === null,
+  ));
   const clipsComplete = candidateClips.some(clip => Boolean(clip.generatorNodeId && clip.sourcePath && clip.isSelected !== false));
   const compositionComplete = workspaces.some(workspace => workspace.job?.status === "done");
   const soundComplete = workspaces.some(workspace => workspace.finalJob?.status === "done");
