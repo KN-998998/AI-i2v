@@ -396,6 +396,8 @@ export type AssetLibraryPlan = {
   assetRoot: string;
   backgroundRoot: string;
   selected: AssetLibraryPlanItem[];
+  /** Generator nodes created after this plan is applied to the canvas. */
+  appliedGeneratorIds?: string[];
   warnings: string[];
   categoryCounts: Record<string, number>;
   classificationResults?: AssetLibraryClassificationItem[];
