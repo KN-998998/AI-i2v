@@ -24,37 +24,37 @@ for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /R /C:":%APP_PORT% .*L
 )
 
 set "PYTHON_EXE="
-if defined CONDA_PREFIX if exist "%CONDA_PREFIX%\python.exe" set "PYTHON_EXE=%CONDA_PREFIX%\python.exe"
+set "PYTHON_FOUND="
 
+rem Prefer the active Conda environment and the project's known Python 3.11 environment.
+if defined CONDA_PREFIX if not defined PYTHON_EXE call :try_python "%CONDA_PREFIX%\python.exe"
+if not defined PYTHON_EXE call :try_python "%~dp0.venv\Scripts\python.exe"
+if not defined PYTHON_EXE call :try_python "E:\ANACONDA\envs\PY3_11\python.exe"
+if not defined PYTHON_EXE call :try_python "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+if not defined PYTHON_EXE call :try_python "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+if not defined PYTHON_EXE call :try_python "E:\ANACONDA\python.exe"
+
+rem Only use PATH Python as a last resort, and skip the Microsoft Store alias.
 if not defined PYTHON_EXE for /f "delims=" %%P in ('where python 2^>nul') do (
     echo %%P | findstr /I "WindowsApps" >nul
-    if errorlevel 1 if not defined PYTHON_EXE set "PYTHON_EXE=%%P"
+    if errorlevel 1 if not defined PYTHON_EXE call :try_python "%%P"
 )
 
-if not defined PYTHON_EXE for %%P in (
-    "%~dp0.venv\Scripts\python.exe"
-    "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-    "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-    "E:\ANACONDA\envs\PY3_11\python.exe"
-    "E:\ANACONDA\python.exe"
-) do if exist "%%~P" if not defined PYTHON_EXE set "PYTHON_EXE=%%~P"
-
 if not defined PYTHON_EXE (
-    echo A real Python interpreter was not found.
-    echo WindowsApps\python.exe is only a Microsoft Store alias.
-    echo Please install Python or set PYTHON_EXE in this file.
+    echo No Python interpreter with the required project dependencies was found.
+    echo Required modules: fastapi, uvicorn, colorama.
+    if defined PYTHON_FOUND (
+        echo A Python interpreter was found, but its dependencies are incomplete.
+        echo Run: "%PYTHON_FOUND%" -m pip install -r requirements.txt
+    ) else (
+        echo WindowsApps\python.exe is only a Microsoft Store alias.
+        echo Please install Python 3.11 or activate the project Conda environment.
+    )
     pause
     exit /b 1
 )
 
 echo Using Python: %PYTHON_EXE%
-"%PYTHON_EXE%" -X utf8 -c "import fastapi, uvicorn, colorama" >nul 2>nul
-if errorlevel 1 (
-    echo Python dependencies are missing in: %PYTHON_EXE%
-    echo Run: "%PYTHON_EXE%" -m pip install -r requirements.txt
-    pause
-    exit /b 1
-)
 
 echo Building React frontend...
 call scripts\build_frontend.bat
@@ -86,4 +86,11 @@ exit /b 1
 :service_ready
 echo Service is ready. Opening http://%APP_HOST%:%APP_PORT%/canvas-mvp
 start "" "http://%APP_HOST%:%APP_PORT%/canvas-mvp"
+exit /b 0
+
+:try_python
+if not exist "%~1" exit /b 0
+if not defined PYTHON_FOUND set "PYTHON_FOUND=%~1"
+"%~1" -X utf8 -c "import fastapi, uvicorn, colorama" >nul 2>nul
+if not errorlevel 1 set "PYTHON_EXE=%~1"
 exit /b 0
