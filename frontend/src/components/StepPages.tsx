@@ -22,7 +22,7 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
   const nodeId = resolveStepNodeId(kind, nodes, selectedNodeId);
   const panel = route === "/workflow/sound" ? "voice" : route === "/workflow/prompts" ? "prompt" : undefined;
   const title = route === "/workflow/assets" ? "素材与菜品" : route === "/workflow/prompts" ? "提示词装配" : route === "/workflow/sound" ? "声音与文字" : "成片结果";
-  const description = route === "/workflow/assets" ? "管理菜品、首帧和尾帧素材。" : route === "/workflow/prompts" ? "编辑 L0/L1/L2 槽位并准备视频生成参数。" : route === "/workflow/sound" ? "在无声成片完成后配置 BGM、人声和画面文字。" : "查看当前草稿的合成任务与最终视频。";
+  const description = route === "/workflow/assets" ? "管理菜品、首帧和尾帧素材。" : route === "/workflow/prompts" ? "给每道菜选一个想要的动态效果；需要时再展开高级设置微调。" : route === "/workflow/sound" ? "在无声成片完成后配置 BGM、人声和画面文字。" : "查看当前草稿的合成任务与最终视频。";
   const setSelection = useWorkflowStore(state => state.setSelection);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   useEffect(() => {
@@ -72,7 +72,7 @@ function PromptNodeWorkspace({ onToast }: { onToast: (message: string) => void }
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const addNode = useWorkflowStore(state => state.addNode);
   return <section className="prompt-node-workspace">
-    <div className="panel-section-head"><div><span className="panel-label">PROMPT NODES</span><h2>提示词节点 · {nodes.length} 个</h2><p className="muted">“槽位”就是可分别编辑的提示词字段：画面元素、主运动、次级动态、镜头和主体类型。01 是通用模板序号，不是版本或质量等级；带菜品名的节点才对应具体菜品。</p></div><button type="button" className="btn btn-primary" onClick={() => { addNode("prompt"); onToast("已新增提示词节点"); }}>＋ 新增提示词节点</button></div>
+    <div className="panel-section-head"><div><span className="panel-label">PROMPT NODES</span><h2>提示词节点 · {nodes.length} 个</h2><p className="muted">点“编辑”给这道菜选一个效果（热气升腾、淋酱、只推近镜头……），校验通过后点“实时装配”。01 是通用模板序号，不是版本或质量等级；带菜品名的才对应具体菜品。</p></div><button type="button" className="btn btn-primary" onClick={() => { addNode("prompt"); onToast("已新增提示词节点"); }}>＋ 新增提示词节点</button></div>
     <div className="prompt-node-list">{nodes.map((node, index) => {
       const assemblyReason = promptAssemblyBlockReason(node, allNodes, edges);
       return <article className="prompt-node-card" key={node.id}>
@@ -425,7 +425,7 @@ export function OutputPage({ onToast }: StepPageProps) {
 function StepFrame({ route, title, description, children }: StepPageProps & { route: WorkflowRoute; title: string; description: string; children: ReactNode }) {
   const guides: Partial<Record<WorkflowRoute, string>> = {
     "/workflow/assets": "先完成菜品素材、分类、冷热属性和主体类型确认，再进入下一步；批量建稿的“应用到画布”会创建对应节点。",
-    "/workflow/prompts": "先选择或编辑 L0/L1/L2 画面元素，再检查景别、动作和主体类型；校验通过后进入生成片段。",
+    "/workflow/prompts": "先给每道菜选一个效果预设，看一眼校验结果是绿色的；想微调再展开高级设置。都通过后点“实时装配”，再进入生成片段。",
     "/workflow/sound": "先在第 5 步完成至少一条无声成片，再配置多轨人声、文字和 BGM；文字与人声可分别拖动并允许重叠。",
     "/workflow/output": "无声成片用于检查片段顺序，有声成片用于发布；需要修改声音或文字时返回第 6 步。",
   };
