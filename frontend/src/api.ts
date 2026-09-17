@@ -1,4 +1,4 @@
-import type { AssetLibraryPlan, BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, ManualAssetReviewScan, MediaAnalysis } from "./model";
+import type { AssetLibraryPlan, BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, ImageRecomposeResult, ManualAssetReviewScan, MediaAnalysis, WorkflowData } from "./model";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -195,6 +195,18 @@ export async function startCanvasImageProcessing(draftId: string, nodeId: string
     body: JSON.stringify({ node_id: nodeId }),
   });
   return parseResponse<ImageProcessingJob>(response);
+}
+
+export type ImageRecomposeConfig = Pick<WorkflowData, "backgroundTemplateId" | "backgroundTemplateName" | "backgroundPreview" | "backgroundBlur" | "backgroundBrightness" | "subjectScale" | "subjectX" | "subjectY">;
+
+/** 复用已抠好的图，只重新做本地背景合成；同步返回，约 1 秒。 */
+export async function recomposeCanvasImage(draftId: string, nodeId: string, config: ImageRecomposeConfig): Promise<ImageRecomposeResult> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/drafts/${encodeURIComponent(draftId)}/image-processing/recompose`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ node_id: nodeId, config }),
+  });
+  return parseResponse<ImageRecomposeResult>(response);
 }
 
 export async function getCanvasImageProcessingStatus(draftId: string, jobId: string): Promise<ImageProcessingJob> {

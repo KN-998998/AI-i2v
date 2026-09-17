@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchBackgroundTemplates, uploadBackgroundTemplate } from "../api";
 import { navigate } from "../router";
 import { requestTutorial } from "../tutorial";
@@ -19,10 +19,10 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
   const nodes = useWorkflowStore(state => state.nodes);
   const edges = useWorkflowStore(state => state.edges);
   const selectedNodeId = useWorkflowStore(state => state.selectedNodeId);
-  const draftId = useWorkflowStore(state => state.draftId);
   const setSelection = useWorkflowStore(state => state.setSelection);
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const processImageNode = useWorkflowStore(state => state.processImageNode);
+  const recomposeImageNode = useWorkflowStore(state => state.recomposeImageNode);
   const addNode = useWorkflowStore(state => state.addNode);
   const processingNodes = nodes.filter(item => item.data.kind === "image_process");
   const inputNodes = nodes.filter(item => item.data.kind === "input");
@@ -35,6 +35,30 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
   const [templates, setTemplates] = useState<Awaited<ReturnType<typeof fetchBackgroundTemplates>>>([]);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [recomposing, setRecomposing] = useState(false);
+  const [showSource, setShowSource] = useState(false);
+  // 抠图结果留在服务器上以后，背景 / 参数的改动只需重新合成（约 1 秒），不再调抠图接口。
+  const canRecompose = Boolean(node && !preserveOriginal && node.data.processedCutoutName && node.data.processedImagePreview);
+  const paramKey = node ? [node.data.backgroundTemplateId ?? "", node.data.backgroundBlur ?? "", node.data.backgroundBrightness ?? "", node.data.subjectScale ?? "", node.data.subjectX ?? "", node.data.subjectY ?? ""].join("|") : "";
+  const appliedKey = useRef(paramKey);
+  const nodeId = node?.id;
+  useEffect(() => { appliedKey.current = paramKey; /* 切换菜品时以它当前的参数为基准，不触发合成 */ }, [nodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!nodeId || !canRecompose || busy || paramKey === appliedKey.current) return;
+    // 拖动滑块时 onChange 连续触发；每次都重置计时，松手 700ms 后只合成一次。
+    const timer = window.setTimeout(async () => {
+      appliedKey.current = paramKey;
+      setRecomposing(true);
+      try {
+        await recomposeImageNode(nodeId);
+      } catch (error) {
+        onToast(error instanceof Error ? error.message : "重新合成失败");
+      } finally {
+        setRecomposing(false);
+      }
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [paramKey, canRecompose, busy, nodeId, recomposeImageNode, onToast]);
 
   const activeTemplate = useMemo(() => templates.find(item => item.id === node?.data.backgroundTemplateId), [node?.data.backgroundTemplateId, templates]);
   const sourceFor = (processNodeId: string) => {
@@ -81,19 +105,55 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
     }
   };
 
+  const dishName = sourceNode?.data.dishName || node.data.dishName || "未选择菜品";
+  const frameImage = showSource || !node.data.processedImagePreview ? sourcePreview : node.data.processedImagePreview;
+  const liveState = busy ? { className: "is-busy", text: preserveOriginal ? "处理中…" : "抠图中…" }
+    : recomposing ? { className: "is-busy", text: "更新预览…" }
+    : canRecompose ? { className: "is-live", text: "松手后约 1 秒自动更新" }
+    : preserveOriginal ? { className: "", text: "人物素材保留原图" }
+    : { className: "", text: "先执行一次抠图" };
+  const primaryLabel = busy ? "正在处理..." : preserveOriginal ? "保留原图并继续" : node.data.processedCutoutName ? "重新抠图" : "开始抠图并合成";
+  const doneCount = processingNodes.filter(item => item.data.processedImagePreview).length;
+
   return <main className="step-main">
     <div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>图片处理</strong></div>
     <div className="step-header"><StepHeading route="/workflow/image-processing" /><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial("/workflow/image-processing")}>查看本步骤教学</button></div>
-    <div className="step-guide"><span>操作提示</span><p>{preserveOriginal ? "手部或人物素材无需选背景，点击“保留原图并继续”即可。" : "先选一个背景模板，再点击“开始抠图并合成”；原图会始终保留，处理图可重复生成。提交抠图前会自动控制最长边约 2048 像素、文件不超过 5 MB，不会覆盖原图。"}</p></div>
+    <div className="step-guide"><span>操作提示</span><p>{preserveOriginal ? "手部或人物素材无需选背景，点击“保留原图并继续”即可。" : "先选背景，点“开始抠图并合成”做一次抠图；之后换背景、拖滑块都会自动更新左侧预览，原图始终保留。"}</p></div>
     <div className="step-page-grid"><div className="step-page-main">
-      <section className="step-panel image-process-node-overview"><div className="panel-section-head"><div><span className="panel-label">PROCESSING QUEUE</span><h2>待处理图片 · {processingNodes.length} 个节点</h2><p className="muted">每张卡片对应画布上的一个图片处理节点。点击卡片后，为当前菜品选择背景并执行处理。</p></div><span className="image-process-queue-count">{processingNodes.filter(item => item.data.processedImagePreview).length}/{processingNodes.length} 已完成</span></div><div className="image-process-node-grid">{processingNodes.map((item, index) => { const source = sourceFor(item.id); const preview = source?.data.imagePreview ?? item.data.imagePreview; const selected = item.id === node.id; const preserve = item.data.visualSubjectType && item.data.visualSubjectType !== "菜品主体"; return <button type="button" className={"image-process-node-card" + (selected ? " selected" : "")} key={item.id} onClick={() => setSelection(item.id)}><div className="image-process-node-card-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><strong>{item.data.title || source?.data.dishName || "未命名菜品"}</strong><span className="node-status">{item.data.status}</span></div><div className="image-process-node-thumb">{preview ? <img src={preview} alt={(source?.data.dishName || item.data.title || "菜品") + "原始素材"} /> : <em>未上传原图</em>}</div><div className="image-process-node-meta"><span>背景：{item.data.backgroundTemplateName || (preserve ? "不使用" : "未选择")}</span><span>输出：{item.data.processedImageName || "尚未生成"}</span></div></button>; })}</div></section>
-      <section className="step-panel"><div className="panel-section-head"><div><span className="panel-label">IMAGE PROCESSING NODE</span><h2>{node.data.title}</h2><p className="muted">原图不会被覆盖；{preserveOriginal ? "人物素材会保留原图，不使用背景模板。" : "处理后首帧单独保存，并优先用于后续视频生成。"}</p></div><div className="panel-actions"><select className="input compact-select" value={node.id} onChange={event => setSelection(event.target.value)}>{processingNodes.map(item => <option key={item.id} value={item.id}>{item.data.title}</option>)}</select><button type="button" className="btn btn-primary" disabled={busy} onClick={process}>{busy ? "正在处理..." : preserveOriginal ? "保留原图并继续" : node.data.processedImagePreview ? "重新处理图片" : "开始抠图并合成"}</button></div></div>
-        {preserveOriginal && <div className="source-ready">画面主体：{node.data.visualSubjectType}。此节点不会调用 GoodsMatting，也不会把背景模板合成到原图上。</div>}
-        <div className="image-process-grid"><div className="image-process-stage"><span>原始菜品图</span><div className="image-process-preview">{sourcePreview ? <img src={sourcePreview} alt="原始菜品" /> : <em>请先上传菜品图片</em>}</div><small>{sourceNode?.data.dishName || node.data.dishName || "未选择菜品"}</small></div><div className="image-process-stage"><span>{preserveOriginal ? "后续生成使用的原图" : "处理后首帧"}</span><div className="image-process-preview">{node.data.processedImagePreview ? <img src={node.data.processedImagePreview} alt="处理后首帧" /> : <em>{preserveOriginal ? "点击“保留原图并继续”" : "选择背景并执行处理"}</em>}</div><small>{node.data.processedImageName || "尚未生成"}</small></div></div>
+      <section className="step-panel image-process-node-overview"><div className="panel-section-head"><div><h2>待处理菜品 · {processingNodes.length} 道</h2><p className="muted">点一张卡片切换当前要处理的菜。</p></div><span className="image-process-queue-count">{doneCount}/{processingNodes.length} 已完成</span></div><div className="image-process-node-grid">{processingNodes.map((item, index) => { const source = sourceFor(item.id); const preview = source?.data.imagePreview ?? item.data.imagePreview; const selected = item.id === node.id; const preserve = item.data.visualSubjectType && item.data.visualSubjectType !== "菜品主体"; return <button type="button" className={"image-process-node-card" + (selected ? " selected" : "")} key={item.id} onClick={() => setSelection(item.id)}><div className="image-process-node-card-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><strong>{item.data.title || source?.data.dishName || "未命名菜品"}</strong><span className="node-status">{item.data.status}</span></div><div className="image-process-node-thumb">{preview ? <img src={preview} alt={(source?.data.dishName || item.data.title || "菜品") + "原始素材"} /> : <em>未上传原图</em>}</div><div className="image-process-node-meta"><span>背景：{item.data.backgroundTemplateName || (preserve ? "不使用" : "未选择")}</span><span>{item.data.processedImagePreview ? "首帧已生成" : "首帧未生成"}</span></div></button>; })}</div></section>
+
+      <section className="step-panel ip-studio">
+        <div className="ip-preview">
+          <div className="ip-preview-head"><h2>{preserveOriginal ? "后续生成使用的原图" : "首帧预览"}</h2><span className={`ip-live ${liveState.className}`}>{liveState.text}</span></div>
+          <div className={`ip-preview-frame ${recomposing ? "is-updating" : ""}`}>
+            {frameImage ? <img src={frameImage} alt={showSource ? "原始菜品" : "处理后首帧"} /> : <em>请先在“素材与菜品”上传这道菜的图片</em>}
+            {frameImage && node.data.processedImagePreview && <span className="ip-frame-tag">{showSource ? "原图" : "9:16 首帧"}</span>}
+            {recomposing && <span className="ip-frame-veil">更新中…</span>}
+          </div>
+          <div className="ip-preview-foot">
+            {sourcePreview && <img src={sourcePreview} alt="原图缩略" />}
+            <span>原图：{dishName} · 不会被覆盖</span>
+            {node.data.processedImagePreview && sourcePreview && <button type="button" className="btn" onClick={() => setShowSource(value => !value)}>{showSource ? "看处理结果" : "对比原图"}</button>}
+          </div>
+          <div className="ip-preview-actions">
+            <button type="button" className={`btn ${node.data.processedCutoutName ? "" : "btn-primary"}`} disabled={busy || recomposing} onClick={process}>{primaryLabel}</button>
+            {node.data.processedImageAnalysis && <span className="muted">处理图质量 {node.data.processedImageAnalysis.qualityScore}/100 · 状态：{node.data.status}</span>}
+          </div>
+          {node.data.processedImageAnalysis?.qualityWarnings.length ? <div className="media-analysis">{node.data.processedImageAnalysis.qualityWarnings.map(item => <small key={item}>提示：{item}</small>)}</div> : null}
+        </div>
+        <div className="ip-controls">
+          {preserveOriginal ? <div className="source-ready">画面主体：{node.data.visualSubjectType}。这类素材保留原图直接生成动作片段，不抠图、不换背景；点左侧“保留原图并继续”即可。</div> : <>
+            <h2>背景</h2><p className="ip-sub">优先用真实门店桌面或吧台；会自动裁成 9:16。</p>
+            <div className="background-template-grid ip-bg-grid">{templates.map(template => <button key={template.id} type="button" className={`background-template ${template.id === activeTemplate?.id ? "selected" : ""}`} onClick={() => selectTemplate(template.id)}><img src={template.url} alt={template.name} /><span>{template.name}</span></button>)}{templates.length === 0 && <div className="empty-state compact">还没有背景模板。可上传已筛选的门店、吧台或桌面图片。</div>}</div>
+            <div className="ip-bg-actions"><span>已选：{activeTemplate?.name ?? node.data.backgroundTemplateName ?? "未选择"}</span><label className="btn upload-button">{uploading ? "上传中..." : "上传背景"}<input type="file" accept="image/*" disabled={uploading} onChange={event => upload(event.target.files?.[0])} /></label></div>
+            <div className="ip-divider" />
+            <h2>菜品与背景</h2><p className="ip-sub">{canRecompose ? "拖动滑块，松手后左侧预览会跟着变；不用再点“重新处理”。" : "先做一次抠图，之后这里的调整会自动更新预览。"}</p>
+            <div className="ip-params"><ImageProcessControlFields data={node.data} update={update} /></div>
+          </>}
+        </div>
       </section>
-      <section className={`step-panel ${preserveOriginal ? "is-disabled-panel" : ""}`}><div className="panel-section-head"><div><span className="panel-label">BACKGROUND TEMPLATE</span><h2>背景模板</h2><p className="muted">{preserveOriginal ? "当前主体类型为人物画面，背景模板不会参与处理。" : "优先使用真实门店桌面或吧台，处理时自动裁为 9:16、虚化并压暗。"}</p></div><label className="btn upload-button">{uploading ? "上传中..." : "上传背景"}<input type="file" accept="image/*" disabled={uploading || preserveOriginal} onChange={event => upload(event.target.files?.[0])} /></label></div><div className="background-template-grid">{templates.map(template => <button key={template.id} type="button" disabled={preserveOriginal} className={`background-template ${template.id === activeTemplate?.id ? "selected" : ""}`} onClick={() => selectTemplate(template.id)}><img src={template.url} alt={template.name} /><span>{template.name}</span></button>)}{templates.length === 0 && <div className="empty-state compact">还没有背景模板。可上传已筛选的门店、吧台或桌面图片。</div>}</div></section>
-      <section className="step-panel"><div className="panel-section-head"><div><span className="panel-label">COMPOSITE CONTROLS</span><h2>主体与背景</h2></div></div><div className="field-grid image-process-controls"><ImageProcessControlFields data={node.data} update={update} /></div>{node.data.processedImageAnalysis && <div className="media-analysis"><div><strong>处理图质量 {node.data.processedImageAnalysis.qualityScore}/100</strong></div>{node.data.processedImageAnalysis.qualityWarnings.map(item => <small key={item}>提示：{item}</small>)}</div>}</section>
-      <div className="step-context"><button type="button" className="btn btn-primary" disabled={!node.data.processedImagePreview} onClick={() => navigate("/workflow/prompts")}>进入提示词装配</button><span className="muted">{node.data.processedImagePreview ? "处理完成，可进入下一步" : "下一步条件：完成图片处理"} · 草稿：{draftId} · 状态：{node.data.status}</span></div>
+
+      <div className="step-context"><button type="button" className="btn btn-primary ip-next" disabled={!node.data.processedImagePreview} onClick={() => navigate("/workflow/prompts")}>下一步：提示词装配</button><span className="muted">{node.data.processedImagePreview ? "这张首帧会用于后面的视频生成" : "先完成这道菜的图片处理"}</span></div>
     </div><Inspector onToast={onToast} /></div>
   </main>;
 }

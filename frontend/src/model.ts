@@ -139,6 +139,9 @@ export type WorkflowData = {
   subjectX?: number;
   subjectY?: number;
   processedImageName?: string;
+  /** 上一次抠图留下的透明 PNG 及其对应原图；调参数时只重新合成，不再抠图。 */
+  processedCutoutName?: string;
+  processedCutoutSourceName?: string;
   processedImagePreview?: string;
   processedImageAnalysis?: MediaAnalysis;
   /** Planned strategy; differs from processedImageMode, which records a completed job. */
@@ -364,6 +367,17 @@ export type GenerationJob = {
   error?: string | null;
 };
 
+export type ImageRecomposeResult = {
+  node_id: string;
+  status: "done";
+  stage: string;
+  processingMode: "matting_composite";
+  result_url: string;
+  result_name: string;
+  cutout_name: string;
+  analysis?: MediaAnalysis | null;
+};
+
 export type ImageProcessingJob = {
   job_id: string;
   draft_id?: string;
@@ -375,6 +389,7 @@ export type ImageProcessingJob = {
   result_url?: string | null;
   result_name?: string | null;
   cutout_name?: string | null;
+  cutout_source_name?: string | null;
   analysis?: MediaAnalysis | null;
   visualSubjectType?: VisualSubjectType;
   processingMode?: "matting_composite" | "preserve_original";

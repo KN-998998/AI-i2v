@@ -1,8 +1,8 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { assetIdForDishName, clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
+import { assetIdForDishName, clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode, type ImageRecomposeResult } from "./model";
 import { workflowSeed } from "./seed";
-import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
+import { fetchCanvasClips, fetchDraft, persistDraft, recomposeCanvasImage, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
 import { browserDraftId } from "./draftIdentity";
 import { generatorGenerationBlockReason, generatorUpstreamNodes, hasSelectedGeneratedClip } from "./generatorReadiness";
@@ -62,6 +62,7 @@ type WorkflowState = {
   selectGeneratorClip: (nodeId: string, clipId: string) => void;
   generateNode: (nodeId: string) => Promise<GenerationJob>;
   processImageNode: (nodeId: string) => Promise<ImageProcessingJob>;
+  recomposeImageNode: (nodeId: string) => Promise<ImageRecomposeResult>;
   addNode: (kind: NodeKind) => void;
   arrangeWorkflowNodes: () => void;
   createBatchWorkflows: (items: AssetLibraryPlanItem[]) => string[];
@@ -496,6 +497,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
               processedImageAnalysis: undefined,
               processedImageMode: undefined,
               imageProcessingJobId: undefined,
+              processedCutoutName: undefined,
+              processedCutoutSourceName: undefined,
             },
           };
         }
@@ -538,6 +541,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
               processedImageAnalysis: undefined,
               processedImageMode: undefined,
               imageProcessingJobId: undefined,
+              processedCutoutName: undefined,
+              processedCutoutSourceName: undefined,
             },
           };
         }
@@ -567,7 +572,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const nodes = state.nodes.map(item => {
       if (item.id === nodeId) return { ...item, data: nextInputData };
       if (item.data.kind === "image_process" && "visualSubjectType" in patch) {
-        return { ...item, data: { ...item.data, status: "待处理", processedImagePreview: undefined, processedImageName: undefined, processedImageAnalysis: undefined, processedImageMode: undefined, imageProcessingJobId: undefined } };
+        return { ...item, data: { ...item.data, status: "待处理", processedImagePreview: undefined, processedImageName: undefined, processedImageAnalysis: undefined, processedImageMode: undefined, imageProcessingJobId: undefined, processedCutoutName: undefined, processedCutoutSourceName: undefined } };
       }
       if (item.data.kind !== "prompt") return item;
       const promptConfig = promptConfigForVisualSubject({ ...(item.data.promptConfig ?? DEFAULT_PROMPT_CONFIG), food_type: foodType } as typeof DEFAULT_PROMPT_CONFIG, data.visualSubjectType);
@@ -685,6 +690,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         processedImageAnalysis: completed.analysis ?? undefined,
         processedImageMode: completed.processingMode,
         visualSubjectType: completed.visualSubjectType,
+        processedCutoutName: completed.cutout_name ?? undefined,
+        processedCutoutSourceName: completed.cutout_source_name ?? undefined,
       });
       await get().saveDraft();
       return completed;
@@ -692,6 +699,30 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       get().updateNodeData(nodeId, { status: "处理失败" });
       throw error;
     }
+  },
+  recomposeImageNode: async nodeId => {
+    const node = get().nodes.find(item => item.id === nodeId);
+    if (!node) throw new Error("图片处理节点不存在");
+    const data = node.data;
+    const result = await recomposeCanvasImage(get().draftId, nodeId, {
+      backgroundTemplateId: data.backgroundTemplateId,
+      backgroundTemplateName: data.backgroundTemplateName,
+      backgroundPreview: data.backgroundPreview,
+      backgroundBlur: data.backgroundBlur,
+      backgroundBrightness: data.backgroundBrightness,
+      subjectScale: data.subjectScale,
+      subjectX: data.subjectX,
+      subjectY: data.subjectY,
+    });
+    get().updateNodeData(nodeId, {
+      status: "已处理",
+      processedImagePreview: result.result_url,
+      processedImageName: result.result_name,
+      processedImageAnalysis: result.analysis ?? undefined,
+      processedImageMode: result.processingMode,
+    });
+    await get().saveDraft();
+    return result;
   },
   addNode: kind => set(state => {
     const id = `node_${kind}_${state.nextNodeNumber}`;

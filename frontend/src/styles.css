@@ -1453,3 +1453,38 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* 步骤页标题下的一句“这一步做什么”。 */
 .step-header .step-goal { max-width: 760px; margin-top: 8px; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .step-header .step-goal strong { color: var(--text); font-weight: 600; }
+/* ---------------------------------------------------------------------------
+ * 第 2 步 · 预览工作区：左预览（滚动时固定），右背景与参数；滑块松手后自动重新合成。
+ * ------------------------------------------------------------------------- */
+.ip-studio { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); gap: 28px; align-items: start; }
+.ip-preview { position: sticky; top: 92px; display: grid; gap: 12px; }
+.ip-preview-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ip-preview-head h2 { margin: 0; }
+.ip-live { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.ip-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.ip-live.is-live { color: var(--green); }
+.ip-live.is-busy { color: var(--amber); }
+.ip-preview-frame { position: relative; display: grid; place-items: center; width: min(100%, 372px); aspect-ratio: 9 / 16; margin: 0 auto; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #f1f1f6; }
+.ip-preview-frame img { width: 100%; height: 100%; object-fit: contain; background: #f1f1f6; transition: opacity .2s ease; }
+.ip-preview-frame.is-updating img { opacity: .55; }
+.ip-preview-frame em { padding: 18px; color: var(--dim); font-size: 14px; font-style: normal; text-align: center; }
+.ip-frame-tag { position: absolute; left: 12px; top: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(20, 20, 30, .62); color: #fff; font-size: 12px; }
+.ip-frame-veil { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 8px 14px; border-radius: 999px; background: rgba(20, 20, 30, .72); color: #fff; font-size: 13px; }
+.ip-preview-foot { display: flex; align-items: center; gap: 12px; }
+.ip-preview-foot img { width: 64px; height: 44px; object-fit: cover; border: 1px solid var(--line); border-radius: 6px; }
+.ip-preview-foot span { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.ip-preview-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 4px; }
+.ip-controls { display: grid; gap: 6px; min-width: 0; }
+.ip-controls h2 { margin: 0; }
+.ip-controls .ip-sub { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.ip-bg-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.ip-bg-grid .background-template img { aspect-ratio: 4 / 3; }
+.ip-bg-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 4px; color: var(--muted); font-size: 13px; }
+.ip-divider { height: 1px; margin: 14px 0 16px; background: var(--line); }
+.ip-params .field { margin: 0 0 14px; }
+.ip-params .field > span { color: var(--text); font-weight: 600; }
+.ip-next { flex: 0 0 auto; min-height: 46px; min-width: 260px; font-size: 15px; }
+@media (max-width: 1100px) {
+  .ip-studio { grid-template-columns: 1fr; }
+  .ip-preview { position: static; }
+}
