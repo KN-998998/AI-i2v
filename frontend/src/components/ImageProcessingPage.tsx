@@ -43,22 +43,36 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
   const appliedKey = useRef(paramKey);
   const nodeId = node?.id;
   useEffect(() => { appliedKey.current = paramKey; /* 切换菜品时以它当前的参数为基准，不触发合成 */ }, [nodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 这道菜处理过但节点上没有留档抠图（改动上线前处理的草稿）：第一次调整先自动抠一次，之后就能即时合成。
+  const needsFirstMatting = Boolean(node && !preserveOriginal && !node.data.processedCutoutName && node.data.processedImagePreview && sourcePreview);
   useEffect(() => {
-    if (!nodeId || !canRecompose || busy || paramKey === appliedKey.current) return;
+    if (!nodeId || busy || paramKey === appliedKey.current || (!canRecompose && !needsFirstMatting)) return;
     // 拖动滑块时 onChange 连续触发；每次都重置计时，松手 700ms 后只合成一次。
     const timer = window.setTimeout(async () => {
       appliedKey.current = paramKey;
-      setRecomposing(true);
+      if (canRecompose) {
+        setRecomposing(true);
+        try {
+          await recomposeImageNode(nodeId);
+        } catch (error) {
+          onToast(error instanceof Error ? error.message : "重新合成失败");
+        } finally {
+          setRecomposing(false);
+        }
+        return;
+      }
+      onToast("这道菜还没有留档的抠图，先抠一次；之后再调整会即时更新");
+      setBusy(true);
       try {
-        await recomposeImageNode(nodeId);
+        await processImageNode(nodeId);
       } catch (error) {
-        onToast(error instanceof Error ? error.message : "重新合成失败");
+        onToast(imageProcessingErrorMessage(error));
       } finally {
-        setRecomposing(false);
+        setBusy(false);
       }
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [paramKey, canRecompose, busy, nodeId, recomposeImageNode, onToast]);
+  }, [paramKey, canRecompose, needsFirstMatting, busy, nodeId, recomposeImageNode, processImageNode, onToast]);
 
   const activeTemplate = useMemo(() => templates.find(item => item.id === node?.data.backgroundTemplateId), [node?.data.backgroundTemplateId, templates]);
   const sourceFor = (processNodeId: string) => {
@@ -111,6 +125,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
     : recomposing ? { className: "is-busy", text: "更新预览…" }
     : canRecompose ? { className: "is-live", text: "松手后约 1 秒自动更新" }
     : preserveOriginal ? { className: "", text: "人物素材保留原图" }
+    : needsFirstMatting ? { className: "", text: "第一次调整会先抠图一次" }
     : { className: "", text: "先执行一次抠图" };
   const primaryLabel = busy ? "正在处理..." : preserveOriginal ? "保留原图并继续" : node.data.processedCutoutName ? "重新抠图" : "开始抠图并合成";
   const doneCount = processingNodes.filter(item => item.data.processedImagePreview).length;
@@ -147,7 +162,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
             <div className="background-template-grid ip-bg-grid">{templates.map(template => <button key={template.id} type="button" className={`background-template ${template.id === activeTemplate?.id ? "selected" : ""}`} onClick={() => selectTemplate(template.id)}><img src={template.url} alt={template.name} /><span>{template.name}</span></button>)}{templates.length === 0 && <div className="empty-state compact">还没有背景模板。可上传已筛选的门店、吧台或桌面图片。</div>}</div>
             <div className="ip-bg-actions"><span>已选：{activeTemplate?.name ?? node.data.backgroundTemplateName ?? "未选择"}</span><label className="btn upload-button">{uploading ? "上传中..." : "上传背景"}<input type="file" accept="image/*" disabled={uploading} onChange={event => upload(event.target.files?.[0])} /></label></div>
             <div className="ip-divider" />
-            <h2>菜品与背景</h2><p className="ip-sub">{canRecompose ? "拖动滑块，松手后左侧预览会跟着变；不用再点“重新处理”。" : "先做一次抠图，之后这里的调整会自动更新预览。"}</p>
+            <h2>菜品与背景</h2><p className="ip-sub">{canRecompose ? "拖动滑块，松手后左侧预览会跟着变；不用再点“重新处理”。" : needsFirstMatting ? "这道菜是旧版处理的：第一次调整会先自动抠图一次（约半分钟），之后就即时更新。" : "先做一次抠图，之后这里的调整会自动更新预览。"}</p>
             <div className="ip-params"><ImageProcessControlFields data={node.data} update={update} /></div>
           </>}
         </div>
