@@ -1,4 +1,4 @@
-import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
 import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
@@ -109,6 +109,14 @@ assert(pendingClip.status === "pending" && !pendingClip.sourcePath, "generator c
 assert(resolveGeneratorNodeStatus("生成中", { status: "generated", sourcePath: "clip.mp4" }) === "已生成", "linked generator clip should be completed");
 assert(resolveGeneratorNodeStatus("生成中") === "待生成", "stale generator status should reset when its clip is gone");
 assert(pendingClip.dishCategory === "其他", "pending generator clip should have a default dish category");
+
+const stalePlaceholder = { ...pendingClip, id: "generator_pending", generatorNodeId: "generator", status: "pending" as const, sourcePath: undefined };
+const completedGeneratorClip = { ...pendingClip, id: "generator_v1", generatorNodeId: "generator", status: "generated" as const, sourcePath: "generator-v1.mp4", clipVersion: 1 };
+assert(reconcileStalePendingGeneratorClips([stalePlaceholder], [completedGeneratorClip], new Set()).length === 0, "stale pending placeholder was not removed after its MP4 arrived");
+const activePending = reconcileStalePendingGeneratorClips([stalePlaceholder], [completedGeneratorClip], new Set(["generator"]));
+assert(activePending.length === 1 && activePending[0].id === "generator_pending", "active regeneration placeholder was removed");
+const repairedTimeline = reconcileStalePendingGeneratorClips([stalePlaceholder], [completedGeneratorClip], new Set(), "replace");
+assert(repairedTimeline.length === 1 && repairedTimeline[0].sourcePath === "generator-v1.mp4", "stale composition reference was not repaired");
 
 assert(inferDishCategory("蜜瓜") === "水果", "fruit fallback classification is incorrect");
 assert(inferDishCategory("抹茶布丁") === "甜品", "dessert fallback classification is incorrect");

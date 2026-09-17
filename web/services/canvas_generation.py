@@ -524,28 +524,52 @@ def _persist_generator_status(draft_id: str, node_id: str, status: str, generati
 
 
 def _persist_generated_clip(draft_id: str, node_id: str, clip: dict[str, Any]) -> None:
-    """Persist a new version and replace only the node's pending/current composition reference."""
+    """Persist a generated version and discard every superseded pending placeholder."""
     draft = load_draft(draft_id)
     if draft is None:
         return
 
     candidates = list(draft.get("candidateClips") or draft.get("timeline") or [])
     linked = [item for item in candidates if item.get("generatorNodeId") == node_id]
-    existing_pending = next((item for item in linked if item.get("status") == "pending"), None)
+    pending_placeholders = [
+        item
+        for item in linked
+        if item.get("status") == "pending" and not item.get("sourcePath")
+    ]
+    existing_result = next(
+        (
+            item
+            for item in linked
+            if item.get("sourcePath")
+            and (
+                (
+                    bool(clip.get("generationJobId"))
+                    and item.get("generationJobId") == clip.get("generationJobId")
+                )
+                or (
+                    bool(clip.get("filename"))
+                    and item.get("filename") == clip.get("filename")
+                )
+            )
+        ),
+        None,
+    )
     persisted_clip = {
         **clip,
-        "id": existing_pending.get("id", clip["id"]) if existing_pending else clip["id"],
+        "id": (pending_placeholders[0].get("id") if pending_placeholders else None)
+        or (existing_result.get("id") if existing_result else None)
+        or clip["id"],
         "isSelected": True,
     }
-    if existing_pending is not None:
-        candidates = [persisted_clip if item.get("id") == existing_pending.get("id") else item for item in candidates]
-    else:
-        candidates = [
-            {**item, "isSelected": False}
-            if item.get("generatorNodeId") == node_id else item
-            for item in candidates
-        ]
-        candidates.append(persisted_clip)
+    pending_ids = {str(item.get("id") or "") for item in pending_placeholders}
+    candidates = [
+        {**item, "isSelected": False}
+        if item.get("generatorNodeId") == node_id else item
+        for item in candidates
+        if str(item.get("id") or "") not in pending_ids
+        and item is not existing_result
+    ]
+    candidates.append(persisted_clip)
 
     def replace_linked(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [

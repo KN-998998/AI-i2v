@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { assetIdForDishName, clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
+import { assetIdForDishName, clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
@@ -937,8 +937,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     try {
       const availableClips = (await fetchCanvasClips()).map(clip => withResolvedDishCategory(normalizeTimelineClip(clip)));
       set(state => {
-        const normalizedTimeline = state.timeline.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip)));
-        const normalizedCandidates = state.candidateClips.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip)));
+        const activeGenerationNodeIds = new Set(state.nodes
+          .filter(node => node.data.kind === "generator" && Boolean(node.data.generationJobId))
+          .map(node => node.id));
+        const normalizedTimeline = reconcileStalePendingGeneratorClips(
+          state.timeline.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
+          availableClips,
+          activeGenerationNodeIds,
+          "replace",
+        );
+        const normalizedCandidates = reconcileStalePendingGeneratorClips(
+          state.candidateClips.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
+          availableClips,
+          activeGenerationNodeIds,
+        );
         const seedIds = new Set(clips.map(item => item.id));
         const isUnlinkedSeedTimeline = normalizedTimeline.length > 0 && normalizedTimeline.every(item => seedIds.has(item.id) && !item.sourcePath);
         const timeline = isUnlinkedSeedTimeline && availableClips.length
@@ -952,7 +964,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const timelineChanged = !sameClipList(timeline, state.timeline);
         const candidateClipsChanged = !sameClipList(candidateClips, state.candidateClips);
         const nodesChanged = nodes.some((node, index) => node !== state.nodes[index]);
-        const workspaces = timelineChanged ? syncPrimaryWorkspace(state.composeWorkspaces, timeline) : state.composeWorkspaces;
+        const workspaces = state.composeWorkspaces.map((workspace, index) => {
+          const workspaceClips = reconcileStalePendingGeneratorClips(
+            workspace.clips.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
+            availableClips,
+            activeGenerationNodeIds,
+            "replace",
+          );
+          return index === 0 && timelineChanged
+            ? { ...workspace, clips: timeline, job: null, finalJob: null }
+            : sameClipList(workspaceClips, workspace.clips) ? workspace : { ...workspace, clips: workspaceClips, job: null, finalJob: null };
+        });
         return {
           nodes,
           availableClips,

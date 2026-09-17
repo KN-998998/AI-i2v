@@ -285,6 +285,41 @@ export type TimelineClip = {
 };
 
 /**
+ * A pending clip without a source file is only an in-flight UI placeholder.
+ * Once the local library has a completed clip for the same node, an inactive
+ * placeholder is stale and must not be shown as another version.
+ */
+export function reconcileStalePendingGeneratorClips(
+  items: TimelineClip[],
+  availableClips: TimelineClip[],
+  activeGenerationNodeIds: ReadonlySet<string>,
+  mode: "remove" | "replace" = "remove",
+): TimelineClip[] {
+  const completedByNode = new Map<string, TimelineClip>();
+  for (const clip of availableClips) {
+    const nodeId = clip.generatorNodeId;
+    if (!nodeId || !clip.sourcePath) continue;
+    const current = completedByNode.get(nodeId);
+    if (!current
+      || (clip.isSelected !== false && current.isSelected === false)
+      || (clip.clipVersion ?? 0) > (current.clipVersion ?? 0)) {
+      completedByNode.set(nodeId, clip);
+    }
+  }
+  return items.flatMap(item => {
+    const nodeId = item.generatorNodeId;
+    const completed = nodeId ? completedByNode.get(nodeId) : undefined;
+    const stale = item.status === "pending"
+      && !item.sourcePath
+      && Boolean(completed)
+      && Boolean(nodeId)
+      && !activeGenerationNodeIds.has(nodeId!);
+    if (!stale) return [item];
+    return mode === "replace" && completed ? [{ ...completed }] : [];
+  });
+}
+
+/**
  * The persisted node label is only a snapshot. Resolve it from the actual
  * clip reference whenever a draft or the local clip library is loaded.
  */

@@ -128,6 +128,43 @@ def test_completed_generation_persists_clip_and_node_status(monkeypatch, tmp_pat
     assert saved["composeWorkspaces"][0]["clips"][0]["sourcePath"] == "C:/clips/test.mp4"
 
 
+def test_completed_generation_removes_all_duplicate_pending_placeholders(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
+    first_version = {
+        "id": "clip_v1",
+        "dish": "测试菜品",
+        "label": "生成片段",
+        "tone": "#355e62",
+        "timelineDuration": 2.5,
+        "status": "generated",
+        "sourcePath": "C:/clips/v1.mp4",
+        "generatorNodeId": "clips",
+        "generationJobId": "job-v1",
+    }
+    placeholders = [
+        {"id": "clips_clip", "dish": "测试菜品", "label": "生成任务", "tone": "#355e62", "timelineDuration": 2.5, "status": "pending", "generatorNodeId": "clips"},
+        {"id": "clips_pending_2", "dish": "测试菜品", "label": "生成任务", "tone": "#355e62", "timelineDuration": 2.5, "status": "pending", "generatorNodeId": "clips"},
+    ]
+    canvas_state.save_draft("default", {
+        "nodes": [{"id": "clips", "data": {"kind": "generator", "status": "生成中"}}],
+        "edges": [],
+        "timeline": [placeholders[0]],
+        "candidateClips": [first_version, *placeholders],
+        "composeWorkspaces": [{"id": "compose_1", "title": "成片 1", "clips": [placeholders[1]], "job": None}],
+    })
+    second_version = {**first_version, "id": "clip_v2", "sourcePath": "C:/clips/v2.mp4", "generationJobId": "job-v2"}
+
+    canvas_generation._persist_generated_clip("default", "clips", second_version)
+
+    saved = canvas_state.load_draft("default")
+    assert [item["id"] for item in saved["candidateClips"]] == ["clip_v1", "clips_clip"]
+    assert all(item.get("sourcePath") for item in saved["candidateClips"])
+    assert saved["candidateClips"][0]["isSelected"] is False
+    assert saved["candidateClips"][1]["sourcePath"] == "C:/clips/v2.mp4"
+    assert saved["timeline"][0]["sourcePath"] == "C:/clips/v2.mp4"
+    assert saved["composeWorkspaces"][0]["clips"][0]["sourcePath"] == "C:/clips/v2.mp4"
+
+
 def test_regeneration_keeps_previous_clip_version_and_switches_current_reference(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", tmp_path / "drafts")
     monkeypatch.setattr(canvas_generation, "CANVAS_CLIP_ROOT", tmp_path / "clips")
