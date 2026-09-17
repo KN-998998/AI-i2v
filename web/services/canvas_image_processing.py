@@ -383,6 +383,9 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
                 processedImageAnalysis=analysis,
                 processedImageMode=job["processingMode"],
                 visualSubjectType=visual_subject_type,
+                # 抠图结果单独留档：之后调背景 / 参数只需重新合成，不必再调一次抠图接口。
+                processedCutoutName=cutout_name,
+                processedCutoutSourceName=source_image.name,
             )
             _update_job(
                 draft_id,
@@ -392,6 +395,7 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
                 result_url=result_url,
                 result_name=result_path.name,
                 cutout_name=cutout_name,
+                cutout_source_name=source_image.name,
                 analysis=analysis,
             )
         except Exception as exc:
@@ -400,6 +404,63 @@ def start_image_processing(draft_id: str, node_id: str) -> dict[str, Any]:
 
     threading.Thread(target=worker, name=f"canvas-image-process-{job_id}", daemon=True).start()
     return job
+
+
+_RECOMPOSE_FIELDS = ("backgroundTemplateId", "backgroundTemplateName", "backgroundPreview", "backgroundBlur", "backgroundBrightness", "subjectScale", "subjectX", "subjectY")
+
+
+def recompose_image(draft_id: str, node_id: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Re-run only the local background composition with the cutout saved by the last matting job.
+
+    抠图（腾讯 GoodsMatting）是付费且要等的远程调用；虚化、亮度、大小、位置只是本地 PIL 合成。
+    第 2 步页面拖完滑块松手后调用这里，约 1 秒内拿到新首帧，不再重新抠图。
+    传入的 config 会覆盖并写回节点数据，这样不必先保存整份草稿再请求。
+    """
+    draft = load_draft(draft_id)
+    if draft is None:
+        raise ValueError("画布草稿不存在，请先保存草稿")
+    process_node = _node_by_id(draft, node_id)
+    if not process_node or process_node.get("data", {}).get("kind") != "image_process":
+        raise ValueError("图片处理节点不存在")
+    data = dict(process_node.get("data", {}))
+    for key, value in (config or {}).items():
+        if key in _RECOMPOSE_FIELDS:
+            data[key] = value
+    input_node = _upstream_node(draft, node_id, "input", allow_legacy_fallback=False)
+    input_data = input_node.get("data", {}) if input_node else {}
+    if _visual_subject_type(input_data) != "菜品主体":
+        raise ValueError("人物或手部素材保留原图，不做背景合成")
+    source_image = _draft_image(draft_id, input_data.get("imagePreview"))
+    cutout_name = str(data.get("processedCutoutName") or "")
+    cutout_path = uploaded_file(draft_id, cutout_name) if cutout_name else None
+    if source_image is None or cutout_path is None or data.get("processedCutoutSourceName") != source_image.name:
+        raise ValueError("还没有可复用的抠图结果，请先执行一次抠图")
+    template_name = str(data.get("backgroundTemplateId") or "")
+    template_path = background_file(template_name) if template_name else None
+    result_path = generated_file_path(draft_id, ".jpg")
+    _compose_image(cutout_path, template_path, result_path, data)
+    analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
+    result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
+    _persist_node_status(
+        draft_id,
+        node_id,
+        "已处理",
+        **{key: data[key] for key in _RECOMPOSE_FIELDS if key in data},
+        processedImagePreview=result_url,
+        processedImageName=result_path.name,
+        processedImageAnalysis=analysis,
+        processedImageMode="matting_composite",
+    )
+    return {
+        "node_id": node_id,
+        "status": "done",
+        "stage": "复用抠图重新合成",
+        "processingMode": "matting_composite",
+        "result_url": result_url,
+        "result_name": result_path.name,
+        "cutout_name": cutout_name,
+        "analysis": analysis,
+    }
 
 
 def _iter_image_processing_jobs() -> list[tuple[str, dict[str, Any]]]:
@@ -444,8 +505,8 @@ def _recover_image_processing_job(draft_id: str, job: dict[str, Any]) -> None:
         _update_job(draft_id, job, stage=stage, visualSubjectType=visual_subject_type, processingMode="matting_composite" if visual_subject_type == "菜品主体" else "preserve_original")
         analysis = analyze_image(result_path, str(input_data.get("dishName") or ""), input_data.get("dishCategory"))
         result_url = f"/api/canvas/drafts/{quote(draft_id, safe='')}/files/{quote(result_path.name, safe='')}"
-        _persist_node_status(draft_id, node_id, "已处理", imageProcessingJobId=job["job_id"], processedImagePreview=result_url, processedImageName=result_path.name, processedImageAnalysis=analysis, processedImageMode=job.get("processingMode"), visualSubjectType=visual_subject_type)
-        _update_job(draft_id, job, status="done", stage="图片处理完成", result_url=result_url, result_name=result_path.name, cutout_name=cutout_name, analysis=analysis)
+        _persist_node_status(draft_id, node_id, "已处理", imageProcessingJobId=job["job_id"], processedImagePreview=result_url, processedImageName=result_path.name, processedImageAnalysis=analysis, processedImageMode=job.get("processingMode"), visualSubjectType=visual_subject_type, processedCutoutName=cutout_name, processedCutoutSourceName=source_image.name)
+        _update_job(draft_id, job, status="done", stage="图片处理完成", result_url=result_url, result_name=result_path.name, cutout_name=cutout_name, cutout_source_name=source_image.name, analysis=analysis)
     except Exception as exc:
         _update_job(draft_id, job, status="error", stage="图片处理恢复失败", error=str(exc))
         _persist_node_status(draft_id, node_id, "处理失败", imageProcessingJobId=job.get("job_id"))

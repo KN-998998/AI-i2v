@@ -199,3 +199,71 @@ def test_startup_recovery_finishes_persisted_image_job(monkeypatch, tmp_path):
     assert current["status"] == "done", current.get("error")
     persisted_data = canvas_state.load_draft("default")["nodes"][1]["data"]
     assert persisted_data.get("processedImagePreview")
+
+
+def _draft_with_processed_dish(monkeypatch, draft_root: Path) -> TestClient:
+    """A dish that has been matted once, with the cutout name persisted on the node."""
+    monkeypatch.setattr(canvas_state, "CANVAS_DRAFT_ROOT", draft_root)
+
+    def fake_goods_matting(source, destination, _draft_id):
+        with Image.open(source) as image:
+            image.convert("RGBA").save(destination, "PNG")
+
+    monkeypatch.setattr(canvas_image_processing, "_goods_matting", fake_goods_matting)
+    files = draft_root / "default" / "files"
+    files.mkdir(parents=True)
+    (files / "source.png").write_bytes(_png_bytes((240, 120, 80, 255)))
+    canvas_state.save_draft("default", {
+        "nodes": [
+            {"id": "assets", "data": {"kind": "input", "dishName": "测试菜品", "imagePreview": "/api/canvas/drafts/default/files/source.png"}},
+            {"id": "image_process", "data": {"kind": "image_process", "subjectScale": 0.6, "subjectX": 0.5, "subjectY": 0.58, "backgroundBlur": 4, "backgroundBrightness": 0.7}},
+        ],
+        "edges": [{"source": "assets", "target": "image_process"}],
+        "timeline": [],
+    })
+    client = TestClient(create_app())
+    job = client.post("/api/canvas/drafts/default/image-processing", json={"node_id": "image_process"}).json()
+    for _ in range(40):
+        job = client.get(f"/api/canvas/drafts/default/image-processing/{job['job_id']}").json()
+        if job["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+    assert job["status"] == "done", job.get("error")
+    return client
+
+
+def test_recompose_reuses_cutout_without_calling_matting_again(monkeypatch, tmp_path):
+    client = _draft_with_processed_dish(monkeypatch, tmp_path / "drafts")
+    before = canvas_state.load_draft("default")["nodes"][1]["data"]
+    assert before["processedCutoutName"].endswith(".png")
+    assert before["processedCutoutSourceName"] == "source.png"
+    # 第二次只允许本地合成：再碰抠图接口就是回归。
+    monkeypatch.setattr(canvas_image_processing, "_goods_matting", lambda *_args: (_ for _ in ()).throw(AssertionError("recompose must not call matting")))
+
+    response = client.post("/api/canvas/drafts/default/image-processing/recompose", json={"node_id": "image_process", "config": {"subjectX": 0.2, "backgroundBlur": 0}})
+
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["status"] == "done" and result["processingMode"] == "matting_composite"
+    assert result["result_name"] != before["processedImageName"]
+    assert result["cutout_name"] == before["processedCutoutName"]
+    with Image.open(BytesIO(client.get(result["result_url"]).content)) as image:
+        assert image.size == (1080, 1920)
+    after = canvas_state.load_draft("default")["nodes"][1]["data"]
+    assert after["subjectX"] == 0.2 and after["backgroundBlur"] == 0
+    assert after["processedImageName"] == result["result_name"]
+    assert after["processedCutoutName"] == before["processedCutoutName"]
+
+
+def test_recompose_refuses_without_a_reusable_cutout(monkeypatch, tmp_path):
+    client = _draft_with_processed_dish(monkeypatch, tmp_path / "drafts")
+    draft = canvas_state.load_draft("default")
+    # 换了原图之后旧抠图不能再用，必须重新抠。
+    (tmp_path / "drafts" / "default" / "files" / "other.png").write_bytes(_png_bytes((10, 200, 80, 255)))
+    draft["nodes"][0]["data"]["imagePreview"] = "/api/canvas/drafts/default/files/other.png"
+    canvas_state.save_draft("default", draft)
+
+    response = client.post("/api/canvas/drafts/default/image-processing/recompose", json={"node_id": "image_process"})
+
+    assert response.status_code == 400
+    assert "抠图" in response.text

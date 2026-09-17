@@ -38,7 +38,7 @@ from web.services.canvas_compose import compose_output_path, get_compose_job, st
 from web.services.weekly_plans import assert_ready_for_compose, create_plan as create_weekly_plan, get_daily_by_draft, get_plan as get_weekly_plan, list_plans as list_weekly_plans, save_clip_review, update_daily_plan, update_plan_status
 from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, managed_asset_library_root, manual_review_preview_path, manual_review_scan_response, manual_review_upload_directory, organize_manual_asset_library, save_category_rule, save_manual_review_state, scan_asset_classifications, scan_manual_asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
-from web.services.canvas_image_processing import get_image_processing_job, start_image_processing, tencent_matting_configured
+from web.services.canvas_image_processing import get_image_processing_job, recompose_image, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
 from web.services.canvas_state import background_file, list_background_files, load_draft, save_asset_library_folder_upload, save_background_upload, save_draft, save_upload, uploaded_file
 
@@ -468,6 +468,17 @@ def get_canvas_background(stored_name: str) -> FileResponse:
 def start_canvas_image_processing(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
         return start_image_processing(draft_id, str((payload or {}).get("node_id") or ""))
+    except (ValueError, RuntimeError) as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/canvas/drafts/{draft_id}/image-processing/recompose")
+def recompose_canvas_image(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Synchronous: reuse the saved cutout and only redo the local background composition."""
+    body = payload or {}
+    config = body.get("config") if isinstance(body.get("config"), dict) else None
+    try:
+        return recompose_image(draft_id, str(body.get("node_id") or ""), config)
     except (ValueError, RuntimeError) as exc:
         raise _json_error(str(exc), 400) from exc
 
