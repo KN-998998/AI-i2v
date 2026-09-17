@@ -1408,3 +1408,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (max-width: 1000px) {
   .sound-step-layout { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------------------
+ * 第 3 步效果预设：预设卡片是默认视图，完整槽位面板折叠进“高级设置”。
+ * ------------------------------------------------------------------------- */
+.prompt-preset-hint { margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.prompt-preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.prompt-preset { display: grid; gap: 4px; min-height: 64px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2, transparent); color: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.prompt-preset:hover { border-color: var(--cyan); transform: translateY(-1px); }
+.prompt-preset.active { border-color: var(--cyan); background: var(--cyan-soft); box-shadow: inset 3px 0 0 var(--cyan); }
+.prompt-preset strong { font-size: 12px; }
+.prompt-preset small { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.prompt-advanced { margin: 4px 0 6px; border: 1px solid var(--line); border-radius: 8px; }
+.prompt-advanced > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; color: var(--muted); font-size: 11px; cursor: pointer; list-style: none; }
+.prompt-advanced > summary::-webkit-details-marker { display: none; }
+.prompt-advanced > summary::before { content: "▸"; margin-right: 6px; color: var(--cyan); }
+.prompt-advanced[open] > summary::before { content: "▾"; }
+.prompt-advanced > summary > span { flex: 1; }
+.prompt-advanced > summary > small { white-space: nowrap; font-size: 10px; }
+.prompt-advanced > summary:hover { color: inherit; }
+.prompt-advanced > :not(summary) { margin-left: 12px; margin-right: 12px; }
+.prompt-advanced > :last-child { margin-bottom: 12px; }

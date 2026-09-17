@@ -308,6 +308,113 @@ export function assemblePrompt(input: PromptConfig): PromptResult {
   return { blocked: false, errors: [], warnings, prompt: buildPrompt(config, lockedSet(config)), negative_prompt: buildNegative(config), cfg_scale: cfgScale(config) };
 }
 
+// ---------------------------------------------------------------------------
+// 效果预设
+//
+// 运营真正想表达的意图只有十来种（“让热气飘起来”“淋个酱”“就慢慢推近”），却要用 40 多个
+// 槽位选项去拼。预设把每种意图映射成一组已验证不会触发 V1–V12 的槽位配置；
+// 完整槽位面板保留为“高级设置”。预设只改镜头 / 主运动 / 次级动态 / 循环，
+// 模式、菜品属性、主体类型沿用当前配置，所以对首尾帧模式和人物入镜同样适用。
+// ---------------------------------------------------------------------------
+export type PromptPresetId = "glow" | "steam" | "chill" | "flame" | "push_in" | "orbit" | "loop" | "pour" | "sprinkle" | "plating";
+
+export type PromptPreset = {
+  id: PromptPresetId;
+  label: string;
+  description: string;
+  /** 需要原图里有手或厨师（visual_subject_type 不是“菜品主体”）。 */
+  needsPerson?: boolean;
+  /** 只对某种菜品温度有意义；food_type 未知或“混合/多温”时两种都显示。 */
+  foodType?: "热食" | "冷食";
+};
+
+export const PROMPT_PRESETS: ReadonlyArray<PromptPreset> = [
+  { id: "glow", label: "光泽流转", description: "镜头小角度环绕，菜品表面的高光慢慢滑过。最稳妥的默认效果。" },
+  { id: "steam", label: "热气升腾", description: "镜头缓慢推近，热气从菜品上轻轻升起。", foodType: "热食" },
+  { id: "chill", label: "冰爽冷凝", description: "镜头缓慢推近，冷雾贴着菜品表面缓缓流动。", foodType: "冷食" },
+  { id: "flame", label: "炙烤火焰", description: "镜头缓慢推近，菜品边缘的小簇火焰轻微摇曳。", foodType: "热食" },
+  { id: "push_in", label: "只推近镜头", description: "画面里的东西都不动，只有镜头缓慢推近。" },
+  { id: "orbit", label: "只环绕镜头", description: "画面里的东西都不动，只有镜头小角度环绕。" },
+  { id: "loop", label: "循环播放", description: "固定机位，首尾画面接得上，适合做循环背景。" },
+  { id: "pour", label: "淋酱", description: "手把酱汁淋到菜品上，固定机位不飞溅。", needsPerson: true },
+  { id: "sprinkle", label: "撒料", description: "手在菜品上方撒下调味，固定机位。", needsPerson: true },
+  { id: "plating", label: "摆盘收尾", description: "手往盘里摆放装饰，镜头小角度环绕。", needsPerson: true },
+];
+
+function personSubjectFor(visual: PromptVisualSubjectType | undefined): "hand" | "chef" | null {
+  if (visual === "厨师上半身") return "chef";
+  if (visual === "手部" || visual === "手部+厨师上半身") return "hand";
+  return null;
+}
+
+/** 当前配置（菜品温度、是否有人物入镜）下可用的预设。 */
+export function availablePromptPresets(config: PromptConfig): PromptPreset[] {
+  const person = personSubjectFor(config.visual_subject_type);
+  const foodType = config.food_type;
+  return PROMPT_PRESETS.filter(preset => {
+    if (preset.needsPerson && !person) return false;
+    if (preset.foodType && foodType && foodType !== "混合/多温" && foodType !== preset.foodType) return false;
+    return true;
+  });
+}
+
+/** 把预设套用到当前配置上，返回新配置；模式、菜品属性、主体类型保持不变。 */
+export function applyPromptPreset(config: PromptConfig, id: PromptPresetId): PromptConfig {
+  const current = normalizeConfig(config);
+  const dish: ElementId = current.food_type === "冷食" ? "dish_cold" : "dish_hot";
+  const person = personSubjectFor(current.visual_subject_type);
+  const elements: ElementId[] = [dish, "garnish", "tableware", "surface", "backdrop"];
+  if (current.visual_subject_type === "手部" || current.visual_subject_type === "手部+厨师上半身") elements.push("hand");
+  if (current.visual_subject_type === "厨师上半身" || current.visual_subject_type === "手部+厨师上半身") elements.push("chef");
+  // 有人物入镜时主运动对象必须是人物（与 workflowStore 的同步规则一致），“不做动作”就是存在感级；
+  // 没有人物时主运动对象是菜品本身或纯运镜。
+  const idle = (subject: L1Subject): Pick<PromptConfig, "l1_subject" | "l1_action_level" | "l1_action_verb"> =>
+    person ? { l1_subject: person, l1_action_level: 1, l1_action_verb: null } : { l1_subject: subject, l1_action_level: null, l1_action_verb: null };
+  const act = (verb: ActionVerb): Pick<PromptConfig, "l1_subject" | "l1_action_level" | "l1_action_verb"> => {
+    const actor = person ?? "hand";
+    if (!elements.includes(actor)) elements.push(actor);
+    return { l1_subject: actor, l1_action_level: 2, l1_action_verb: verb };
+  };
+  const base: PromptConfig = { ...current, elements, seamless_loop: false, speed_curve: current.mode === "keyframes" ? (current.speed_curve ?? "uniform") : null };
+  switch (id) {
+    case "glow": return { ...base, camera_move: "orbit_right", camera_amplitude: "subtle", shot_size: "close_up", ...idle(dish), l2_dynamics: [{ type: "specular", target: "菜品" }] };
+    case "steam": return { ...base, camera_move: "dolly_in", camera_amplitude: "subtle", shot_size: "close_up", ...idle(dish), l2_dynamics: [{ type: "steam", target: "菜品" }] };
+    // 冰雾、火焰不在“主运动对象 = 菜品”的次级动态豁免名单里（V3），所以主运动改为纯运镜。
+    case "chill": return { ...base, camera_move: "dolly_in", camera_amplitude: "subtle", shot_size: "close_up", ...idle("none"), l2_dynamics: [{ type: "ice_mist", target: "菜品" }] };
+    case "flame": return { ...base, camera_move: "dolly_in", camera_amplitude: "subtle", shot_size: "close_up", ...idle("none"), l2_dynamics: [{ type: "flame", target: "菜品" }] };
+    // 纯运镜也保留一项高光滑移：镜头动时高光本来就会动，且避免 W5“几乎没有任何动作”。
+    case "push_in": return { ...base, camera_move: "dolly_in", camera_amplitude: "light", shot_size: "medium_close", ...idle("none"), l2_dynamics: [{ type: "specular", target: "菜品" }] };
+    case "orbit": return { ...base, camera_move: "orbit_right", camera_amplitude: "light", shot_size: "close_up", ...idle("none"), l2_dynamics: [{ type: "specular", target: "菜品" }] };
+    case "loop": return { ...base, camera_move: "locked_off", camera_amplitude: "subtle", shot_size: "close_up", ...idle(dish), seamless_loop: true, l2_dynamics: [{ type: dish === "dish_hot" ? "steam" : "specular", target: "菜品" }] };
+    case "pour": return { ...base, camera_move: "locked_off", camera_amplitude: "subtle", shot_size: "medium_close", ...act("pour_sauce"), l2_dynamics: [] };
+    case "sprinkle": return { ...base, camera_move: "locked_off", camera_amplitude: "subtle", shot_size: "medium_close", ...act("sprinkle_seasoning"), l2_dynamics: [] };
+    case "plating": return { ...base, camera_move: "orbit_right", camera_amplitude: "subtle", shot_size: "medium_close", ...act("place_garnish"), l2_dynamics: [] };
+  }
+}
+
+function sameSlots(a: PromptConfig, b: PromptConfig): boolean {
+  const sortedElements = (config: PromptConfig) => [...config.elements].sort().join(",");
+  const l2 = (config: PromptConfig) => config.l2_dynamics.map(item => `${item.type}:${item.target.trim()}`).join("|");
+  return a.camera_move === b.camera_move
+    && a.camera_amplitude === b.camera_amplitude
+    && a.shot_size === b.shot_size
+    && a.l1_subject === b.l1_subject
+    && (a.l1_action_level ?? null) === (b.l1_action_level ?? null)
+    && (a.l1_action_verb ?? null) === (b.l1_action_verb ?? null)
+    && a.seamless_loop === b.seamless_loop
+    && sortedElements(a) === sortedElements(b)
+    && l2(a) === l2(b);
+}
+
+/** 当前配置正好等于哪个预设；手动改过任何槽位就返回 null（界面显示为“自定义”）。 */
+export function matchPromptPreset(config: PromptConfig): PromptPresetId | null {
+  const current = normalizeConfig(config);
+  for (const preset of availablePromptPresets(current)) {
+    if (sameSlots(applyPromptPreset(current, preset.id), current)) return preset.id;
+  }
+  return null;
+}
+
 type LegacyPromptData = {
   promptConfig?: PromptConfig;
   promptMode?: string;

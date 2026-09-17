@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, normalizeDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
 import { fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
-import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
+import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { ImageProcessControlFields } from "./ImageProcessControls";
 import { Field, formatNodeValue, SectionTitle, Select, Tag } from "./ui";
@@ -113,8 +113,17 @@ function PromptFields({ node, onToast }: { node: WorkflowNode; onToast: (message
     });
   };
   const formatIssue = (item: { code: string; message: string }) => `${item.code}：${item.message}`;
+  // 预设是默认视图；完整槽位面板折叠进“高级设置”，只有手动改过槽位（没有预设能对上）时才默认展开。
+  const presets = availablePromptPresets(config);
+  const activePreset = matchPromptPreset(config);
+  const activePresetLabel = presets.find(preset => preset.id === activePreset)?.label;
+  const [advancedOpen, setAdvancedOpen] = useState(activePreset === null);
   return <div className="prompt-fields-compact">
-    <SectionTitle>提示词槽位</SectionTitle>
+    <SectionTitle>想要什么效果</SectionTitle>
+    <p className="prompt-preset-hint">点一个效果就够了，镜头、动作和校验会一起配好。{activePreset ? "想微调再展开下面的高级设置。" : "当前是手动调整过的自定义配置；点任一效果会覆盖这些调整。"}</p>
+    <div className="prompt-preset-grid">{presets.map(preset => <button type="button" key={preset.id} className={`prompt-preset ${activePreset === preset.id ? "active" : ""}`} aria-pressed={activePreset === preset.id} onClick={() => { commit(applyPromptPreset(config, preset.id)); onToast(`已套用「${preset.label}」`); }}><strong>{preset.label}</strong><small>{preset.description}</small></button>)}</div>
+    <details className="prompt-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
+    <summary><span>高级设置 · 逐项调整镜头、画面元素和动作</span><small>{activePresetLabel ? `当前：${activePresetLabel}` : "当前：自定义"}</small></summary>
     <div className="prompt-control-grid">
     <Field label="模式"><Select value={config.mode === "keyframes" ? "首尾帧模式" : "单图模式"} options={["单图模式", "首尾帧模式"]} onChange={value => commit({ mode: value === "首尾帧模式" ? "keyframes" : "single_image" })} /></Field>
     <Field label="镜头运动"><Select value={CAMERA_OPTIONS.find(item => item.value === config.camera_move)?.label ?? CAMERA_OPTIONS[0].label} options={CAMERA_OPTIONS.map(item => item.label)} onChange={value => commit({ camera_move: CAMERA_OPTIONS.find(item => item.label === value)!.value })} /></Field>
@@ -127,6 +136,7 @@ function PromptFields({ node, onToast }: { node: WorkflowNode; onToast: (message
     <div className="prompt-l2-grid">{[0, 1].map(index => { const item = config.l2_dynamics[index]; const typeLabel = item ? L2_OPTIONS.find(option => option.value === item.type)?.label ?? "" : "无"; const target = item?.target ?? targetOptions[0] ?? "主体"; return <div className="field" key={index}><span>{`L2 · 动态 ${index + 1}`}</span><div className="field-grid"><Select value={typeLabel} options={["无", ...L2_OPTIONS.map(option => option.label)]} onChange={value => selectL2(index, value === "无" ? null : L2_OPTIONS.find(option => option.label === value)!.value)} />{item && <Select value={targetOptions.includes(target) ? target : "其他"} options={targetOptions} onChange={value => updateL2Target(index, value === "其他" ? "" : value)} />}</div>{item && (!targetOptions.includes(target) || target === "") && <input className="input prompt-target-input" value={target} placeholder="填写1-8字名词" onChange={event => updateL2Target(index, event.target.value)} />}</div>; })}</div>
     {config.mode === "keyframes" && <><Field label="尾帧图片"><div className="upload-row"><input className="input" type="file" accept="image/*" onChange={event => { const file = event.target.files?.[0]; if (file) uploadEndImage(file); }} /><span>{data.promptEndImageName || "未上传"}</span></div></Field><Field label="速度曲线"><Select value={SPEED_CURVE_OPTIONS.find(item => item.value === config.speed_curve)?.label ?? SPEED_CURVE_OPTIONS[0].label} options={SPEED_CURVE_OPTIONS.map(item => item.label)} onChange={value => commit({ speed_curve: SPEED_CURVE_OPTIONS.find(item => item.label === value)!.value as SpeedCurve })} /></Field></>}
     <label className={`check ${config.seamless_loop ? "checked" : ""}`}><input type="checkbox" checked={config.seamless_loop} onChange={event => commit({ seamless_loop: event.target.checked })} />启用无缝循环</label>
+    </details>
     <div className={`prompt-validation ${result.blocked ? "prompt-validation-error" : "prompt-validation-ready"}`}><strong>{result.blocked ? "当前配置阻断生成" : "当前配置可生成"}</strong>{result.errors.map(item => <span key={`${item.code}-${item.field}`}>{formatIssue(item)}</span>)}{result.warnings.map(item => <span key={`${item.code}-${item.field}`}>提示 {formatIssue(item)}</span>)}{result.warnings.some(item => item.code === "W2") && <button type="button" className="btn" onClick={() => commit({ mode: "keyframes" })}>切换到首尾帧模式</button>}</div>
     <div className="prompt-preview-grid"><Field label="正向提示词"><AutoGrowingTextarea value={result.prompt} placeholder="修正阻断项后生成" /></Field><Field label="负向提示词"><AutoGrowingTextarea value={result.negative_prompt} placeholder="修正阻断项后生成" /></Field></div>
     <div className="preview-box">L0 {config.elements.length} 项 · L2 {config.l2_dynamics.length}/2 项 · cfg_scale {result.cfg_scale}</div>

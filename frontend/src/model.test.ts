@@ -1,5 +1,5 @@
 import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
-import { assemblePrompt, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
+import { applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, DEFAULT_PROMPT_CONFIG, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
 import { canAssemblePromptNode, promptAssemblyBlockReason, promptUpstreamNodes } from "./promptAssemblyReadiness.ts";
@@ -297,4 +297,36 @@ assert(invalidPrompt.prompt === "" && invalidPrompt.cfg_scale === 0, "blocked pr
 
 const missingEndImage = assemblePrompt({ ...validPrompt, endImageReady: false });
 assert(missingEndImage.errors.some(item => item.code === "V7"), "missing tail frame was not detected");
+// 效果预设：在所有“菜品温度 × 主体类型 × 模式”组合下，每个可用预设都必须一次通过校验且没有警告，
+// 并且套用后能被 matchPromptPreset 认回来（否则界面上没有高亮，用户不知道自己选了什么）。
+const presetFoodTypes: Array<PromptConfig["food_type"]> = [undefined, "热食", "冷食", "混合/多温"];
+const presetSubjects: Array<PromptConfig["visual_subject_type"]> = ["菜品主体", "手部", "厨师上半身", "手部+厨师上半身"];
+const presetModes: Array<Pick<PromptConfig, "mode" | "endImageReady" | "speed_curve">> = [
+  { mode: "single_image", endImageReady: false, speed_curve: null },
+  { mode: "keyframes", endImageReady: true, speed_curve: "ease_out" },
+];
+let presetCases = 0;
+for (const food_type of presetFoodTypes) for (const visual_subject_type of presetSubjects) for (const modeFields of presetModes) {
+  const context: PromptConfig = { ...DEFAULT_PROMPT_CONFIG, ...modeFields, food_type, visual_subject_type, elements: [], l2_dynamics: [] };
+  const available = availablePromptPresets(context);
+  assert(available.length >= 5, `too few presets for ${food_type}/${visual_subject_type}`);
+  assert(available.some(preset => preset.needsPerson) === (visual_subject_type !== "菜品主体"), "person presets should follow the visual subject type");
+  for (const preset of available) {
+    const applied = applyPromptPreset(context, preset.id);
+    const result = assemblePrompt(applied);
+    const label = `${preset.id} @ ${food_type}/${visual_subject_type}/${modeFields.mode}`;
+    assert(!result.blocked, `preset ${label} is blocked: ${result.errors.map(item => item.code).join(",")}`);
+    assert(result.warnings.length === 0, `preset ${label} has warnings: ${result.warnings.map(item => item.code).join(",")}`);
+    assert(applied.mode === context.mode && applied.food_type === food_type && applied.visual_subject_type === visual_subject_type, `preset ${label} changed mode or dish context`);
+    assert(matchPromptPreset(applied) === preset.id, `preset ${label} does not round-trip through matchPromptPreset`);
+    presetCases += 1;
+  }
+}
+assert(presetCases > 100, "preset matrix was not exercised");
+assert(availablePromptPresets({ ...DEFAULT_PROMPT_CONFIG, food_type: "冷食" }).every(preset => preset.id !== "steam" && preset.id !== "flame"), "hot-only presets leaked into cold dishes");
+assert(availablePromptPresets({ ...DEFAULT_PROMPT_CONFIG, food_type: "热食" }).every(preset => preset.id !== "chill"), "cold-only preset leaked into hot dishes");
+assert(matchPromptPreset(DEFAULT_PROMPT_CONFIG) === "glow", "the factory default config should read as the “光泽流转” preset");
+assert(matchPromptPreset({ ...DEFAULT_PROMPT_CONFIG, camera_amplitude: "medium" }) === null, "a hand-tuned config should read as custom");
+assert(new Set(PROMPT_PRESETS.map(preset => preset.label)).size === PROMPT_PRESETS.length, "preset labels must be unique");
+
 console.log("model tests passed");
