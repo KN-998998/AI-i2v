@@ -188,38 +188,38 @@ function validateTarget(target: string): boolean {
 function blockingRules(config: PromptConfig): PromptIssue[] {
   const errors: PromptIssue[] = [];
   const l1 = element(config.l1_subject);
-  if (config.l1_subject !== "none" && !config.elements.includes(config.l1_subject)) errors.push(issue("V1", "主运动对象必须先在画面元素中勾选", "l1_subject"));
-  if (config.l2_dynamics.length > 2) errors.push(issue("V2", "3 秒最多承载 2 个次级动态，超出会导致每项都退化为轻微抖动", "l2_dynamics"));
+  if (config.l1_subject !== "none" && !config.elements.includes(config.l1_subject)) errors.push(issue("V1", "要让它动的东西，得先在「画面元素」里勾上", "l1_subject"));
+  if (config.l2_dynamics.length > 2) errors.push(issue("V2", "3 秒视频最多放 2 个次级动态，再多每个都只会轻微晃一下", "l2_dynamics"));
   for (const item of config.l2_dynamics) {
     if (l1?.lockLabel === item.target) {
       const dishSurfaceException = (config.l1_subject === "dish_cold" || config.l1_subject === "dish_hot") && (item.type === "steam" || item.type === "specular");
       if (!dishSurfaceException) {
-        errors.push(issue("V3", "次级动态不能指向主运动对象，二者会互相抵消", "l2_dynamics"));
+        errors.push(issue("V3", "次级动态不能加在主运动对象上，两个动作会互相打架", "l2_dynamics"));
         break;
       }
     }
   }
   const types = config.l2_dynamics.map(item => item.type);
-  if (types.includes("flame") && types.includes("ice_mist")) errors.push(issue("V4", "火焰与冰雾互斥，不能同时生成", "l2_dynamics"));
-  if (config.seamless_loop && (types.includes("liquid_pour") || (config.l1_action_level ?? 0) >= 2)) errors.push(issue("V5", "无缝循环要求首尾状态一致，与不可逆动作冲突", "seamless_loop"));
-  if (config.l1_action_level !== null && !["hand", "chef"].includes(config.l1_subject)) errors.push(issue("V6", "动作幅度仅适用于手部或厨师主体", "l1_action_level"));
-  if (config.mode === "keyframes" && !config.endImageReady) errors.push(issue("V7", "首尾帧模式需要上传尾帧图片", "end_image"));
-  if (config.mode === "single_image" && config.speed_curve !== null) errors.push(issue("V8", "速度曲线仅适用于首尾帧模式", "speed_curve"));
-  if (config.l2_dynamics.some(item => !validateTarget(item.target))) errors.push(issue("V9", "作用对象只能填写简短名词（1-8字，无标点，无条件/否定词）", "l2_dynamics"));
-  if ([2, 3].includes(config.l1_action_level ?? 0) && !config.l1_action_verb) errors.push(issue("V10", "请选择具体动作", "l1_action_verb"));
-  if (config.elements.length === 0) errors.push(issue("V11", "请至少勾选一项画面元素", "elements"));
-  if (config.seamless_loop && !["truck_left", "truck_right", "locked_off"].includes(config.camera_move)) errors.push(issue("V12", "无缝循环仅支持极小幅横移或固定机位（推进／后拉无法闭环）", "camera_move"));
+  if (types.includes("flame") && types.includes("ice_mist")) errors.push(issue("V4", "火焰和冰雾不能同时出现，请二选一", "l2_dynamics"));
+  if (config.seamless_loop && (types.includes("liquid_pour") || (config.l1_action_level ?? 0) >= 2)) errors.push(issue("V5", "选了倒酱汁这类“做完就变”的动作，视频没法首尾相接循环播放", "seamless_loop"));
+  if (config.l1_action_level !== null && !["hand", "chef"].includes(config.l1_subject)) errors.push(issue("V6", "只有画面里有手或厨师时，才能设置动作幅度", "l1_action_level"));
+  if (config.mode === "keyframes" && !config.endImageReady) errors.push(issue("V7", "首尾帧模式要上传一张结束画面的图片", "end_image"));
+  if (config.mode === "single_image" && config.speed_curve !== null) errors.push(issue("V8", "速度曲线只在首尾帧模式下有效", "speed_curve"));
+  if (config.l2_dynamics.some(item => !validateTarget(item.target))) errors.push(issue("V9", "作用对象写一个简短的名词就行，1–8 个字，比如「汤面」「酱汁」", "l2_dynamics"));
+  if ([2, 3].includes(config.l1_action_level ?? 0) && !config.l1_action_verb) errors.push(issue("V10", "请选一个具体动作", "l1_action_verb"));
+  if (config.elements.length === 0) errors.push(issue("V11", "至少勾选一项画面元素", "elements"));
+  if (config.seamless_loop && !["truck_left", "truck_right", "locked_off"].includes(config.camera_move)) errors.push(issue("V12", "循环播放只能配固定机位或极小幅横移，镜头推进或后拉没法接回开头", "camera_move"));
   return errors;
 }
 
 function warningRules(config: PromptConfig): PromptIssue[] {
   const warnings: PromptIssue[] = [];
   const types = config.l2_dynamics.map(item => item.type);
-  if (types.includes("liquid_pour") && config.camera_move === "dolly_in") warnings.push(issue("W1", "推进会拉长流体运动路径，飞溅风险较高，建议改用固定机位", "camera_move"));
-  if (config.mode === "single_image" && config.l1_action_level === 3) warnings.push(issue("W2", "单图模式下模型需自行编造动作终点，3 秒内成片率较低。建议改用首尾帧模式，由尾帧给定终点", "mode"));
-  if (config.elements.length < 2) warnings.push(issue("W3", "画面元素勾选过少，锁定层约束偏弱，非主体元素可能出现意外变化", "elements"));
-  if (config.camera_move === "locked_off" && config.camera_amplitude !== "subtle") warnings.push(issue("W4", "固定机位下运动幅度设置无效，将被忽略", "camera_amplitude"));
-  if (config.mode === "single_image" && config.l1_subject === "none" && config.l2_dynamics.length === 0) warnings.push(issue("W5", "当前配置下画面几乎完全静止，生成结果可能接近静态图", "l1_subject"));
+  if (types.includes("liquid_pour") && config.camera_move === "dolly_in") warnings.push(issue("W1", "镜头推进时倒液体容易飞溅出画面，建议用固定机位", "camera_move"));
+  if (config.mode === "single_image" && config.l1_action_level === 3) warnings.push(issue("W2", "单图模式下 AI 要自己猜动作做到哪结束，成功率偏低；换首尾帧模式、上传结束画面会稳很多", "mode"));
+  if (config.elements.length < 2) warnings.push(issue("W3", "勾选的画面元素太少，没勾到的东西（餐具、桌面等）可能会自己变形", "elements"));
+  if (config.camera_move === "locked_off" && config.camera_amplitude !== "subtle") warnings.push(issue("W4", "固定机位时镜头不动，运动幅度的设置不起作用", "camera_amplitude"));
+  if (config.mode === "single_image" && config.l1_subject === "none" && config.l2_dynamics.length === 0) warnings.push(issue("W5", "现在的设置几乎没有任何动作，生成出来可能就是一张不动的图", "l1_subject"));
   return warnings;
 }
 
