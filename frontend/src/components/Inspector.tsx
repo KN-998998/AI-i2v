@@ -35,10 +35,14 @@ function AutoGrowingTextarea({ value, placeholder }: { value: string; placeholde
 function BasicFields({ node }: { node: WorkflowNode }) {
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
   const update = (patch: Partial<WorkflowData>) => updateNodeData(node.id, patch);
-  return <div className="basic-fields">
+  // 「节点类型」和「节点说明」是工程字段：改类型会把流程改坏，说明只是开发者备注。
+  // 只有“自定义处理”这种空白节点才需要它们；流程内置的节点只保留可改的名称。
+  const showEngineeringFields = node.data.kind === "custom";
+  // 隐藏右侧说明栏后，网格只保留一栏，避免名称输入框被挤在左侧四分之一宽。
+  return <div className="basic-fields" style={showEngineeringFields ? undefined : { gridTemplateColumns: "minmax(0, 1fr)" }}>
     <SectionTitle>基本信息</SectionTitle>
-    <div className="basic-fields-left"><Field label="节点类型"><select className="input" value={node.data.kind} onChange={event => { const kind = event.target.value as NodeKind; update({ kind, title: node.data.title === nodeCatalog[node.data.kind].title ? nodeCatalog[kind].title : node.data.title, description: nodeCatalog[kind].description, status: nodeCatalog[kind].status }); }}><option value="input">素材输入</option><option value="image_process">图片处理</option><option value="prompt">槽位化提示词</option><option value="generator">3 秒视频片段</option><option value="output">成片合成</option><option value="sound">声音与文字</option><option value="custom">自定义处理</option></select></Field><Field label="节点名称"><input className="input" value={node.data.title} onChange={event => update({ title: event.target.value })} /></Field></div>
-    <div className="basic-fields-description"><Field label="节点说明"><textarea className="input textarea" value={node.data.description} onChange={event => update({ description: event.target.value })} /></Field></div>
+    <div className="basic-fields-left">{showEngineeringFields && <Field label="节点类型"><select className="input" value={node.data.kind} onChange={event => { const kind = event.target.value as NodeKind; update({ kind, title: node.data.title === nodeCatalog[node.data.kind].title ? nodeCatalog[kind].title : node.data.title, description: nodeCatalog[kind].description, status: nodeCatalog[kind].status }); }}><option value="input">素材输入</option><option value="image_process">图片处理</option><option value="prompt">槽位化提示词</option><option value="generator">3 秒视频片段</option><option value="output">成片合成</option><option value="sound">声音与文字</option><option value="custom">自定义处理</option></select></Field>}<Field label="节点名称"><input className="input" value={node.data.title} onChange={event => update({ title: event.target.value })} /></Field></div>
+    {showEngineeringFields && <div className="basic-fields-description"><Field label="节点说明"><textarea className="input textarea" value={node.data.description} onChange={event => update({ description: event.target.value })} /></Field></div>}
   </div>;
 }
 
