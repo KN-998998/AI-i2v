@@ -1,4 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
+import { workflowStep, type WorkflowRoute } from "../router";
 
 export function formatNodeValue(value: unknown, fallback = "待配置") {
   return typeof value === "string" && value.trim() ? value : fallback;
@@ -18,6 +19,13 @@ export function Footer({ children }: { children: ReactNode }) {
 
 export function ActionButton({ children, onClick, primary = false, disabled = false, title }: { children: ReactNode; onClick: () => void; primary?: boolean; disabled?: boolean; title?: string }) {
   return <button className={`btn nodrag nopan ${primary ? "btn-primary" : ""}`} type="button" disabled={disabled} title={title} onClick={(event: MouseEvent<HTMLButtonElement>) => { event.stopPropagation(); onClick(); }}>{children}</button>;
+}
+
+/** 步骤页统一标题：「第 N 步 · 名称」+ 一句“这一步做什么、做完得到什么”。 */
+export function StepHeading({ route }: { route: WorkflowRoute }) {
+  const step = workflowStep(route);
+  if (!step) return null;
+  return <div><h1>第 {step.step} 步 · {step.label}</h1><p className="step-goal"><strong>这一步做什么：</strong>{step.goal}</p></div>;
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {

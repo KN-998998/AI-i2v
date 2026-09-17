@@ -5,6 +5,7 @@ import { promptConfigFromData } from "../promptAssembler";
 import { canAssemblePromptNode, promptAssemblyBlockReason } from "../promptAssemblyReadiness";
 import { useWorkflowStore } from "../workflowStore";
 import { InlineSoundEditor, Inspector } from "./Inspector";
+import { StepHeading } from "./ui";
 import { navigate, type WorkflowRoute } from "../router";
 import { requestTutorial } from "../tutorial";
 import { deriveWorkflowProgress, isWorkflowRouteUnlocked } from "../workflowProgress";
@@ -22,7 +23,6 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
   const nodeId = resolveStepNodeId(kind, nodes, selectedNodeId);
   const panel = route === "/workflow/sound" ? "voice" : route === "/workflow/prompts" ? "prompt" : undefined;
   const title = route === "/workflow/assets" ? "素材与菜品" : route === "/workflow/prompts" ? "提示词装配" : route === "/workflow/sound" ? "声音与文字" : "成片结果";
-  const description = route === "/workflow/assets" ? "管理菜品、首帧和尾帧素材。" : route === "/workflow/prompts" ? "给每道菜选一个想要的动态效果；需要时再展开高级设置微调。" : route === "/workflow/sound" ? "在无声成片完成后配置 BGM、人声和画面文字。" : "查看当前草稿的合成任务与最终视频。";
   const setSelection = useWorkflowStore(state => state.setSelection);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   useEffect(() => {
@@ -30,10 +30,10 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
     if (panel) setActivePanel(panel);
   }, [nodeId, panel, setActivePanel, setSelection]);
 
-  if (route === "/workflow/prompts") return <><StepFrame route={route} title={title} description={description} onToast={onToast}>
+  if (route === "/workflow/prompts") return <><StepFrame route={route} title={title} onToast={onToast}>
     <div className="prompt-step-layout"><PromptNodeWorkspace onToast={onToast} /><div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div>
   </StepFrame><Inspector onToast={onToast} /></>;
-  if (route === "/workflow/sound") return <StepFrame route={route} title={title} description={description} onToast={onToast}>
+  if (route === "/workflow/sound") return <StepFrame route={route} title={title} onToast={onToast}>
     <div className="step-page-main step-page-main-sound">
       <div className="sound-step-layout">
         <div className="sound-step-display"><SoundTextPreview /><SoundComposePanel onToast={onToast} /></div>
@@ -42,7 +42,7 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
       <div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div>
     </div>
   </StepFrame>;
-  return <StepFrame route={route} title={title} description={description} onToast={onToast}>
+  return <StepFrame route={route} title={title} onToast={onToast}>
     <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div></div>
     <Inspector onToast={onToast} />
   </StepFrame>;
@@ -395,7 +395,7 @@ export function GeneratorPage({ onToast }: StepPageProps) {
   };
 
   const syncTime = clipsLastLoadedAt ? new Date(clipsLastLoadedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "尚未扫描";
-  return <StepFrame route="/workflow/generator" title="生成视频片段" description="先管理生成节点，再查看每个节点对应的片段结果。只有已经关联真实 MP4 的片段，才能进入成片合成。" onToast={onToast}>
+  return <StepFrame route="/workflow/generator" title="生成视频片段" onToast={onToast}>
     <div className="step-guide"><span>操作提示</span><p>先在上方节点卡片编辑参数并点击“生成片段”。每次重新生成会保留新的 V1、V2 版本，选择“当前版本”后才会进入第 5 步候选池。</p></div><div className="step-page-grid"><div className="step-page-main"><section className="generator-status-strip"><div><span className="panel-label">CURRENT STATUS</span><strong>{generatorCount} 个生成节点</strong></div><div><span className="panel-label">READY CLIPS</span><strong className="source-ready">{readyClipCount} 个当前版本</strong></div><div><span className="panel-label">PENDING TASKS</span><strong className={pendingClipCount ? "source-pending" : "source-ready"}>{pendingClipCount} 个待关联</strong></div></section><NodeManager kind="generator" onToast={onToast} /><div className="step-panel"><div className="panel-section-head"><div><span className="panel-label">CLIP RESULTS</span><h2>按素材查看生成版本 · {currentGeneratedClips.length} 个当前版本</h2><p className="muted">V1、V2 仅表示同一素材的第几次生成。再次生成会保留旧版本，只有“当前使用”版本会进入成片合成候选池。</p></div><div className="panel-actions"><span className="muted">3s · 1080p · 9:16 · 无声</span><button type="button" className="btn" disabled={busy} onClick={refresh}>{busy ? "刷新中..." : "扫描本地 MP4"}</button></div></div><div className="generator-version-list">{nodes.filter(node => node.data.kind === "generator").map(node => <GeneratorVersionGroup key={node.id} node={node} clips={timeline.filter(clip => clip.generatorNodeId === node.id)} selectedClipId={node.data.selectedClipId} onSelect={clipId => selectGeneratorClip(node.id, clipId)} />)}</div>{timeline.filter(clip => !clip.generatorNodeId).length > 0 && <section className="unlinked-clip-library"><div className="generator-version-group-head"><div><span className="panel-label">LOCAL LIBRARY</span><h3>未绑定到生成节点的本地片段</h3><p className="muted">这些是历史导入文件，无法判断对应的原始图片或生成批次，不属于 V1、V2 版本，也不会计入可合成片段。</p></div><span className="source-status ready">可浏览</span></div><div className="clip-input-grid">{timeline.filter(clip => !clip.generatorNodeId).map((clip, index) => <GeneratorVersionCard key={clip.id} clip={clip} index={index + 1} selected={false} onSelect={() => {}} versioned={false} />)}</div></section>}<div className="step-callout"><strong>{readyClipCount ? "可以进入成片合成" : "下一步条件：先生成当前版本"}</strong><span>{readyClipCount ? "当前版本会进入候选池；旧版本和未绑定的本地片段只保留在本页，方便检查与回退。" : "请先在上方对应节点点击“生成片段”，待真实 MP4 下载完成后，按钮会自动可用。"}</span></div><button type="button" className="btn btn-primary" disabled={!readyClipCount} onClick={() => navigate("/workflow/compose")}>进入成片合成</button><div className="clip-library-status"><span className="muted">本地片段库发现 {availableClips.length} 个 MP4 · 自动扫描每 30 秒 · 最近扫描 {syncTime}</span>{clipsLoadError && <span className="clip-sync-error">扫描失败：{clipsLoadError}</span>}</div></div></div><Inspector onToast={onToast} /></div>
   </StepFrame>;
 }
@@ -419,15 +419,15 @@ export function OutputPage({ onToast }: StepPageProps) {
     ),
   }));
   const setActiveWorkspace = useWorkflowStore(state => state.setActiveComposeWorkspace);
-  return <StepFrame route="/workflow/output" title="成片结果" description="查看每个成片方案的无声与有声结果，并继续完成声音与文字配置。" onToast={onToast}><div className="step-page-grid"><div className="step-page-main"><NodeManager kind="output" onToast={onToast} /><div className="output-workspace-list">{workspaces.map(workspace => <section className="step-panel output-workspace" key={workspace.id}><div className="panel-section-head"><div><span className="panel-label panel-note">成片方案</span><h2>{workspace.title}</h2><p className="muted">{workspace.clips.length} 个片段 · 无声：{workspace.job?.status === "done" ? "已生成" : workspace.job?.status === "error" ? "失败" : "未生成"} · 有声：{workspace.finalJob?.status === "done" ? "已生成" : workspace.finalJob?.status === "error" ? "失败" : "未生成"}</p></div><button type="button" className="btn" onClick={() => { setActiveWorkspace(workspace.id); navigate("/workflow/sound"); }}>配置声音文字</button></div>{workspace.job?.output_url && <div className="result-version"><span>无声成片</span><video controls preload="metadata" src={workspace.job.output_url} /></div>}{workspace.finalJob?.output_url && <div className="result-version"><span>最终有声成片</span><video controls preload="metadata" src={workspace.finalJob.output_url} /></div>}{!workspace.job?.output_url && !workspace.finalJob?.output_url && <p className="muted">尚未生成该方案的视频结果。</p>}</section>)}</div></div><Inspector onToast={onToast} /></div></StepFrame>;
+  return <StepFrame route="/workflow/output" title="成片结果" onToast={onToast}><div className="step-page-grid"><div className="step-page-main"><NodeManager kind="output" onToast={onToast} /><div className="output-workspace-list">{workspaces.map(workspace => <section className="step-panel output-workspace" key={workspace.id}><div className="panel-section-head"><div><span className="panel-label panel-note">成片方案</span><h2>{workspace.title}</h2><p className="muted">{workspace.clips.length} 个片段 · 无声：{workspace.job?.status === "done" ? "已生成" : workspace.job?.status === "error" ? "失败" : "未生成"} · 有声：{workspace.finalJob?.status === "done" ? "已生成" : workspace.finalJob?.status === "error" ? "失败" : "未生成"}</p></div><button type="button" className="btn" onClick={() => { setActiveWorkspace(workspace.id); navigate("/workflow/sound"); }}>配置声音文字</button></div>{workspace.job?.output_url && <div className="result-version"><span>无声成片</span><video controls preload="metadata" src={workspace.job.output_url} /></div>}{workspace.finalJob?.output_url && <div className="result-version"><span>最终有声成片</span><video controls preload="metadata" src={workspace.finalJob.output_url} /></div>}{!workspace.job?.output_url && !workspace.finalJob?.output_url && <p className="muted">尚未生成该方案的视频结果。</p>}</section>)}</div></div><Inspector onToast={onToast} /></div></StepFrame>;
 }
 
-function StepFrame({ route, title, description, children }: StepPageProps & { route: WorkflowRoute; title: string; description: string; children: ReactNode }) {
+function StepFrame({ route, title, children }: StepPageProps & { route: WorkflowRoute; title: string; children: ReactNode }) {
   const guides: Partial<Record<WorkflowRoute, string>> = {
     "/workflow/assets": "先完成菜品素材、分类、冷热属性和主体类型确认，再进入下一步；批量建稿的“应用到画布”会创建对应节点。",
     "/workflow/prompts": "先给每道菜选一个效果预设，看一眼校验结果是绿色的；想微调再展开高级设置。都通过后点“实时装配”，再进入生成片段。",
     "/workflow/sound": "先在第 5 步完成至少一条无声成片，再配置多轨人声、文字和 BGM；文字与人声可分别拖动并允许重叠。",
     "/workflow/output": "无声成片用于检查片段顺序，有声成片用于发布；需要修改声音或文字时返回第 6 步。",
   };
-  return <main className={`step-main ${route === "/workflow/sound" ? "step-main-sound" : ""}`}><div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>{title}</strong></div><div className="step-header"><div><span className="panel-label">WORKFLOW STEP</span><h1>{title}</h1><p>{description}</p></div><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial(route)}>查看本步骤教学</button></div>{guides[route] && <div className="step-guide"><span>操作提示</span><p>{guides[route]}</p></div>}{children}</main>;
+  return <main className={`step-main ${route === "/workflow/sound" ? "step-main-sound" : ""}`}><div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>{title}</strong></div><div className="step-header"><StepHeading route={route} /><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial(route)}>查看本步骤教学</button></div>{guides[route] && <div className="step-guide"><span>操作提示</span><p>{guides[route]}</p></div>}{children}</main>;
 }

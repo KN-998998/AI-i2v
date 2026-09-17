@@ -1450,3 +1450,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .node-footer { flex-wrap: wrap; }
 .node-footer .btn { flex: 1 1 auto; white-space: nowrap; font-size: 13px; }
 .node-footer .action-hint { flex-basis: 100%; }
+/* 步骤页标题下的一句“这一步做什么”。 */
+.step-header .step-goal { max-width: 760px; margin-top: 8px; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.step-header .step-goal strong { color: var(--text); font-weight: 600; }

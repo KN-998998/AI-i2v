@@ -5,6 +5,7 @@ import { requestTutorial } from "../tutorial";
 import { useWorkflowStore } from "../workflowStore";
 import { ImageProcessControlFields } from "./ImageProcessControls";
 import { Inspector } from "./Inspector";
+import { StepHeading } from "./ui";
 
 function imageProcessingErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : "图片处理失败";
@@ -45,7 +46,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
   useEffect(() => { if (node) setSelection(node.id); }, [node, setSelection]);
   useEffect(() => { fetchBackgroundTemplates().then(setTemplates).catch(error => onToast(error instanceof Error ? error.message : "背景模板加载失败")); }, [onToast]);
 
-  if (!node) return <main className="step-main"><div className="step-header"><div><span className="panel-label">WORKFLOW STEP 2</span><h1>图片处理</h1><p>抠图、背景模板和首帧合成。</p></div></div><section className="step-panel empty-panel"><h2>尚未创建图片处理节点</h2><p>新增节点后，将其连接在“素材与菜品”和“提示词装配”之间。</p><button type="button" className="btn btn-primary" onClick={() => addNode("image_process")}>新增图片处理节点</button></section></main>;
+  if (!node) return <main className="step-main"><div className="step-header"><StepHeading route="/workflow/image-processing" /></div><section className="step-panel empty-panel"><h2>尚未创建图片处理节点</h2><p>新增节点后，将其连接在“素材与菜品”和“提示词装配”之间。</p><button type="button" className="btn btn-primary" onClick={() => addNode("image_process")}>新增图片处理节点</button></section></main>;
 
   const update = (patch: Partial<typeof node.data>) => updateNodeData(node.id, patch);
   const selectTemplate = (id: string) => {
@@ -82,7 +83,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
 
   return <main className="step-main">
     <div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>图片处理</strong></div>
-    <div className="step-header"><div><span className="panel-label">WORKFLOW STEP 2</span><h1>图片处理</h1><p>{preserveOriginal ? "当前素材包含人物，保留原图并让 Kling 生成动作片段。" : "调用腾讯云 GoodsMatting 抠出菜品，再与本地背景模板合成为 Kling 视频首帧。"}</p></div><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial("/workflow/image-processing")}>查看本步骤教学</button></div>
+    <div className="step-header"><StepHeading route="/workflow/image-processing" /><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial("/workflow/image-processing")}>查看本步骤教学</button></div>
     <div className="step-guide"><span>操作提示</span><p>{preserveOriginal ? "手部或人物素材无需选背景，点击“保留原图并继续”即可。" : "先选一个背景模板，再点击“开始抠图并合成”；原图会始终保留，处理图可重复生成。提交抠图前会自动控制最长边约 2048 像素、文件不超过 5 MB，不会覆盖原图。"}</p></div>
     <div className="step-page-grid"><div className="step-page-main">
       <section className="step-panel image-process-node-overview"><div className="panel-section-head"><div><span className="panel-label">PROCESSING QUEUE</span><h2>待处理图片 · {processingNodes.length} 个节点</h2><p className="muted">每张卡片对应画布上的一个图片处理节点。点击卡片后，为当前菜品选择背景并执行处理。</p></div><span className="image-process-queue-count">{processingNodes.filter(item => item.data.processedImagePreview).length}/{processingNodes.length} 已完成</span></div><div className="image-process-node-grid">{processingNodes.map((item, index) => { const source = sourceFor(item.id); const preview = source?.data.imagePreview ?? item.data.imagePreview; const selected = item.id === node.id; const preserve = item.data.visualSubjectType && item.data.visualSubjectType !== "菜品主体"; return <button type="button" className={"image-process-node-card" + (selected ? " selected" : "")} key={item.id} onClick={() => setSelection(item.id)}><div className="image-process-node-card-head"><span className="node-record-index">{String(index + 1).padStart(2, "0")}</span><strong>{item.data.title || source?.data.dishName || "未命名菜品"}</strong><span className="node-status">{item.data.status}</span></div><div className="image-process-node-thumb">{preview ? <img src={preview} alt={(source?.data.dishName || item.data.title || "菜品") + "原始素材"} /> : <em>未上传原图</em>}</div><div className="image-process-node-meta"><span>背景：{item.data.backgroundTemplateName || (preserve ? "不使用" : "未选择")}</span><span>输出：{item.data.processedImageName || "尚未生成"}</span></div></button>; })}</div></section>
