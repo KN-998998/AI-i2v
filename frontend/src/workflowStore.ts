@@ -249,6 +249,10 @@ function syncGeneratorNodeStatuses(nodes: WorkflowNode[], candidateClips: Timeli
   return nodes.map(node => {
     if (node.data.kind !== "generator") return node;
     const linked = candidateClips.filter(item => item.generatorNodeId === node.id);
+    const completedCurrentJob = node.data.generationJobId
+      ? linked.find(item => item.sourcePath && item.generationJobId === node.data.generationJobId)
+      : undefined;
+    const generationJobId = completedCurrentJob ? undefined : node.data.generationJobId;
     const clip = linked.find(item => item.id === node.data.selectedClipId && item.sourcePath)
       ?? linked.find(item => item.isSelected !== false && item.sourcePath)
       ?? linked.find(item => item.sourcePath)
@@ -256,12 +260,14 @@ function syncGeneratorNodeStatuses(nodes: WorkflowNode[], candidateClips: Timeli
       ?? linked[0];
     const status = clip?.sourcePath
       ? "已生成"
-      : clip?.status === "pending" && node.data.generationJobId
+      : clip?.status === "pending" && generationJobId
         ? "生成中"
         : node.data.status === "生成失败"
           ? "生成失败"
           : "待生成";
-    return status === node.data.status ? node : { ...node, data: { ...node.data, status } };
+    return status === node.data.status && generationJobId === node.data.generationJobId
+      ? node
+      : { ...node, data: { ...node.data, status, generationJobId } };
   });
 }
 
@@ -937,8 +943,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     try {
       const availableClips = (await fetchCanvasClips()).map(clip => withResolvedDishCategory(normalizeTimelineClip(clip)));
       set(state => {
+        const completedJobKeys = new Set(
+          [...availableClips, ...state.candidateClips]
+            .filter(clip => clip.sourcePath && clip.generatorNodeId && clip.generationJobId)
+            .map(clip => `${clip.generatorNodeId}:${clip.generationJobId}`),
+        );
         const activeGenerationNodeIds = new Set(state.nodes
-          .filter(node => node.data.kind === "generator" && Boolean(node.data.generationJobId))
+          .filter(node => node.data.kind === "generator"
+            && Boolean(node.data.generationJobId)
+            && !completedJobKeys.has(`${node.id}:${node.data.generationJobId}`))
           .map(node => node.id));
         const normalizedTimeline = reconcileStalePendingGeneratorClips(
           state.timeline.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
