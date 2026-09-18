@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from pipeline.config import CANVAS_CLIP_ROOT, OUTPUT_ROOT
+from pipeline.config import BRAND_END_CARD_LINES, CANVAS_CLIP_ROOT, OUTPUT_ROOT
 from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import preflight_draft
 from web.services.task_contract import is_recoverable, task_metadata, update_task
@@ -133,6 +133,36 @@ def _sound_node(draft: dict[str, Any], workspace_id: str | None = None) -> dict[
         if data.get("kind") == "sound":
             return data
     return {}
+
+
+def _end_card_lines(sound: dict[str, Any]) -> list[str]:
+    """片尾卡写什么：样板里配了就用样板的，没配就用 .env 里的全局店铺信息。
+
+    样板里把 endCardEnabled 设成 false 就彻底不加卡（比如做纯素材片的时候）。
+    """
+    if sound.get("endCardEnabled") is False:
+        return []
+    configured = sound.get("endCardLines")
+    if isinstance(configured, list):
+        lines = [str(item).strip() for item in configured if str(item).strip()]
+        if lines:
+            return lines[:3]
+    return list(BRAND_END_CARD_LINES)
+
+
+def _append_end_card(output_dir: Path, sound: dict[str, Any], clip_paths: list[str], temporary_paths: list[str]) -> float:
+    """把片尾卡当成普通片段接在最后，返回它占的秒数（音轨长度要算上它）。"""
+    lines = _end_card_lines(sound)
+    if not lines:
+        return 0.0
+    from pipeline.video_render import END_CARD_SECONDS, render_end_card
+
+    card = render_end_card(output_dir / "end_card.mp4", lines)
+    if not card:
+        return 0.0
+    clip_paths.append(card)
+    temporary_paths.append(card)
+    return float(END_CARD_SECONDS)
 
 
 def _overlay_items(sound: dict[str, Any], voice_timings: dict[str, tuple[float, float]] | None = None) -> list[dict[str, Any]]:
@@ -310,6 +340,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
             output_path = output_dir / ("canvas_final.mp4" if include_sound else "canvas_composed.mp4")
             sound = _sound_node(draft, workspace_id)
             _pair_caption_tracks(sound)
+            end_card_seconds = _append_end_card(output_dir, sound, trimmed_paths, temporary_paths)
             voice_timings: dict[str, tuple[float, float]] = {}
             if not include_sound:
                 concat_clips(trimmed_paths, str(output_path), subtitles=[], brand_info=None)
@@ -317,7 +348,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                 from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
                 _update_job(draft_id, job, status="running", stage="生成并测量 Qwen 人声")
-                video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
+                video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared) + end_card_seconds
                 bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
                 audio_path = output_dir / "mixed_audio.m4a"
                 bgm_file = _uploaded_audio_path(draft_id, sound.get("bgmUrl"))
@@ -441,6 +472,7 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
         _update_job(draft_id, job, status="running", stage="片段裁剪完成，准备恢复渲染")
 
         sound = job.get("sound") if isinstance(job.get("sound"), dict) else _sound_node(draft, workspace_id)
+        end_card_seconds = _append_end_card(output_dir, sound, trimmed_paths, temporary_paths)
         voice_timings: dict[str, tuple[float, float]] = {}
         if not job.get("include_sound"):
             concat_clips(trimmed_paths, str(output_path), subtitles=[], brand_info=None)
@@ -448,7 +480,7 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
             from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
             _update_job(draft_id, job, status="running", stage="恢复并生成 Qwen 人声")
-            video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
+            video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared) + end_card_seconds
             bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
             audio_path = output_dir / "mixed_audio.m4a"
             bgm_file = _uploaded_audio_path(draft_id, sound.get("bgmUrl"))

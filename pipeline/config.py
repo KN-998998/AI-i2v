@@ -86,6 +86,12 @@ VIDEO_ASPECT     = "9:16"      # 竖版
 VIDEO_DURATION   = 3           # Kling 3.0 最短 3s（3.0 系列支持 3~15s 整数步进）
 VIDEO_SILENT     = True        # 无声生成
 
+# 片尾信息卡：店名 / 地址 / 定位，用 | 分隔，最多三行。
+# 11 条已发布的参考片全都有这么一张卡，而工具原来一条都不加。店铺信息是固定的，
+# 所以放在 .env 里配一次，之后每条成片自动带上，不用每次让人填。
+#   .env 示例：BRAND_END_CARD_LINES=和心居酒屋|旺角登打士街 32 号 2 楼|搜尋「和心」
+BRAND_END_CARD_LINES = [item.strip() for item in os.environ.get("BRAND_END_CARD_LINES", "").split("|") if item.strip()][:3]
+
 # 成片规格（项目组 2026-08-20 确认：5-6 道菜 / 成片 12-15s）
 FINAL_DURATION_RANGE = (12, 15)   # 成片 12-15s
 FINAL_FPS            = 30

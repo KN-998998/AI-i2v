@@ -6,6 +6,8 @@ from pipeline.video_render import _typewriter_char_width, _typewriter_prefixes
 from web.services.canvas_compose import _overlay_items, _pair_caption_tracks, _sound_node, _sync_caption_timings, _voice_items
 from web.services import canvas_compose, canvas_quality, canvas_state
 
+import pytest
+
 
 def test_typewriter_prefixes_keep_unicode_characters():
     assert _typewriter_prefixes("寿司🍣") == ["寿", "寿司", "寿司🍣"]
@@ -233,3 +235,114 @@ def test_startup_recovery_finishes_persisted_compose_job(monkeypatch, tmp_path):
     assert current["status"] == "done", current.get("error")
     output = canvas_compose.compose_output_path("default", job["job_id"])
     assert output is not None and output.is_file()
+
+
+# ---------------------------------------------------------------------------
+# 字体解析：仓库原来写死 Windows 路径，线上是 Debian 容器，ffmpeg 不报错、默默换成
+# 一个不含中文的字体，中文字幕全变方框。这几条用例守住"必须解析到真实存在的文件"。
+# ---------------------------------------------------------------------------
+def test_caption_font_prefers_the_explicit_environment_override(monkeypatch, tmp_path):
+    font = tmp_path / "my.ttc"
+    font.write_bytes(b"font")
+    monkeypatch.setenv("CAPTION_FONT_FILE", str(font))
+    video_render.resolve_caption_font.cache_clear()
+
+    assert video_render.resolve_caption_font() == str(font)
+    assert video_render.caption_font_missing() is False
+
+
+def test_caption_font_falls_back_to_a_font_that_actually_exists(monkeypatch, tmp_path):
+    installed = tmp_path / "NotoSansCJK-Regular.ttc"
+    installed.write_bytes(b"font")
+    monkeypatch.delenv("CAPTION_FONT_FILE", raising=False)
+    monkeypatch.setattr(video_render, "_WINDOWS_FONTS", {("Microsoft YaHei", "normal"): "C:/Windows/Fonts/msyh.ttc"})
+    monkeypatch.setattr(video_render, "_FALLBACK_FONTS", (str(installed),))
+    video_render.resolve_caption_font.cache_clear()
+
+    assert video_render.resolve_caption_font("Microsoft YaHei", "normal") == str(installed)
+
+
+def test_caption_font_reports_missing_instead_of_pretending(monkeypatch):
+    monkeypatch.delenv("CAPTION_FONT_FILE", raising=False)
+    monkeypatch.setattr(video_render, "_WINDOWS_FONTS", {})
+    monkeypatch.setattr(video_render, "_FALLBACK_FONTS", ())
+    video_render.resolve_caption_font.cache_clear()
+
+    assert video_render.resolve_caption_font() == ""
+    assert video_render.caption_font_missing() is True
+    # 找不到字体时不写 fontfile，交给 ffmpeg 自己兜底，而不是塞一个不存在的路径。
+    assert video_render._font_file("Microsoft YaHei", "normal") == ""
+
+
+def test_subtitles_never_reference_a_windows_path_that_is_not_there(monkeypatch, tmp_path):
+    installed = tmp_path / "cjk.ttc"
+    installed.write_bytes(b"font")
+    monkeypatch.setenv("CAPTION_FONT_FILE", str(installed))
+    video_render.resolve_caption_font.cache_clear()
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"video")
+    commands = []
+    monkeypatch.setattr(video_render, "_run_ffmpeg", lambda command, timeout, action: commands.append(command))
+
+    video_render.concat_clips([str(source)], str(tmp_path / "out.mp4"), subtitles=[{"text": "寿司", "start": 0, "end": 2}])
+
+    vf = commands[0][commands[0].index("-vf") + 1]
+    assert "C:/Windows" not in vf
+    assert installed.name in vf
+
+
+# ---------------------------------------------------------------------------
+# 开头淡入 + 片尾信息卡：11 条参考片里 9 条有淡入、11 条全有片尾卡，工具原来一样都没有。
+# ---------------------------------------------------------------------------
+def test_every_composition_fades_in(monkeypatch, tmp_path):
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"video")
+    commands = []
+    monkeypatch.setattr(video_render, "_run_ffmpeg", lambda command, timeout, action: commands.append(command))
+
+    video_render.concat_clips([str(source)], str(tmp_path / "out.mp4"), subtitles=[])
+
+    vf = commands[0][commands[0].index("-vf") + 1]
+    assert vf.endswith(f"fade=t=in:st=0:d={video_render.FADE_IN_SECONDS}"), "淡入要放在最后一环，字幕才会跟着一起淡进来"
+
+
+def test_the_end_card_renders_three_centred_lines(monkeypatch, tmp_path):
+    commands = []
+    monkeypatch.setattr(video_render, "_run_ffmpeg", lambda command, timeout, action: commands.append(command))
+
+    result = video_render.render_end_card(tmp_path / "card.mp4", ["和心居酒屋", "旺角登打士街 32 号", "搜尋「和心」"])
+
+    assert result == str(tmp_path / "card.mp4")
+    vf = commands[0][commands[0].index("-vf") + 1]
+    assert vf.count("drawtext=") == 3
+    assert "和心居酒屋" in vf and "x=(w-text_w)/2" in vf
+
+
+def test_no_lines_means_no_end_card(monkeypatch, tmp_path):
+    monkeypatch.setattr(video_render, "_run_ffmpeg", lambda command, timeout, action: pytest.fail("没有文案时不该调 ffmpeg"))
+
+    assert video_render.render_end_card(tmp_path / "card.mp4", ["", "  "]) is None
+
+
+def test_the_end_card_text_comes_from_the_template_then_from_the_env(monkeypatch):
+    monkeypatch.setattr(canvas_compose, "BRAND_END_CARD_LINES", ["全局店名", "全局地址"])
+
+    assert canvas_compose._end_card_lines({}) == ["全局店名", "全局地址"]
+    assert canvas_compose._end_card_lines({"endCardLines": ["样板店名"]}) == ["样板店名"]
+    assert canvas_compose._end_card_lines({"endCardEnabled": False}) == []
+    # 样板里写了空字符串不算配置过，还是走全局的。
+    assert canvas_compose._end_card_lines({"endCardLines": ["", " "]}) == ["全局店名", "全局地址"]
+
+
+def test_the_end_card_is_appended_as_an_ordinary_segment(monkeypatch, tmp_path):
+    """片尾卡就是接在最后的一段普通视频，所以拼接逻辑和字幕时间轴都不用改。"""
+    monkeypatch.setattr(canvas_compose, "BRAND_END_CARD_LINES", ["和心居酒屋"])
+    monkeypatch.setattr(video_render, "render_end_card", lambda destination, lines, **_kwargs: str(destination))
+    clips: list[str] = ["/tmp/segment_000.mp4"]
+    temporary: list[str] = []
+
+    seconds = canvas_compose._append_end_card(tmp_path, {}, clips, temporary)
+
+    assert seconds == video_render.END_CARD_SECONDS
+    assert clips[-1].endswith("end_card.mp4")
+    assert temporary == [clips[-1]], "片尾卡也要登记成临时文件，任务结束后跟着清掉"
