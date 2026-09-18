@@ -5,8 +5,14 @@ import os
 import re
 import subprocess
 import unicodedata
+from functools import lru_cache
 from pathlib import Path
 from pipeline.config import FINAL_FPS, FINAL_RESOLUTION
+
+# 开头淡入。11 条参考片里 9 条都是黑场淡入起手，这里统一加上。
+FADE_IN_SECONDS = 0.3
+# 片尾信息卡时长。参考片全部有，约 1 秒。
+END_CARD_SECONDS = 1.0
 
 
 def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
@@ -102,24 +108,101 @@ def _typewriter_prefixes(text: str) -> list[str]:
     return ["".join(characters[:index]) for index in range(1, len(characters) + 1)]
 
 
+# drawtext 必须拿到一个真实存在的字体文件。这里原来写死的是 Windows 路径，而线上
+# 跑的是 Debian 容器，那些文件根本不存在——ffmpeg 不报错，它会默默换一个不含中文
+# 的字体，于是所有中文字幕都渲染成方框，人还以为是字幕没写对。
+# 所以改成运行时按平台找一个真的能写中文的字体；想指定具体字体就设 CAPTION_FONT_FILE。
+_FONT_ENV_KEY = "CAPTION_FONT_FILE"
+_WINDOWS_FONTS = {
+    ("Microsoft YaHei", "normal"): "C:/Windows/Fonts/msyh.ttc",
+    ("Microsoft YaHei", "bold"): "C:/Windows/Fonts/msyhbd.ttc",
+    ("SimHei", "normal"): "C:/Windows/Fonts/simhei.ttf",
+    ("SimHei", "bold"): "C:/Windows/Fonts/simhei.ttf",
+    ("KaiTi", "normal"): "C:/Windows/Fonts/simkai.ttf",
+    ("KaiTi", "bold"): "C:/Windows/Fonts/simkai.ttf",
+    ("FangSong", "normal"): "C:/Windows/Fonts/simfang.ttf",
+    ("FangSong", "bold"): "C:/Windows/Fonts/simfang.ttf",
+    ("DengXian", "normal"): "C:/Windows/Fonts/Deng.ttf",
+    ("DengXian", "bold"): "C:/Windows/Fonts/Deng.ttf",
+    ("Arial", "normal"): "C:/Windows/Fonts/arial.ttf",
+    ("Arial", "bold"): "C:/Windows/Fonts/arialbd.ttf",
+    ("Arial Black", "normal"): "C:/Windows/Fonts/ariblk.ttf",
+    ("Arial Black", "bold"): "C:/Windows/Fonts/ariblk.ttf",
+}
+# 按 macOS → Linux 的顺序找，都是自带或 fonts-noto-cjk 装出来的路径。
+_FALLBACK_FONTS = (
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/Library/Fonts/Arial Unicode.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
+)
+
+
+@lru_cache(maxsize=64)
+def resolve_caption_font(font_family: str | None = None, font_weight: str | None = None) -> str:
+    """返回一个真实存在的字体文件路径；一个都找不到时返回空字符串。"""
+    override = os.environ.get(_FONT_ENV_KEY, "").strip()
+    if override and Path(override).is_file():
+        return override
+    preferred = _WINDOWS_FONTS.get((str(font_family), str(font_weight or "normal")))
+    for candidate in (preferred, *_FALLBACK_FONTS):
+        if candidate and Path(candidate).is_file():
+            return candidate
+    return ""
+
+
+def caption_font_missing() -> bool:
+    """机器上一个中文字体都没有——预检用它提前告诉人"中文会变成方框"。"""
+    return not resolve_caption_font()
+
+
 def _font_file(font_family: str | None, font_weight: str | None = None) -> str:
-    mapping = {
-        ("Microsoft YaHei", "normal"): "C\\:/Windows/Fonts/msyh.ttc",
-        ("Microsoft YaHei", "bold"): "C\\:/Windows/Fonts/msyhbd.ttc",
-        ("SimHei", "normal"): "C\\:/Windows/Fonts/simhei.ttf",
-        ("SimHei", "bold"): "C\\:/Windows/Fonts/simhei.ttf",
-        ("KaiTi", "normal"): "C\\:/Windows/Fonts/simkai.ttf",
-        ("KaiTi", "bold"): "C\\:/Windows/Fonts/simkai.ttf",
-        ("FangSong", "normal"): "C\\:/Windows/Fonts/simfang.ttf",
-        ("FangSong", "bold"): "C\\:/Windows/Fonts/simfang.ttf",
-        ("DengXian", "normal"): "C\\:/Windows/Fonts/Deng.ttf",
-        ("DengXian", "bold"): "C\\:/Windows/Fonts/Deng.ttf",
-        ("Arial", "normal"): "C\\:/Windows/Fonts/arial.ttf",
-        ("Arial", "bold"): "C\\:/Windows/Fonts/arialbd.ttf",
-        ("Arial Black", "normal"): "C\\:/Windows/Fonts/ariblk.ttf",
-        ("Arial Black", "bold"): "C\\:/Windows/Fonts/ariblk.ttf",
-    }
-    return mapping.get((str(font_family), str(font_weight or "normal")), mapping[("Microsoft YaHei", "normal")])
+    """拼进 drawtext 的 `:fontfile='...'` 片段；找不到字体就返回空串，交给 ffmpeg 兜底。"""
+    resolved = resolve_caption_font(font_family, font_weight)
+    if not resolved:
+        return ""
+    escaped = resolved.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+    return f":fontfile='{escaped}'"
+
+
+def render_end_card(out_path, lines, duration: float = END_CARD_SECONDS):
+    """渲染一张黑底的片尾信息卡（店名 / 地址 / 定位），规格和裁好的片段一致。
+
+    参考片 11 条全都有这么一张卡。它作为普通片段接在 concat 列表最后，所以不需要
+    改拼接逻辑，字幕的时间轴也不受影响。
+    """
+    usable = [str(item).strip() for item in (lines or []) if str(item).strip()][:3]
+    if not usable:
+        return None
+    width, height = FINAL_RESOLUTION
+    font = _font_file("Microsoft YaHei", "bold")
+    sizes = [78, 46, 40][: len(usable)]
+    gap = 34
+    block = sum(sizes) + gap * (len(usable) - 1)
+    top = (height - block) / 2
+    filters = []
+    for text, size in zip(usable, sizes):
+        filters.append(
+            f"drawtext=text='{_escape_drawtext(text)}'{font}:"
+            f"fontsize={size}:fontcolor=#FFFFFF:x=(w-text_w)/2:y={int(round(top))}"
+        )
+        top += size + gap
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:d={max(0.2, float(duration))}:r={FINAL_FPS}",
+        "-vf", ",".join(filters),
+        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-an",
+        str(out_path),
+    ]
+    _run_ffmpeg(cmd, timeout=60, action="ffmpeg 片尾卡渲染")
+    return str(out_path)
 
 
 def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
@@ -214,8 +297,8 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
                 fontsize = fontsize_override or str(font_size)
                 alpha = f":alpha={alpha_override}" if alpha_override else ""
                 filters.append(
-                    f"drawtext=text='{safe_text}':"
-                    f"fontfile='{_font_file(style.get('fontFamily'), font_weight)}':"
+                    f"drawtext=text='{safe_text}'"
+                    f"{_font_file(style.get('fontFamily'), font_weight)}:"
                     f"fontsize={fontsize}:fontcolor={font_color}:borderw={stroke_width}:bordercolor={stroke_color}@0.8{box}{alpha}:"
                     f"x={x_override or x}:y={y}:"
                     f"enable='{enable}'"
@@ -257,18 +340,22 @@ def concat_clips(clip_paths, out_path, subtitles=None, brand_info=None):
             if explicit_start is None and explicit_end is None:
                 start_time = end_time
 
-    # 片尾 CTA
+    # 片尾 CTA（旧接口，现在片尾信息卡走 render_end_card 作为独立片段接在最后）
     if brand_info:
         cta_text = f"{brand_info.get('name','')} | {brand_info.get('cta','')}"
         safe_cta = _escape_drawtext(cta_text)
         total_duration = sum(s["duration"] for s in subtitle_items) if subtitle_items else 10
         filters.append(
-            f"drawtext=text='{safe_cta}':"
-            f"fontfile='C\\:/Windows/Fonts/msyh.ttc':"
+            f"drawtext=text='{safe_cta}'"
+            f"{_font_file('Microsoft YaHei', 'bold')}:"
             f"fontsize=52:fontcolor=#FFD700:borderw=3:bordercolor=black@0.9:"
             f"x=(w-text_w)/2:y=h-120:"
             f"enable='gte(t,{total_duration - 2})'"
         )
+
+    # 开头淡入放在最后一环，这样连字幕一起淡进来，和参考片的黑场起手一致。
+    if FADE_IN_SECONDS > 0:
+        filters.append(f"fade=t=in:st=0:d={FADE_IN_SECONDS}")
 
     # 执行拼接
     vf_arg = ",".join(filters) if filters else None

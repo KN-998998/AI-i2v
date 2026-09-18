@@ -20,8 +20,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # FFmpeg is required by the compose and media-preview services.
+# fonts-noto-cjk is required by drawtext: without a CJK font every Chinese
+# caption silently renders as tofu boxes instead of failing loudly.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./

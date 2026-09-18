@@ -434,6 +434,10 @@ def analyze_video(path: str | Path, dish_name: str = "", category: str | None = 
     }
 
 
+def _has_cjk(text: str) -> bool:
+    return any("\u4e00" <= character <= "\u9fff" for character in text)
+
+
 def _uploaded_path(draft_id: str, url: str | None) -> Path | None:
     if not url:
         return None
@@ -507,6 +511,17 @@ def preflight_draft(
     bgm_url = sound.get("bgmUrl")
     if bgm_url and _uploaded_path(draft_id, str(bgm_url)) is None:
         warnings.append({"code": "MISSING_BGM", "message": "草稿记录了 BGM，但本地音频文件不存在"})
+
+    # 机器上没有中文字体时 ffmpeg 不报错，它会默默换一个字体，中文全变成方框。
+    # 与其让人渲染完才发现，不如在这里说清楚。
+    if any(_has_cjk(str(item.get("text") or "")) for item in overlays + voices):
+        from pipeline.video_render import caption_font_missing
+
+        if caption_font_missing():
+            warnings.append({
+                "code": "MISSING_CAPTION_FONT",
+                "message": "这台机器上找不到中文字体，字幕里的中文会渲染成方框。安装 fonts-noto-cjk，或用环境变量 CAPTION_FONT_FILE 指定一个字体文件",
+            })
 
     return {
         "ok": not errors,
