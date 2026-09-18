@@ -1598,3 +1598,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .batch-defaults, .batch-defaults-open { padding-inline: 18px; }
   .batch-defaults-open .weekly-output-fields { grid-template-columns: 1fr; }
 }
+/* ---------------------------------------------------------------------------
+ * 片段硬伤：后端逐帧算出「整段不动 / 闪烁 / 边缘长出新东西 / 长时间卡住」之后，
+ * 在审片卡片上直说建议重做和原因，人不用自己逐条看完才发现是废片。
+ * ------------------------------------------------------------------------- */
+.clip-review-card.redo { border-color: #e8bfa6; background: #fffaf5; }
+.clip-redo-flag { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; color: var(--amber); font-size: 13px; line-height: 1.6; }
+.clip-redo-flag strong { padding: 2px 8px; border-radius: 999px; background: #fdecd9; font-size: 12px; }

@@ -283,6 +283,9 @@ export type TimelineClip = {
   qualityLabel?: "good" | "warning" | "reject";
   qualityWarnings?: string[];
   analysisMode?: string;
+  /** A 层硬伤：整段不动 / 闪烁 / 边缘长出新东西 / 长时间卡住。后端逐帧算出来的。 */
+  redoRecommended?: boolean;
+  redoReasons?: string[];
   /** Required only for scheduled weekly runs; one-off drafts remain unaffected. */
   reviewStatus?: "approved" | "rejected";
 };
@@ -349,6 +352,14 @@ export type MediaAnalysis = {
   durationSeconds?: number;
   fps?: number;
   semanticReview?: string;
+  redoRecommended?: boolean;
+  redoReasons?: string[];
+  /** 逐帧统计的原始数值，留给成片对照和排序用；界面上不直接显示。 */
+  frameDelta?: number;
+  flickerStd?: number;
+  motionMean?: number;
+  edgeCorrelation?: number;
+  subjectMatchRatio?: number | null;
 };
 
 export type TaskStatus = "queued" | "running" | "polling" | "downloading" | "analyzing" | "retrying" | "done" | "error";
@@ -875,9 +886,12 @@ export function recommendClipSelection(items: TimelineClip[], clipCount: number)
     .sort((left, right) => clipRecommendationScore(right) - clipRecommendationScore(left));
   const count = Math.max(0, Math.round(clipCount));
   if (count === 0 || available.length === 0) return [];
-  const special = available.filter(clip => ["甜品", "水果"].includes(resolveDishCategory(clip)));
-  const ordinary = available.filter(clip => !["甜品", "水果"].includes(resolveDishCategory(clip)));
-  if (count === 1) return [available[0]];
+  // 有硬伤的片段先排除；只有好片不够数时才退回去用它们，免得凑不满一条成片。
+  const healthy = available.filter(clip => !clip.redoRecommended);
+  const pool = healthy.length >= count ? healthy : available;
+  const special = pool.filter(clip => ["甜品", "水果"].includes(resolveDishCategory(clip)));
+  const ordinary = pool.filter(clip => !["甜品", "水果"].includes(resolveDishCategory(clip)));
+  if (count === 1) return [pool[0]];
 
   const selected: TimelineClip[] = [];
   const targetOrdinary = Math.min(ordinary.length, special.length ? count - 1 : count);
@@ -901,7 +915,9 @@ function clipRecommendationScore(clip: TimelineClip): number {
   const quality = Number.isFinite(Number(clip.qualityScore)) ? Number(clip.qualityScore) : 50;
   const readyBonus = clip.sourcePath ? 20 : 0;
   const warningPenalty = (clip.qualityWarnings?.length ?? 0) * 4;
-  return quality + readyBonus - warningPenalty;
+  // 硬伤片段即使被迫入选，也要排在最后，人一眼就看到该先换哪条。
+  const redoPenalty = clip.redoRecommended ? 200 : 0;
+  return quality + readyBonus - warningPenalty - redoPenalty;
 }
 
 function shuffle<T>(items: T[], random: () => number): T[] {

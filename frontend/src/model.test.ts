@@ -1,4 +1,4 @@
-import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, voiceItemsFromData } from "./model.ts";
+import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, type TimelineClip, voiceItemsFromData } from "./model.ts";
 import { applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, DEFAULT_PROMPT_CONFIG, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
@@ -359,5 +359,27 @@ assert(batchPlanReadiness({ ...batchInput, library: { ...fullLibrary, pendingCou
 const customBlank = batchPlanReadiness({ ...batchInput, library: null, customRoots: { asset: "", background: "" } });
 assert(!customBlank.ok, "a custom folder pair with empty paths must not start a plan");
 assert(batchPlanReadiness({ ...batchInput, library: null, customRoots: { asset: "/tmp/a", background: "/tmp/b" } }).ok, "two filled custom folders should be allowed to start");
+
+// A 层硬伤：自动选片要避开「建议重做」的片段，好片不够时才退回去用。
+const baseClip = (id: string, extra: Record<string, unknown> = {}) => ({
+  id, dish: id, label: "生成片段", tone: "#355e62", timelineDuration: 2.5,
+  sourcePath: `/tmp/${id}.mp4`, qualityScore: 90, dishCategory: "主菜", ...extra,
+}) as TimelineClip;
+const mixedClips = [
+  baseClip("坏片1", { redoRecommended: true, redoReasons: ["整段几乎没有动"] }),
+  baseClip("好片1"),
+  baseClip("好片2"),
+  baseClip("坏片2", { redoRecommended: true, redoReasons: ["画面亮度忽明忽暗"] }),
+  baseClip("好片3"),
+];
+const picked = recommendClipSelection(mixedClips, 3);
+assert(picked.length === 3, "three healthy clips should still fill a three-clip video");
+assert(picked.every(clip => !clip.redoRecommended), "clips flagged for redo must be skipped while healthy ones remain");
+// 只有 1 条好片、却要 3 条时，不能因为挑剔而交不出成片。
+const scarce = [baseClip("好片1"), baseClip("坏片1", { redoRecommended: true }), baseClip("坏片2", { redoRecommended: true })];
+const fallback = recommendClipSelection(scarce, 3);
+assert(fallback.length === 3, "a short pool must still fill the video rather than returning nothing");
+assert(fallback[0].id === "好片1", "the healthy clip must come first when the pool has to include flagged ones");
+assert(recommendClipSelection([baseClip("坏片1", { redoRecommended: true })], 1)[0].id === "坏片1", "a single flagged clip is still better than an empty timeline");
 
 console.log("model tests passed");
