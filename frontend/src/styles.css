@@ -1488,3 +1488,43 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .ip-studio { grid-template-columns: 1fr; }
   .ip-preview { position: static; }
 }
+
+/* ---------------------------------------------------------------------------
+ * 侧栏制作流程：竖向进度线。完成 = 实心绿点带 ✓，当前 = 唯一高亮卡片，未到 = 空心点 + 浅灰名字。
+ * ------------------------------------------------------------------------- */
+.step-line { list-style: none; margin: 2px 0 0; padding: 0 0 0 4px; }
+.step-line-item { position: relative; display: flex; align-items: center; gap: 12px; min-height: 40px; padding-left: 4px; }
+.step-line-item::before { content: ""; position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: var(--line); }
+.step-line-item:first-child::before { top: 50%; }
+.step-line-item:last-child::before { bottom: 50%; }
+.step-line-item.done::before { background: var(--green); }
+.step-line-item.done + .step-line-item::before { background: linear-gradient(var(--green) 50%, var(--line) 50%); }
+.step-line-item.done + .step-line-item.done::before { background: var(--green); }
+.step-dot { position: relative; z-index: 1; box-sizing: border-box; flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid var(--line); border-radius: 50%; background: #fff; }
+.step-line-item.done .step-dot { border-color: var(--green); background: var(--green); }
+.step-line-item.done .step-dot::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
+.step-line-item.open .step-dot { border-color: var(--cyan); }
+.step-line-item.active .step-dot { flex-basis: 18px; width: 18px; height: 18px; margin-left: -1px; border: 3px solid var(--cyan); }
+.step-line-link { padding: 6px 0; border: 0; background: transparent; color: var(--dim); font-size: 14px; text-align: left; cursor: default; }
+.step-line-item.done .step-line-link, .step-line-item.open .step-line-link { color: var(--text); cursor: pointer; }
+.step-line-item.done .step-line-link:hover, .step-line-item.open .step-line-link:hover { color: var(--cyan); }
+.step-line-item.active { min-height: 64px; }
+.step-line-item.active .pipeline-step-row { flex: 1; min-width: 0; }
+.step-line-card { display: grid; flex: 1; gap: 2px; min-width: 0; padding: 10px 12px; border: 1px solid var(--cyan); border-radius: 10px; background: var(--cyan-soft); text-align: left; box-shadow: inset 3px 0 0 var(--cyan); }
+.step-line-card strong { font-size: 14px; color: var(--text); }
+.step-line-card small { font-size: 12px; color: var(--muted); }
+@media (min-width: 721px) {
+  .pipeline-collapsed .step-line { padding: 0; }
+  .pipeline-collapsed .step-line-item { justify-content: center; min-height: 30px; padding: 0; }
+  .pipeline-collapsed .step-line-item::before { left: 50%; margin-left: -1px; }
+  .pipeline-collapsed .step-line-link, .pipeline-collapsed .step-line-card, .pipeline-collapsed .step-line-item .pipeline-step-tutorial { display: none; }
+  .pipeline-collapsed .step-line-item.active .pipeline-step-row { display: none; }
+}
+@media (max-width: 720px) {
+  .step-line { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 0; }
+  .step-line-item { min-height: 0; padding: 0; }
+  .step-line-item::before { display: none; }
+  .step-line-item.active { min-height: 0; }
+  .step-line-card { padding: 6px 10px; }
+  .step-line-card small { display: none; }
+}
