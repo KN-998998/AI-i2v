@@ -70,7 +70,7 @@ start "Restaurant Video Canvas - FastAPI" /D "%~dp0" cmd /k call "%~dp0web\run_b
 echo Waiting for the service to become ready...
 set "READY="
 for /L %%N in (1,1,30) do (
-    curl.exe --silent --show-error --fail --max-time 2 "http://%APP_HOST%:%APP_PORT%/canvas-mvp" >nul 2>nul
+    curl.exe --silent --show-error --fail --max-time 2 "http://%APP_HOST%:%APP_PORT%/" >nul 2>nul
     if not errorlevel 1 (
         set "READY=1"
         goto :service_ready
@@ -84,8 +84,8 @@ pause
 exit /b 1
 
 :service_ready
-echo Service is ready. Opening http://%APP_HOST%:%APP_PORT%/canvas-mvp
-start "" "http://%APP_HOST%:%APP_PORT%/canvas-mvp"
+echo Service is ready. Opening http://%APP_HOST%:%APP_PORT%/
+start "" "http://%APP_HOST%:%APP_PORT%/"
 exit /b 0
 
 :try_python

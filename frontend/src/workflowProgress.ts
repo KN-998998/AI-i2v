@@ -3,6 +3,7 @@ import type { ComposeWorkspace, TimelineClip, WorkflowNode } from "./model";
 import { generatorGenerationBlockReason, generatorUpstreamNodes } from "./generatorReadiness.ts";
 
 export type GuidedWorkflowRoute =
+  | "/"
   | "/canvas-mvp"
   | "/workflow/assets"
   | "/workflow/image-processing"
@@ -63,6 +64,7 @@ export function firstIncompleteWorkflowRoute(progress: WorkflowProgress): Guided
 }
 
 export function isWorkflowRouteUnlocked(route: GuidedWorkflowRoute, progress: WorkflowProgress): boolean {
+  if (route === "/") return true; // 首页是入口，任何时候都能回
   const stepIndex = guidedWorkflowSteps.findIndex(item => item.path === route);
   if (stepIndex >= 0) return progress.steps[stepIndex].unlocked;
   if (route === "/workflow/asset-library-review") return progress.steps[0].unlocked;

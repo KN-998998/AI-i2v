@@ -131,7 +131,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
   const doneCount = processingNodes.filter(item => item.data.processedImagePreview).length;
 
   return <main className="step-main">
-    <div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>流程画布</button><span>/</span><strong>图片处理</strong></div>
+    <div className="step-breadcrumb"><button type="button" className="link-button" onClick={() => navigate("/")}>工作台首页</button><span>/</span><strong>图片处理</strong></div>
     <div className="step-header"><StepHeading route="/workflow/image-processing" /><button type="button" className="btn step-tutorial-button" onClick={() => requestTutorial("/workflow/image-processing")}>查看本步骤教学</button></div>
     <div className="step-guide"><span>操作提示</span><p>{preserveOriginal ? "手部或人物素材无需选背景，点击“保留原图并继续”即可。" : "先选背景，点“开始抠图并合成”做一次抠图；之后换背景、拖滑块都会自动更新左侧预览，原图始终保留。"}</p></div>
     <div className="step-page-grid"><div className="step-page-main">

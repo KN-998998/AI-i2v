@@ -16,6 +16,7 @@ export function Pipeline({ path, collapsed, onToggle }: { path: WorkflowRoute; c
   return <aside id="pipeline-navigation" className="pipeline" aria-label="生产工作台导航">
     <button type="button" className="pipeline-toggle" onClick={onToggle} aria-label={collapsed ? "展开左侧菜单" : "收起左侧菜单"} aria-controls="pipeline-navigation" aria-expanded={!collapsed} title={collapsed ? "展开左侧菜单" : "收起左侧菜单"}><span aria-hidden="true">{collapsed ? "»" : "«"}</span><span className="pipeline-toggle-copy">{collapsed ? "展开" : "收起菜单"}</span></button>
     <div className="pipeline-heading"><span className="pipeline-kicker">PROJECT FLOW</span><strong>生产工作台</strong><small>从素材到最终成片</small></div>
+    <button type="button" className={`canvas-link home-link ${path === "/" ? "active" : ""}`} onClick={() => navigate("/")} title="工作台首页"><span className="canvas-link-icon">⌂</span><span><strong>工作台首页</strong><small>调样板 / 批量生产入口</small></span></button>
     <button type="button" className="pipeline-tutorial-button" onClick={() => requestTutorial(path)}><span aria-hidden="true">?</span><span><strong>使用教程</strong><small>查看当前页面或步骤教学</small></span></button>
     <button type="button" className={`canvas-link ${path === "/canvas-mvp" ? "active" : ""}`} onClick={() => navigate("/canvas-mvp")} title="流程画布总览"><span className="canvas-link-icon">⌘</span><span><strong>流程画布总览</strong><small>节点与连接关系</small></span></button>
     <TaskCenterLink path={path} />

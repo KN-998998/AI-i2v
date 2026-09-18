@@ -1,4 +1,5 @@
 export type WorkflowRoute =
+  | "/"
   | "/canvas-mvp"
   | "/workflow/assets"
   | "/workflow/image-processing"
@@ -28,7 +29,9 @@ export function workflowStep(route: WorkflowRoute) {
 }
 
 export function routeForPath(pathname: string): WorkflowRoute {
-  if (pathname === "/" || pathname === "/canvas-mvp") return "/canvas-mvp";
+  // 「/」是工作台首页（两条路的入口），不再直接落到流程画布。
+  if (pathname === "/") return "/";
+  if (pathname === "/canvas-mvp") return "/canvas-mvp";
   if (pathname === "/workflow/timeline") return "/workflow/compose";
   if (pathname === "/workflow/asset-library-review") return "/workflow/asset-library-review";
   if (pathname === "/workflow/tasks") return "/workflow/tasks";

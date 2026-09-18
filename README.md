@@ -139,6 +139,7 @@ Windows 双击根目录的 `start_dev.bat`；macOS / Linux 执行 `./start_dev.s
 
 | 地址 | 用途 |
 | --- | --- |
+| `http://127.0.0.1:8015/` | 工作台首页（调样板 / 批量生产两个入口） |
 | `http://127.0.0.1:8015/canvas-mvp` | 流程画布 |
 | `http://127.0.0.1:8015/workflow/assets` | 第一步：素材与菜品 |
 | `http://127.0.0.1:8015/workflow/tasks` | 任务中心 |

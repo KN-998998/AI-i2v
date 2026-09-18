@@ -15,12 +15,13 @@ import { ManualAssetLibraryPage } from "./components/ManualAssetLibraryPage";
 import { TaskCenterPage } from "./components/TaskCenterPage";
 import { WeeklyPlanPage } from "./components/WeeklyPlanPage";
 import { ClipReviewPage } from "./components/ClipReviewPage";
+import { HomePage } from "./components/HomePage";
 import { TutorialModal } from "./components/TutorialModal";
 import { chapterIndexForRoute, isTutorialDismissed } from "./tutorial";
 
 const nodeTypes = { workflow: WorkflowNodeCard };
 const pipelinePreferenceKey = "restaurant-video.pipeline-collapsed";
-const alwaysAvailableWorkspaceRoutes = new Set<WorkflowRoute>(["/canvas-mvp", "/workflow/tasks", "/workflow/weekly-plan"]);
+const alwaysAvailableWorkspaceRoutes = new Set<WorkflowRoute>(["/", "/canvas-mvp", "/workflow/tasks", "/workflow/weekly-plan"]);
 
 function loadPipelinePreference() {
   try {
@@ -111,12 +112,11 @@ function App() {
     setTutorialOpen(true);
   }, [hydrated]);
   const save = () => saveDraft().then(() => notify("草稿已保存")).catch(() => notify("保存失败，请检查后端服务"));
-  const workspaceLabel = path === "/canvas-mvp" ? "流程总览" : path === "/workflow/weekly-plan" ? "自动化生产" : "分步编辑";
-  const overviewUnlocked = isWorkflowRouteUnlocked("/canvas-mvp", workflowProgress);
+  const workspaceLabel = path === "/" ? "工作台首页" : path === "/canvas-mvp" ? "流程总览" : path === "/workflow/weekly-plan" ? "自动化生产" : "分步编辑";
   const outputUnlocked = isWorkflowRouteUnlocked("/workflow/output", workflowProgress);
   return <div className="app-shell">
     <header className="topbar">
-      <button type="button" className="brand-button" onClick={() => navigate(overviewUnlocked ? "/canvas-mvp" : firstIncompleteWorkflowRoute(workflowProgress))}>
+      <button type="button" className="brand-button" onClick={() => navigate("/")}>
         <span className="brand-mark"><img src={`${import.meta.env.BASE_URL}favicon.png`} alt="" /></span>
         <span className="brand-copy"><span className="eyebrow">AI VIDEO WORKFLOW</span><h1>AI 图生视频工作流</h1></span>
       </button>
@@ -131,6 +131,7 @@ function App() {
 }
 
 function RouteContent({ path, onToast }: { path: WorkflowRoute; onToast: (message: string) => void }) {
+  if (path === "/") return <HomePage />;
   if (path === "/canvas-mvp") return <CanvasWorkspace onToast={onToast} />;
   if (path === "/workflow/image-processing") return <ImageProcessingPage onToast={onToast} />;
   if (path === "/workflow/generator") return <GeneratorPage onToast={onToast} />;

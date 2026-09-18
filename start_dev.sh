@@ -150,9 +150,10 @@ if [ "${READY}" -ne 1 ]; then
   fail "FastAPI 在 30 秒内没有就绪，请查看上方日志。"
 fi
 
-info "服务已就绪: http://${APP_HOST}:${APP_PORT}/canvas-mvp"
+info "服务已就绪: http://${APP_HOST}:${APP_PORT}/"
 if [ "${OPEN_BROWSER}" -eq 1 ] && command -v open >/dev/null 2>&1; then
-  open "http://${APP_HOST}:${APP_PORT}/canvas-mvp" || true
+  # 打开工作台首页（两条路的入口）；流程画布在侧栏「流程画布总览」里。
+  open "http://${APP_HOST}:${APP_PORT}/" || true
 fi
 info "按 Ctrl+C 停止服务。"
 trap - EXIT

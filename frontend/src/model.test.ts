@@ -2,6 +2,7 @@ import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, capt
 import { applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, DEFAULT_PROMPT_CONFIG, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
+import { routeForPath } from "./router.ts";
 import { canAssemblePromptNode, promptAssemblyBlockReason, promptUpstreamNodes } from "./promptAssemblyReadiness.ts";
 import { generatorGenerationBlockReason } from "./generatorReadiness.ts";
 
@@ -328,5 +329,12 @@ assert(availablePromptPresets({ ...DEFAULT_PROMPT_CONFIG, food_type: "热食" })
 assert(matchPromptPreset(DEFAULT_PROMPT_CONFIG) === "glow", "the factory default config should read as the “光泽流转” preset");
 assert(matchPromptPreset({ ...DEFAULT_PROMPT_CONFIG, camera_amplitude: "medium" }) === null, "a hand-tuned config should read as custom");
 assert(new Set(PROMPT_PRESETS.map(preset => preset.label)).size === PROMPT_PRESETS.length, "preset labels must be unique");
+
+// 首页：「/」是独立路由（不再落到画布），且任何进度下都能回。
+assert(routeForPath("/") === "/", "root path should resolve to the home route");
+assert(routeForPath("/canvas-mvp") === "/canvas-mvp", "canvas path should still resolve to the canvas");
+assert(routeForPath("/workflow/unknown") === "/canvas-mvp", "unknown workflow paths should still fall back to the canvas");
+const emptyProgress = deriveWorkflowProgress([], [], []);
+assert(isWorkflowRouteUnlocked("/", emptyProgress), "the home route must stay reachable on an empty draft");
 
 console.log("model tests passed");
