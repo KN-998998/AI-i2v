@@ -205,7 +205,9 @@ def _next_clip_version(asset_id: str) -> int:
 
 
 def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> dict[str, Any]:
-    analysis = analyze_video(path, dish, category)
+    # 深度检查（逐帧统计 + freezedetect）要两三秒，但生成本身要一分多钟，值得当场把
+    # 「整段不动 / 闪烁 / 边缘长出新东西」判出来，免得拖到第二天人工审片才发现。
+    analysis = analyze_video(path, dish, category, True)
     duration = float(analysis.get("durationSeconds") or VIDEO_DURATION)
     filename = path.name
     asset_id = str(job.get("asset_id") or f"asset_{job.get('node_id', 'generator')}")
@@ -237,6 +239,8 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
         "qualityLabel": analysis.get("qualityLabel", "warning"),
         "qualityWarnings": analysis.get("qualityWarnings", []),
         "analysisMode": analysis.get("analysisMode", "technical_rules"),
+        "redoRecommended": bool(analysis.get("redoRecommended")),
+        "redoReasons": analysis.get("redoReasons", []),
     }
 
 
