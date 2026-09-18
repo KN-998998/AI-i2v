@@ -325,6 +325,21 @@ export async function fetchWeeklyPlans(): Promise<WeeklyPlan[]> {
   return parseResponse<WeeklyPlan[]>(await fetch(`${API_BASE_URL}/api/weekly-plans`, { cache: "no-store" }));
 }
 
+/** 批量生产页开工前的摘要：整理好的素材库里有多少菜可用、背景图有几张。只读文件和预留记录，不调用分类模型。 */
+export type WeeklyPlanReadiness = {
+  assetRoot: string;
+  backgroundRoot: string;
+  dishCount: number;
+  availableCount: number;
+  pendingCount: number;
+  backgroundCount: number;
+  categoryCounts: Record<string, number>;
+};
+
+export async function fetchWeeklyPlanReadiness(): Promise<WeeklyPlanReadiness> {
+  return parseResponse<WeeklyPlanReadiness>(await fetch(`${API_BASE_URL}/api/weekly-plans/readiness`, { cache: "no-store" }));
+}
+
 export async function createWeeklyPlan(payload: WeeklyPlanInput): Promise<WeeklyPlan> {
   return parseResponse<WeeklyPlan>(await fetch(`${API_BASE_URL}/api/weekly-plans`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }));
 }

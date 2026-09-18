@@ -5,6 +5,7 @@ import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUn
 import { routeForPath } from "./router.ts";
 import { canAssemblePromptNode, promptAssemblyBlockReason, promptUpstreamNodes } from "./promptAssemblyReadiness.ts";
 import { generatorGenerationBlockReason } from "./generatorReadiness.ts";
+import { batchPlanReadiness, missingTemplateKinds, REQUIRED_TEMPLATE_KINDS } from "./batchPlanReadiness.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -336,5 +337,27 @@ assert(routeForPath("/canvas-mvp") === "/canvas-mvp", "canvas path should still 
 assert(routeForPath("/workflow/unknown") === "/canvas-mvp", "unknown workflow paths should still fall back to the canvas");
 const emptyProgress = deriveWorkflowProgress([], [], []);
 assert(isWorkflowRouteUnlocked("/", emptyProgress), "the home route must stay reachable on an empty draft");
+
+// 批量生产：开工前就要说清楚缺什么，别等到第二天早上执行失败。
+assert(missingTemplateKinds(initialNodes).length === 0, "the factory template should already contain every node kind a daily draft needs");
+assert(missingTemplateKinds(initialNodes.filter(node => node.data.kind !== "sound")).join(",") === "sound", "a template without the sound node should report exactly that");
+const fullLibrary = { dishCount: 120, availableCount: 120, pendingCount: 0, backgroundCount: 8 };
+const batchInput = { loading: false, library: fullLibrary, customRoots: null, missingKinds: [], candidateCount: 40, clipsPerVideo: 4 };
+const readyPlan = batchPlanReadiness(batchInput);
+assert(readyPlan.ok && readyPlan.blocker === "", "a stocked library with a complete template should be ready to start");
+assert(readyPlan.maxVideosPerDay === 30, "120 dishes at 4 clips per video should allow 30 videos a day");
+assert(!batchPlanReadiness({ ...batchInput, loading: true }).ok, "the start button must stay disabled while the library summary is still loading");
+assert(batchPlanReadiness({ ...batchInput, missingKinds: REQUIRED_TEMPLATE_KINDS.slice(0, 1) }).action === "template", "a template gap should send the user to the template, not the library");
+assert(batchPlanReadiness({ ...batchInput, library: { ...fullLibrary, dishCount: 0, availableCount: 0 } }).action === "library", "an empty library should send the user to the library");
+assert(batchPlanReadiness({ ...batchInput, library: { ...fullLibrary, backgroundCount: 0 } }).action === "background", "a library without backgrounds should send the user to the background upload");
+const shortStock = batchPlanReadiness({ ...batchInput, library: { ...fullLibrary, dishCount: 20, availableCount: 20 } });
+assert(!shortStock.ok && shortStock.blocker.includes("5 条"), "a short library should say how many videos a day it can still cover");
+// 预留是按日期滚动的，占用只提醒不拦。
+const crowded = batchPlanReadiness({ ...batchInput, library: { ...fullLibrary, availableCount: 10 } });
+assert(crowded.ok && crowded.note.includes("110"), "dishes reserved by another plan should warn rather than block");
+assert(batchPlanReadiness({ ...batchInput, library: { ...fullLibrary, pendingCount: 12 } }).note.includes("12"), "unclassified dishes should be surfaced as a note");
+const customBlank = batchPlanReadiness({ ...batchInput, library: null, customRoots: { asset: "", background: "" } });
+assert(!customBlank.ok, "a custom folder pair with empty paths must not start a plan");
+assert(batchPlanReadiness({ ...batchInput, library: null, customRoots: { asset: "/tmp/a", background: "/tmp/b" } }).ok, "two filled custom folders should be allowed to start");
 
 console.log("model tests passed");
