@@ -291,7 +291,9 @@ def create_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
                 source = by_date.get(run_date.isoformat(), defaults)
                 candidate_count = _positive(source.get("candidate_count", 40), "候选片段数")
                 video_count = _positive(source.get("video_count", 10), "成片数", maximum=30)
-                clips_per_video = _positive(source.get("clips_per_video", 4), "每条成片片段数", maximum=8)
+                # 默认 6 段：参考片的镜头数中位是 6（p10 也是 6，见 docs/reference_profile.json），
+                # 原来默认 4 段成片明显更单调。前端表单的默认值跟这里保持一致。
+                clips_per_video = _positive(source.get("clips_per_video", 6), "每条成片片段数", maximum=8)
                 counts = _normalize_counts(source.get("category_counts") if isinstance(source.get("category_counts"), Mapping) else {}, candidate_count)
                 daily_id = uuid.uuid4().hex
                 connection.execute(

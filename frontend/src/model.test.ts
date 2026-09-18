@@ -6,6 +6,7 @@ import { routeForPath } from "./router.ts";
 import { canAssemblePromptNode, promptAssemblyBlockReason, promptUpstreamNodes } from "./promptAssemblyReadiness.ts";
 import { generatorGenerationBlockReason } from "./generatorReadiness.ts";
 import { batchPlanReadiness, missingTemplateKinds, REQUIRED_TEMPLATE_KINDS } from "./batchPlanReadiness.ts";
+import { workflowSeed } from "./seed.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -381,5 +382,9 @@ const fallback = recommendClipSelection(scarce, 3);
 assert(fallback.length === 3, "a short pool must still fill the video rather than returning nothing");
 assert(fallback[0].id === "好片1", "the healthy clip must come first when the pool has to include flagged ones");
 assert(recommendClipSelection([baseClip("坏片1", { redoRecommended: true })], 1)[0].id === "坏片1", "a single flagged clip is still better than an empty timeline");
+
+// 第十一批：每条成片默认用 6 个片段——参考片的镜头数中位就是 6（p10 也是 6），
+// 工具原来默认 3 个，成片明显更单调。
+assert(workflowSeed.composeClipCount === 6, "a default video should be cut from six clips, like the published reference videos");
 
 console.log("model tests passed");

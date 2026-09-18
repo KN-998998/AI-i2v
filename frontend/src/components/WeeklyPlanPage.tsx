@@ -10,7 +10,9 @@ type Props = { onToast: (message: string) => void };
 type DailyForm = { candidate_count: number; video_count: number; clips_per_video: number; category_counts: Record<string, number> };
 
 const blankCounts = (): Record<string, number> => Object.fromEntries(DISH_CATEGORY_OPTIONS.map(category => [category, 0]));
-const defaultForm = (): DailyForm => ({ candidate_count: 40, video_count: 10, clips_per_video: 4, category_counts: blankCounts() });
+/** 每条 6 段：参考片的镜头数中位就是 6（p10 也是 6，见 docs/reference_profile.json）。
+ *  代价是每条片子多用 2 道菜，库存吃紧时可以在「高级设置」里调回去。 */
+const defaultForm = (): DailyForm => ({ candidate_count: 40, video_count: 10, clips_per_video: 6, category_counts: blankCounts() });
 /** 后端对候选片段数的上限（weekly_plans.py::_positive）。每天条数的上限跟着它走。 */
 const MAX_CANDIDATES_PER_DAY = 80;
 
