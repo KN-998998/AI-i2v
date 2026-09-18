@@ -19,11 +19,11 @@ from pathlib import Path
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
-from web.core.settings import WEEKLY_PLAN_DB, WEEKLY_PLAN_TIMEZONE
+from web.core.settings import CANVAS_BACKGROUND_ROOT, WEEKLY_PLAN_DB, WEEKLY_PLAN_TIMEZONE
 from web.services import canvas_asset_library as asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, start_image_processing
-from web.services.canvas_state import load_draft, save_draft
+from web.services.canvas_state import list_background_files, load_draft, save_draft
 
 _LOCK = threading.RLock()
 _SCHEDULER_STARTED = False
@@ -309,6 +309,46 @@ def create_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
             connection.rollback()
             raise
     return get_plan(plan_id) or {}
+
+
+def library_readiness(asset_root: str | None = None) -> dict[str, Any]:
+    """批量生产页开工前的摘要：现在有多少道菜、多少张背景图能直接用。
+
+    这里刻意不走 _library_candidates。那条路对没有标签的菜名会调用分类模型，
+    慢而且要花钱，而这个摘要是一打开页面就要读的。所以只认两种确定的分类来源：
+    素材库里人工确认过的标签，和「分类/菜名/图片」这种标准目录结构；两种都认不出
+    的算「待确认」，页面会提示去整理素材库。
+    """
+    initialize()
+    root = Path(asset_root).expanduser() if asset_root else asset_library.managed_asset_library_root()
+    counts = {category: 0 for category in _CATEGORIES}
+    dish_keys: list[str] = []
+    pending = 0
+    if root.is_dir():
+        resolved = root.resolve()
+        metadata = asset_library._load_asset_metadata(resolved)
+        groups = asset_library._merge_duplicate_dish_directories(asset_library._dish_directories(resolved))
+        for group in groups:
+            dish_name = str(group["dishName"])
+            confirmed = asset_library._metadata_for_dish_name(metadata, dish_name)
+            category = str(confirmed.get("category") or "") or str(asset_library._category_from_standardized_folders(resolved, group) or "")
+            if category in _CATEGORIES:
+                counts[category] += 1
+                dish_keys.append(_dish_key(dish_name))
+            else:
+                pending += 1
+    today = datetime.now(ZoneInfo(WEEKLY_PLAN_TIMEZONE)).date()
+    with _LOCK, _connect() as connection:
+        blocked = _reserved_keys(connection, today)
+    return {
+        "assetRoot": str(root),
+        "backgroundRoot": str(CANVAS_BACKGROUND_ROOT),
+        "dishCount": len(dish_keys),
+        "availableCount": len([key for key in dish_keys if key not in blocked]),
+        "pendingCount": pending,
+        "backgroundCount": len(list_background_files()),
+        "categoryCounts": counts,
+    }
 
 
 def update_plan_status(plan_id: str, action: str) -> dict[str, Any]:

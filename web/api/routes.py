@@ -35,7 +35,7 @@ from pipeline.config import (
     VIDEO_SILENT,
 )
 from web.services.canvas_compose import compose_output_path, get_compose_job, start_compose
-from web.services.weekly_plans import assert_ready_for_compose, create_plan as create_weekly_plan, get_daily_by_draft, get_plan as get_weekly_plan, list_plans as list_weekly_plans, save_clip_review, update_daily_plan, update_plan_status
+from web.services.weekly_plans import assert_ready_for_compose, create_plan as create_weekly_plan, get_daily_by_draft, get_plan as get_weekly_plan, library_readiness, list_plans as list_weekly_plans, save_clip_review, update_daily_plan, update_plan_status
 from web.services.canvas_asset_library import ASSET_CATEGORIES, build_asset_plan, list_category_rules, load_manual_review_scan, managed_asset_library_root, manual_review_preview_path, manual_review_scan_response, manual_review_upload_directory, organize_manual_asset_library, save_category_rule, save_manual_review_state, scan_asset_classifications, scan_manual_asset_library
 from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, recompose_image, start_image_processing, tencent_matting_configured
@@ -530,6 +530,15 @@ def compose_canvas_draft(draft_id: str, payload: dict[str, Any] | None = None) -
 @router.get("/api/weekly-plans")
 def get_weekly_plans() -> list[dict[str, Any]]:
     return list_weekly_plans()
+
+
+# 必须排在 /api/weekly-plans/{plan_id} 之前，否则 readiness 会被当成计划 ID。
+@router.get("/api/weekly-plans/readiness")
+def get_weekly_plan_readiness(asset_root: str | None = None) -> dict[str, Any]:
+    try:
+        return library_readiness(asset_root)
+    except (OSError, ValueError) as exc:
+        raise _json_error(str(exc), 400) from exc
 
 
 @router.post("/api/weekly-plans")
