@@ -13,7 +13,8 @@ type ImageProcessSetting = {
 
 const SETTINGS: ImageProcessSetting[] = [
   { key: "backgroundBlur", label: "背景虚化", help: "0 为清晰，24 为最强；只处理背景模板。", min: 0, max: 24, step: 1, fallback: 4 },
-  { key: "backgroundBrightness", label: "背景亮度", help: "1 为原始亮度；数值越小，背景越暗。", min: 0.35, max: 1, step: 0.05, fallback: 0.72 },
+  // 默认 0.85 而不是原来的 0.72：参考片画面平均亮度 109–123，我们只有 65.7。要和 model.ts 的默认值保持一致。
+  { key: "backgroundBrightness", label: "背景亮度", help: "1 为原始亮度；数值越小，背景越暗。", min: 0.35, max: 1, step: 0.05, fallback: 0.85 },
   { key: "subjectScale", label: "菜品大小", help: "按画面占比缩放，最高不会超过画面高度的 72%。", min: 0.2, max: 1, step: 0.05, fallback: 0.68 },
   { key: "subjectX", label: "水平位置", help: "0.5 为居中；数值越大，菜品越靠右。", min: 0.05, max: 0.95, step: 0.05, fallback: 0.5 },
   { key: "subjectY", label: "垂直位置", help: "0.5 为居中；数值越大，菜品越靠下。", min: 0.05, max: 0.95, step: 0.05, fallback: 0.58 },

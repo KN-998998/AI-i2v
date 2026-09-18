@@ -800,7 +800,9 @@ export const clips: TimelineClip[] = [
 export function dataFor(kind: NodeKind): WorkflowData {
   const base = { kind, ...nodeCatalog[kind] };
   if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", dishCategory: "主菜", assetMode: "单图模式", imageName: "当前素材" };
-  if (kind === "image_process") return { ...base, processingMode: "matting_composite", backgroundBlur: 4, backgroundBrightness: 0.72, subjectScale: 0.68, subjectX: 0.5, subjectY: 0.58 };
+  // 背景亮度 0.85：参考片的画面平均亮度是 109–123，工具合成的成片只有 65.7，压暗到 0.72 是成因之一。
+  // 只调这一步大约能到 74，到不了 109——剩下的差距在背景素材本身偏暗，见 README「为什么成片比参考片暗」。
+  if (kind === "image_process") return { ...base, processingMode: "matting_composite", backgroundBlur: 4, backgroundBrightness: 0.85, subjectScale: 0.68, subjectX: 0.5, subjectY: 0.58 };
   if (kind === "prompt") return { ...base, promptConfig: DEFAULT_PROMPT_CONFIG, ...promptLegacyPatch(DEFAULT_PROMPT_CONFIG) };
   if (kind === "generator") return { ...base, duration: "3s", resolution: "1080p", audio: "无声", storyboard: "单分镜" };
   if (kind === "output") return { ...base, outputTarget: "5-6 道菜", outputDuration: "12-15s", outputAspect: "9:16" };

@@ -264,7 +264,9 @@ def _cover_background(source: Image.Image) -> Image.Image:
 
 def _compose_image(foreground_path: Path, background_path: Path | None, destination: Path, config: dict[str, Any]) -> None:
     blur_radius = max(0.0, min(24.0, float(config.get("backgroundBlur", 4) or 0)))
-    brightness = max(0.35, min(1.0, float(config.get("backgroundBrightness", 0.72) or 0.72)))
+    # 0.85：参考片的画面平均亮度 109–123，工具合成的成片只有 65.7，原来默认压暗到 0.72 是成因之一。
+    # 兜底值要和前端的默认值（model.ts / ImageProcessControls.tsx）保持一致，否则同一张草稿两边合出来不一样。
+    brightness = max(0.35, min(1.0, float(config.get("backgroundBrightness", 0.85) or 0.85)))
     subject_scale = max(0.2, min(1.0, float(config.get("subjectScale", 0.68) or 0.68)))
     subject_x = max(0.05, min(0.95, float(config.get("subjectX", 0.5) or 0.5)))
     subject_y = max(0.05, min(0.95, float(config.get("subjectY", 0.58) or 0.58)))

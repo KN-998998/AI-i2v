@@ -1,4 +1,4 @@
-import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, type TimelineClip, voiceItemsFromData } from "./model.ts";
+import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, dataFor, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, type TimelineClip, voiceItemsFromData } from "./model.ts";
 import { applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, DEFAULT_PROMPT_CONFIG, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
@@ -386,5 +386,9 @@ assert(recommendClipSelection([baseClip("坏片1", { redoRecommended: true })], 
 // 第十一批：每条成片默认用 6 个片段——参考片的镜头数中位就是 6（p10 也是 6），
 // 工具原来默认 3 个，成片明显更单调。
 assert(workflowSeed.composeClipCount === 6, "a default video should be cut from six clips, like the published reference videos");
+
+// 第十二批：背景压暗的默认值从 0.72 调到 0.85。参考片画面平均亮度 109–123，
+// 工具合成的成片只有 65.7；这一步只能拉到 74 左右，剩下的差距在背景素材本身。
+assert(dataFor("image_process").backgroundBrightness === 0.85, "the background should no longer be dimmed to 0.72 by default");
 
 console.log("model tests passed");
