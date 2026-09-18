@@ -152,3 +152,70 @@ def test_an_unreadable_file_degrades_to_no_frame_checks(tmp_path):
     clip.write_bytes(b"not a video")
 
     assert canvas_quality._frame_diagnostics(clip) == {"frameChecksOk": False}
+
+
+# ---------------------------------------------------------------------------
+# 第十一批：每段只用"动得最多"的 1.8 秒
+# 参考片的单镜头中位时长是 1.53 秒（四分位 0.98–1.98，见 docs/reference_profile.json），
+# 工具原来固定把 3 秒片段截成 2.5 秒用掉，节奏明显更拖。
+# ---------------------------------------------------------------------------
+def test_the_target_clip_length_comes_from_the_reference_profile():
+    assert canvas_quality.TARGET_CLIP_SECONDS == 1.8
+
+
+def test_a_clip_shorter_than_the_window_is_used_whole():
+    """片段本身还没窗口长时，原样用完，别去切。"""
+    start, end = canvas_quality._best_motion_window([1.0] * 10, 30.0, 1.8)
+    assert start == 0.0
+    assert round(end, 2) == round(11 / 30, 2)
+
+
+def test_the_window_lands_where_the_motion_is():
+    """前 2 秒几乎不动、后 1 秒动得厉害的片子，窗口要贴着片尾。"""
+    deltas = [0.01] * 60 + [5.0] * 29
+    start, end = canvas_quality._best_motion_window(deltas, 30.0, 1.0)
+    assert round(end, 1) == 3.0
+    assert round(end - start, 1) == 1.0
+
+
+def test_the_window_is_exactly_as_long_as_asked():
+    start, end = canvas_quality._best_motion_window([1.0] * 89, 30.0, 1.8)
+    assert round(end - start, 2) == 1.8
+
+
+def test_an_evenly_paced_clip_starts_from_the_beginning():
+    """全片动得一样多时取最靠前的窗口，同一个片段每次算出来要一样。"""
+    start, _end = canvas_quality._best_motion_window([1.0] * 89, 30.0, 1.8)
+    assert start == 0.0
+
+
+def test_a_quick_analysis_does_not_guess_a_window(monkeypatch, tmp_path):
+    """浅分析没有逐帧数据，就不该凭空给出一个窗口。"""
+    monkeypatch.setattr(canvas_quality, "_probe_media", _fake_probe)
+    monkeypatch.setattr(canvas_quality, "_frame_diagnostics", lambda _p: pytest.fail("浅分析不应该逐帧读视频"))
+
+    result = analyze_video(tmp_path / "clip.mp4", "玉子寿司", "寿司")
+
+    assert "bestWindowStart" not in result or result.get("bestWindowStart") is None
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="需要 ffmpeg 才能造对照片段")
+def test_frame_diagnostics_pick_the_liveliest_part_of_a_real_clip(tmp_path):
+    """端到端：2 秒静止 + 1 秒晃动拼起来的片子，窗口必须落在后面那一秒。"""
+    pytest.importorskip("cv2")
+    still = tmp_path / "still.png"
+    frozen = tmp_path / "frozen.mp4"
+    moving = tmp_path / "moving.mp4"
+    joined = tmp_path / "joined.mp4"
+    listing = tmp_path / "list.txt"
+    assert _render(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=#334455:size=360x640:duration=1", "-vframes", "1", str(still)])
+    assert _render(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(still), "-t", "2", "-r", "30", "-pix_fmt", "yuv420p", str(frozen)])
+    assert _render(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30:duration=1", "-pix_fmt", "yuv420p", str(moving)])
+    listing.write_text(f"file '{frozen}'\nfile '{moving}'\n", encoding="utf-8")
+    assert _render(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(joined)])
+
+    stats = canvas_quality._frame_diagnostics(joined)
+
+    assert stats["frameChecksOk"]
+    assert stats["bestWindowStart"] >= 1.0, "静止的那两秒不该被选中"
+    assert stats["bestWindowEnd"] > 2.0

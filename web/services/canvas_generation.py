@@ -209,6 +209,19 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
     # 「整段不动 / 闪烁 / 边缘长出新东西」判出来，免得拖到第二天人工审片才发现。
     analysis = analyze_video(path, dish, category, True)
     duration = float(analysis.get("durationSeconds") or VIDEO_DURATION)
+    # 默认只用逐帧分析挑出来的那段「动得最多的 1.8 秒」，参考片的单镜头中位就是 1.53 秒，
+    # 原来固定截 2.5 秒明显更拖。拿不到窗口（浅分析、cv2 读不出帧）时保持老行为，
+    # 不凭空编一个区间出来。人在第 5 步仍然可以手动改。
+    window_start = analysis.get("bestWindowStart")
+    window_end = analysis.get("bestWindowEnd")
+    if window_start is None or window_end is None:
+        start_seconds = min(0.5, max(0.0, duration - 0.1))
+        end_seconds = round(duration, 2)
+        timeline_duration = min(round(duration, 2), 2.5)
+    else:
+        start_seconds = round(float(window_start), 2)
+        end_seconds = round(float(window_end), 2)
+        timeline_duration = round(end_seconds - start_seconds, 2)
     filename = path.name
     asset_id = str(job.get("asset_id") or f"asset_{job.get('node_id', 'generator')}")
     clip_version = int(job.get("clip_version") or _next_clip_version(asset_id))
@@ -223,10 +236,10 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
         "label": "生成片段",
         "tone": "#355e62",
         "durationSeconds": round(duration, 2),
-        "timelineDuration": min(round(duration, 2), 2.5),
+        "timelineDuration": timeline_duration,
         "sourceDurationSeconds": round(duration, 2),
-        "sourceStartSeconds": min(0.5, max(0.0, duration - 0.1)),
-        "sourceEndSeconds": round(duration, 2),
+        "sourceStartSeconds": start_seconds,
+        "sourceEndSeconds": end_seconds,
         "status": "generated",
         "sourcePath": str(path.resolve()),
         "sourceUrl": f"/api/canvas/clips/library/{filename}",

@@ -279,3 +279,39 @@ def test_startup_recovery_marks_job_without_task_id_as_unrecoverable(monkeypatch
     current = canvas_generation.get_generation_job("default", job["job_id"])
     assert current["status"] == "error"
     assert "task_id" in current["error"]
+
+
+# ---------------------------------------------------------------------------
+# 第十一批：生成完的片段默认只用动得最多的那 1.8 秒
+# ---------------------------------------------------------------------------
+_FAKE_JOB = {"job_id": "a" * 32, "node_id": "generator", "asset_id": "asset_test", "clip_version": 1}
+
+
+def _fake_analysis(**extra):
+    base = {
+        "durationSeconds": 3.0, "qualityScore": 90, "qualityLabel": "good",
+        "qualityWarnings": [], "analysisMode": "technical_rules",
+    }
+    base.update(extra)
+    return base
+
+
+def test_a_clip_uses_the_liveliest_window_the_analysis_found(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_generation, "analyze_video", lambda *_args: _fake_analysis(bestWindowStart=1.05, bestWindowEnd=2.85))
+
+    clip = canvas_generation._build_clip(dict(_FAKE_JOB), tmp_path / "clip.mp4", "玉子寿司", "寿司")
+
+    assert clip["sourceStartSeconds"] == 1.05
+    assert clip["sourceEndSeconds"] == 2.85
+    assert clip["timelineDuration"] == 1.8
+
+
+def test_a_clip_without_frame_analysis_keeps_the_old_timings(monkeypatch, tmp_path):
+    """cv2 读不出帧时不能凭空编一个窗口，保持原来的 0.5 → 全长。"""
+    monkeypatch.setattr(canvas_generation, "analyze_video", lambda *_args: _fake_analysis())
+
+    clip = canvas_generation._build_clip(dict(_FAKE_JOB), tmp_path / "clip.mp4", "玉子寿司", "寿司")
+
+    assert clip["sourceStartSeconds"] == 0.5
+    assert clip["sourceEndSeconds"] == 3.0
+    assert clip["timelineDuration"] == 2.5

@@ -203,6 +203,41 @@ _EDGE_CORRELATION = 0.60           # 首末帧四边 8% 区域的直方图相关
 _FREEZE_REDO_SECONDS = 1.0         # 连续静止到这个长度就不只是提醒了
 
 
+# ---------------------------------------------------------------------------
+# 成片节奏：每段默认只用「动得最多」的那一小段
+#
+# 11 条已发布参考片量下来，单镜头时长中位 1.53 秒、四分位 0.98–1.98
+# （docs/reference_profile.json）。工具原来把 3 秒片段固定按 0.5 → 3.0 用掉 2.5 秒，
+# 比参考片拖得明显。取 1.8 秒落在四分位带的上沿：跟得上参考片的节奏，又不至于
+# 短到看不清是什么菜。这只是个默认值，人在第 5 步仍然可以手动改裁剪区间。
+# ---------------------------------------------------------------------------
+TARGET_CLIP_SECONDS = 1.8   # 参考片单镜头中位 1.53s，四分位 0.98–1.98（docs/reference_profile.json）
+
+
+def _best_motion_window(deltas: list[float], fps: float, window_seconds: float) -> tuple[float, float]:
+    """在逐帧差上滑窗，找出动得最多的一段，返回（起点秒, 终点秒）。
+
+    deltas[i] 是第 i 帧与第 i+1 帧的平均绝对差，比帧数少 1，所以片段总长按
+    (len(deltas) + 1) / fps 算。并列时取最靠前的一段：同一个片段重复分析必须给出
+    同一个答案，否则重新生成一次时间线就会莫名其妙地跳。
+    """
+    total_seconds = (len(deltas) + 1) / fps
+    if total_seconds <= window_seconds:
+        # 片段本身还没窗口长，整段用完，别切出个更短的来。
+        return 0.0, round(total_seconds, 3)
+    span = max(1, min(len(deltas), int(round(window_seconds * fps))))
+    best_index = 0
+    best_sum = sum(deltas[:span])
+    for index in range(1, len(deltas) - span + 1):
+        # 逐窗重新求和而不是滚动加减：最多 150 帧，代价可以忽略，
+        # 而滚动累加的浮点误差会让「全片动得一样多」这种并列悄悄漂到后面去。
+        current = sum(deltas[index:index + span])
+        if current > best_sum:
+            best_sum, best_index = current, index
+    start = best_index / fps
+    return round(start, 3), round(min(start + window_seconds, total_seconds), 3)
+
+
 def _frame_diagnostics(path: Path) -> dict[str, Any]:
     """逐帧统计 A 层用到的几个数。cv2 和 numpy 已在 requirements 里，不引入新依赖。"""
     try:
@@ -214,7 +249,9 @@ def _frame_diagnostics(path: Path) -> dict[str, Any]:
     if not capture.isOpened():
         return {"frameChecksOk": False}
     frames: list[Any] = []
+    fps = 0.0
     try:
+        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
         while len(frames) < _ANALYSIS_MAX_FRAMES:
             ok, frame = capture.read()
             if not ok:
@@ -241,6 +278,9 @@ def _frame_diagnostics(path: Path) -> dict[str, Any]:
         motion = _optical_flow_mean(cv2, np, frames)
         match_ratio = _subject_match_ratio(cv2, frames)
         edge = _edge_correlation(cv2, frames)
+        # 顺手把「动得最多的 1.8 秒」算出来：逐帧差这一趟已经跑完了，白算一遍太亏。
+        # 有的容器读不出帧率（拿到 0 甚至负数），生成出来的片段都是 30fps，按 30 兜底。
+        window_start, window_end = _best_motion_window(deltas, fps if fps > 0 else 30.0, TARGET_CLIP_SECONDS)
     except (cv2.error, ValueError, ZeroDivisionError):
         return {"frameChecksOk": False}
 
@@ -252,6 +292,8 @@ def _frame_diagnostics(path: Path) -> dict[str, Any]:
         "motionMean": round(motion, 4),
         "subjectMatchRatio": None if match_ratio is None else round(match_ratio, 4),
         "edgeCorrelation": round(edge, 4),
+        "bestWindowStart": window_start,
+        "bestWindowEnd": window_end,
     }
 
 
