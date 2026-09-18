@@ -14,7 +14,10 @@ export PYTHONUTF8=1
 export PYTHONIOENCODING=utf-8
 
 # 后端测试需要的模块（pytest 之外，还要能真正 import 起 web 与 pipeline）
-REQUIRED_MODULES="pytest fastapi uvicorn colorama PIL numpy requests urllib3 jwt multipart"
+# cv2 必须在这里：片段的逐帧检查（整段不动 / 闪烁 / 边缘伪影 / 最佳截取窗口）全靠它，
+# 而缺了 cv2 时 _frame_diagnostics 会安静地走降级分支——测试照样全绿，但那几项其实
+# 一条都没被测到。漏掉它会让验证变成纸面绿。
+REQUIRED_MODULES="pytest fastapi uvicorn colorama PIL numpy cv2 requests urllib3 jwt multipart"
 
 info() { printf '\033[36m[信息]\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m[注意]\033[0m %s\n' "$*"; }
@@ -80,10 +83,21 @@ info "2/3 前端单元测试"
 (cd frontend && npm test) || fail "前端单元测试失败。"
 pass "前端单元测试通过"
 
+# ffmpeg 不是 import 得到的，单独查。没有它时一批端到端用例会被 pytest 跳过，
+# 而跳过不算失败——不特意说一声，这里就会报一个不完整的绿。
+FFMPEG_OK=1
+for tool in ffmpeg ffprobe; do
+  command -v "${tool}" >/dev/null 2>&1 || FFMPEG_OK=0
+done
+
 info "3/3 后端测试"
 mkdir -p .tmp
 "${PYTHON_EXE}" -X utf8 -m pytest || fail "后端测试失败。"
 pass "后端测试通过"
 
 echo
+if [ "${FFMPEG_OK}" -eq 0 ]; then
+  warn "这台机器上没有 ffmpeg / ffprobe，几条端到端用例被跳过了，本次不算完整验证。"
+  warn "而且没有 ffmpeg 就合成不了成片，本地根本跑不到第 5 步。安装: brew install ffmpeg"
+fi
 pass "全部验证通过，可以提交。"
