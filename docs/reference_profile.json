@@ -1,0 +1,225 @@
+{
+  "clips": [
+    {
+      "file": "曾恺龙 2026-09-09 16.44.01.mp4",
+      "durationSeconds": 9.308,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 4,
+      "medianShotSeconds": 1.984,
+      "motionMedian": 0.3846,
+      "brightness": 101.6,
+      "saturation": 132.24,
+      "hasFadeIn": false,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -19.3,
+      "rmsStdDb": 6.4
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.04.mp4",
+      "durationSeconds": 9.6,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 8,
+      "medianShotSeconds": 1.033,
+      "motionMedian": 0.6754,
+      "brightness": 109.23,
+      "saturation": 107.14,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -18.57,
+      "rmsStdDb": 5.01
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.08.mp4",
+      "durationSeconds": 14.626,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 13,
+      "medianShotSeconds": 0.967,
+      "motionMedian": 0.5568,
+      "brightness": 122.92,
+      "saturation": 120.08,
+      "hasFadeIn": false,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -18.72,
+      "rmsStdDb": 4.6
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.10.mp4",
+      "durationSeconds": 10.148,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 6,
+      "medianShotSeconds": 1.583,
+      "motionMedian": 0.5578,
+      "brightness": 114.08,
+      "saturation": 84.71,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -19.04,
+      "rmsStdDb": 5.24
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.12.mp4",
+      "durationSeconds": 8.633,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 6,
+      "medianShotSeconds": 1.534,
+      "motionMedian": 0.7274,
+      "brightness": 114.51,
+      "saturation": 93.33,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -17.85,
+      "rmsStdDb": 3.92
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.14.mp4",
+      "durationSeconds": 11.955,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 10,
+      "medianShotSeconds": 1.127,
+      "motionMedian": 0.915,
+      "brightness": 121.47,
+      "saturation": 105.76,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -18.1,
+      "rmsStdDb": 3.81
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.18.mp4",
+      "durationSeconds": 8.667,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 6,
+      "medianShotSeconds": 1.534,
+      "motionMedian": 0.4999,
+      "brightness": 116.6,
+      "saturation": 91.56,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -19.0,
+      "rmsStdDb": 5.07
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.21.mp4",
+      "durationSeconds": 14.1,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 12,
+      "medianShotSeconds": 0.984,
+      "motionMedian": 0.8402,
+      "brightness": 123.96,
+      "saturation": 102.76,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -18.02,
+      "rmsStdDb": 3.19
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.27.mp4",
+      "durationSeconds": 12.47,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 6,
+      "medianShotSeconds": 2.3,
+      "motionMedian": 1.0119,
+      "brightness": 117.18,
+      "saturation": 109.98,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -19.7,
+      "rmsStdDb": 5.1
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.31.mp4",
+      "durationSeconds": 11.537,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 6,
+      "medianShotSeconds": 1.917,
+      "motionMedian": 0.5743,
+      "brightness": 115.09,
+      "saturation": 100.83,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -20.36,
+      "rmsStdDb": 5.88
+    },
+    {
+      "file": "曾恺龙 2026-09-09 16.44.38.mp4",
+      "durationSeconds": 9.006,
+      "width": 720,
+      "height": 1280,
+      "shotCount": 6,
+      "medianShotSeconds": 1.437,
+      "motionMedian": 0.6767,
+      "brightness": 116.82,
+      "saturation": 102.21,
+      "hasFadeIn": true,
+      "hasEndCard": true,
+      "hasAudio": true,
+      "rmsDb": -18.31,
+      "rmsStdDb": 3.94
+    }
+  ],
+  "profile": {
+    "sampleCount": 11,
+    "durationSeconds": {
+      "p10": 8.667,
+      "median": 10.148,
+      "p90": 14.1
+    },
+    "shotCount": {
+      "p10": 6.0,
+      "median": 6.0,
+      "p90": 12.0
+    },
+    "medianShotSeconds": {
+      "p10": 0.984,
+      "median": 1.534,
+      "p90": 1.984
+    },
+    "motionMedian": {
+      "p10": 0.5,
+      "median": 0.675,
+      "p90": 0.915
+    },
+    "brightness": {
+      "p10": 109.23,
+      "median": 116.6,
+      "p90": 122.92
+    },
+    "saturation": {
+      "p10": 91.56,
+      "median": 102.76,
+      "p90": 120.08
+    },
+    "fadeInRatio": 0.818,
+    "endCardRatio": 1.0,
+    "audioRmsDb": {
+      "p10": -19.7,
+      "median": -18.72,
+      "p90": -18.02
+    },
+    "audioRmsStdDb": {
+      "p10": 3.81,
+      "median": 5.01,
+      "p90": 5.88
+    }
+  }
+}
