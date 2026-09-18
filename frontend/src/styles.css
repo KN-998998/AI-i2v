@@ -1553,3 +1553,48 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 /* 侧栏「工作台首页」：和流程画布、任务中心同一层级，图标用一个屋顶。 */
 .home-link .canvas-link-icon { font-size: 15px; }
+/* ---------------------------------------------------------------------------
+ * 批量生产入口：一屏三问（用哪个素材库 / 每天出几条 / 哪个样板、什么时候开工），
+ * 其余参数收进「高级设置」。以前这里是三张并排的工程表单卡片，开工按钮在两屏以下。
+ * ------------------------------------------------------------------------- */
+.batch-start { max-width: 940px; margin-top: 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: var(--shadow); }
+.batch-rows { list-style: none; margin: 0; padding: 0; }
+.batch-row { display: flex; align-items: flex-start; gap: 16px; padding: 16px 26px; border-bottom: 1px solid var(--line); }
+.batch-row-index { flex: 0 0 26px; width: 26px; height: 26px; margin-top: 1px; border-radius: 50%; background: var(--cyan-soft); color: var(--cyan); font-size: 14px; font-weight: 700; line-height: 26px; text-align: center; }
+.batch-row-expand { padding-top: 0; border-bottom: 1px solid var(--line); }
+.batch-row-expand .batch-row-index { background: transparent; }
+.batch-row-body { display: grid; flex: 1; gap: 6px; min-width: 0; }
+.batch-row-body h2 { margin: 0; font-size: 17px; }
+.batch-row-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin: 0; color: var(--text); font-size: 16px; }
+.batch-row-hint { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.batch-row-hint .link-button { margin-left: 6px; font-size: 14px; }
+.batch-row-switch { flex: 0 0 auto; font-size: 14px; }
+.batch-custom-roots { gap: 14px; }
+.batch-stepper { display: flex; align-items: center; gap: 10px; }
+.batch-step-button { width: 40px; min-width: 40px; height: 40px; padding: 0; font-size: 20px; line-height: 1; }
+.batch-step-input { width: 96px; height: 40px; font-size: 20px; font-weight: 600; text-align: center; }
+.batch-step-unit { color: var(--muted); font-size: 15px; }
+.batch-schedule { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 15px; }
+.batch-schedule .input { width: auto; min-width: 0; height: 36px; }
+.batch-schedule-days { width: 66px; text-align: center; }
+.batch-schedule-time { width: 112px; }
+.batch-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; padding: 16px 26px; }
+.batch-go { min-width: 190px; min-height: 48px; font-size: 16px; }
+.batch-footer-note { flex: 1; min-width: 240px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.batch-footer-note.is-blocked { color: var(--amber); }
+.batch-footer-note .link-button { margin-left: 8px; font-size: 14px; }
+/* 默认值不藏起来：三个参数写成一行摆在开始按钮上方，点「改」才就地展开。 */
+.batch-defaults { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 13px 26px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.batch-defaults .link-button { font-size: 14px; }
+.batch-defaults-open { display: grid; gap: 10px; padding: 16px 26px 20px; border-bottom: 1px solid var(--line); background: #fafafd; }
+.batch-defaults-open .weekly-output-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 0; }
+.batch-defaults-open .form-check { padding-left: 0; }
+.batch-category-block { display: grid; gap: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.batch-category-block p { margin: 0; font-size: 14px; }
+.batch-recreate { margin-top: 22px; }
+@media (max-width: 860px) {
+  .batch-row, .batch-footer { padding: 16px 18px; }
+  .batch-row { flex-wrap: wrap; }
+  .batch-defaults, .batch-defaults-open { padding-inline: 18px; }
+  .batch-defaults-open .weekly-output-fields { grid-template-columns: 1fr; }
+}
