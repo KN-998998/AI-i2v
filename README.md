@@ -146,7 +146,11 @@ Windows 双击根目录的 `start_dev.bat`；macOS / Linux 执行 `./start_dev.s
 | `http://127.0.0.1:8015/workflow/weekly-plan` | 周计划生产 |
 | `http://127.0.0.1:8015/docs` | FastAPI OpenAPI 文档 |
 
-> 修改 `frontend/` 后需要重新构建：Windows 运行 `scripts\build_frontend.bat`，
+> **改前端时用热更新模式**：`./start_dev.sh --watch` 会同时起 FastAPI 和 Vite 开发
+> 服务器（127.0.0.1:5174），改 `frontend/` 下的文件存盘即刷新，不用重新构建；改 `.py`
+> 后端也会自动重启。挂着不用管，Ctrl+C 一起停掉。
+>
+> 不加 `--watch` 时走生产构建：Windows 运行 `scripts\build_frontend.bat`，
 > macOS / Linux 在 `frontend/` 下运行 `npm run build`，或重新执行启动脚本。
 > 只改了后端 Python 时，可用 `./start_dev.sh --skip-build` 跳过前端构建；
 > 用 `--no-open` 可禁止启动后自动打开浏览器。
