@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from pipeline.config import (
+    FINAL_LOUDNESS_LUFS,
     QWEN_API_KEY, QWEN_TTS_BASE_URL, QWEN_TTS_MODEL, QWEN_TTS_MODELS,
     QWEN_TTS_NATIVE_BASE_URL, QWEN_TTS_CLONE_MODEL, QWEN_TTS_CLONED_VOICES,
     TTS_VOICE,
@@ -262,13 +263,20 @@ def mix_voice_segments(voice_segments, bgm_path, out_path, bgm_volume=0.3, video
 
 
 def merge_audio_video(video_path, audio_path, out_path, audio_volume=1.0, video_duration=None):
-    """用 ffmpeg 将音频合并到无声视频中。"""
+    """用 ffmpeg 将音频合并到无声视频中，并把最终混音统一到参考片的响度。
+
+    loudnorm 接在 volume 后面：人在界面上调的音量倍数先生效，再整体归一化，
+    否则调完音量会被归一化原样抹平。TP=-1.5 留 1.5 dB 真峰值余量，免得平台
+    转码时削波；LRA=11 是响度范围，参考片的动态起伏大约就是这个量级。
+    用单遍不用双遍：双遍要先跑一次分析再跑一次渲染，合成本来就慢，不值得为
+    这点精度翻倍，单遍在成片这个长度上足够稳。
+    """
     cmd = [
         "ffmpeg", "-y",
         "-i", video_path,
         "-i", audio_path,
         "-c:v", "copy",
-        "-filter:a", f"volume={audio_volume}",
+        "-filter:a", f"volume={audio_volume},loudnorm=I={FINAL_LOUDNESS_LUFS}:TP=-1.5:LRA=11",
         "-c:a", "aac", "-b:a", "192k",
     ]
     if video_duration is None:

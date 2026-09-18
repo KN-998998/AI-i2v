@@ -97,6 +97,11 @@ FINAL_DURATION_RANGE = (12, 15)   # 成片 12-15s
 FINAL_FPS            = 30
 FINAL_RESOLUTION     = (1080, 1920)
 
+# 成片的目标响度（EBU R128 Integrated）。11 条已发布的参考片实测全部落在
+# −14.0 ~ −14.2 LUFS，也就是 Instagram / YouTube 的标准化目标；而工具合成的成片
+# 实测是 −20.4 / −26.2 / −31.1，彼此差了 10.7 dB。统一到这个值，成片之间响度才一致。
+FINAL_LOUDNESS_LUFS = -14.0
+
 # 图片预处理规格
 PREP_TARGET_SHORT = 1080          # 目标短边 1080（1080×1920）
 PREP_MAX_LONG     = 2048          # API 允许的最大长边

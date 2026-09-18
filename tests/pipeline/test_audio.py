@@ -1,6 +1,11 @@
 import io
 import json
+import re
+import shutil
+import subprocess
 from unittest.mock import patch
+
+import pytest
 
 from pipeline import audio as voice_bgm
 
@@ -103,3 +108,61 @@ def test_cosyvoice_id_is_rejected_for_qwen_vc_model(monkeypatch, tmp_path):
         assert "CosyVoice" in str(exc)
     else:
         raise AssertionError("expected a voice/model mismatch error")
+
+
+# ---------------------------------------------------------------------------
+# 第十二批：成片统一到 −14 LUFS
+# 11 条已发布的参考片整体响度实测全部落在 −14.0 ~ −14.2 LUFS（Instagram / YouTube
+# 的标准化目标），而工具合成的三条成片是 −20.4 / −26.2 / −31.1，彼此差了 10.7 dB。
+# ---------------------------------------------------------------------------
+def test_the_reference_loudness_target_is_minus_fourteen():
+    from pipeline.config import FINAL_LOUDNESS_LUFS
+
+    assert FINAL_LOUDNESS_LUFS == -14.0
+
+
+def test_the_final_mix_is_normalised_to_the_reference_loudness(monkeypatch, tmp_path):
+    from pipeline.config import FINAL_LOUDNESS_LUFS
+
+    commands = []
+    monkeypatch.setattr(voice_bgm, "_run_ffmpeg", lambda command, timeout, action: commands.append(command))
+
+    voice_bgm.merge_audio_video(str(tmp_path / "v.mp4"), str(tmp_path / "a.m4a"), str(tmp_path / "out.mp4"), video_duration=11.8)
+
+    command = commands[0]
+    audio_filter = command[command.index("-filter:a") + 1]
+    assert f"loudnorm=I={FINAL_LOUDNESS_LUFS}" in audio_filter
+    assert "TP=-1.5" in audio_filter, "留 1.5 dB 真峰值余量，免得平台转码时削波"
+    assert audio_filter.startswith("volume="), "音量倍数要在归一化之前生效，否则用户调的音量会被抹掉"
+
+
+def _run_ok(command):
+    return subprocess.run(command, capture_output=True, check=False).returncode == 0
+
+
+def _integrated_loudness(path):
+    """用 ffmpeg 的 ebur128 量整体响度，量不到返回 None。"""
+    result = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "ebur128=framelog=quiet", "-f", "null", "-"],
+        capture_output=True, text=True, errors="replace", check=False,
+    )
+    found = re.findall(r"I:\s*(-?\d+(?:\.\d+)?)\s*LUFS", f"{result.stdout}\n{result.stderr}")
+    return float(found[-1]) if found else None
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="需要 ffmpeg 才能量响度")
+def test_a_quiet_soundtrack_comes_out_at_the_reference_loudness(tmp_path):
+    """端到端：造一条比目标安静十几 dB 的音频，合并之后实际响度要落回 −14 附近。"""
+    from pipeline.config import FINAL_LOUDNESS_LUFS
+
+    video = tmp_path / "silent.mp4"
+    quiet = tmp_path / "quiet.m4a"
+    merged = tmp_path / "merged.mp4"
+    assert _run_ok(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=180x320:d=6:r=30", "-pix_fmt", "yuv420p", "-an", str(video)])
+    assert _run_ok(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anoisesrc=color=pink:d=6:r=44100", "-af", "volume=-18dB", "-c:a", "aac", str(quiet)])
+
+    voice_bgm.merge_audio_video(str(video), str(quiet), str(merged), video_duration=6)
+
+    measured = _integrated_loudness(merged)
+    assert measured is not None, "没量到响度，ebur128 的输出格式可能变了"
+    assert abs(measured - FINAL_LOUDNESS_LUFS) <= 2.0, f"实际响度 {measured} LUFS，离目标 {FINAL_LOUDNESS_LUFS} 太远"
