@@ -166,3 +166,47 @@ def test_a_quiet_soundtrack_comes_out_at_the_reference_loudness(tmp_path):
     measured = _integrated_loudness(merged)
     assert measured is not None, "没量到响度，ebur128 的输出格式可能变了"
     assert abs(measured - FINAL_LOUDNESS_LUFS) <= 2.0, f"实际响度 {measured} LUFS，离目标 {FINAL_LOUDNESS_LUFS} 太远"
+
+
+# ---------------------------------------------------------------------------
+# 第十二批 · 补充：归一化之后把采样率收回 44.1 kHz
+# loudnorm 内部按 192 kHz 工作，不收尾的话 ffmpeg 会就近给 aac 挑 96 kHz——实测
+# 同样 192 kbps 摊到两倍的采样点上，是个没人要的副作用。11 条已发布的参考片
+# 全部是 aac / 44100 Hz / 立体声，成片没理由跟着变。
+# ---------------------------------------------------------------------------
+def test_the_published_sample_rate_is_forty_four_one():
+    from pipeline.config import FINAL_AUDIO_SAMPLE_RATE
+
+    assert FINAL_AUDIO_SAMPLE_RATE == 44100
+
+
+def test_the_filter_chain_ends_by_restoring_the_sample_rate(monkeypatch, tmp_path):
+    from pipeline.config import FINAL_AUDIO_SAMPLE_RATE
+
+    commands = []
+    monkeypatch.setattr(voice_bgm, "_run_ffmpeg", lambda command, timeout, action: commands.append(command))
+
+    voice_bgm.merge_audio_video(str(tmp_path / "v.mp4"), str(tmp_path / "a.m4a"), str(tmp_path / "out.mp4"), video_duration=11.8)
+
+    audio_filter = commands[0][commands[0].index("-filter:a") + 1]
+    assert audio_filter.endswith(f"aresample={FINAL_AUDIO_SAMPLE_RATE}"), "重采样要放在最后一环，放在 loudnorm 前面会被它重新抬上去"
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="需要 ffmpeg 才能真合一条出来量")
+def test_the_merged_file_keeps_the_published_sample_rate(tmp_path):
+    """端到端：真合一条出来，探它的采样率，而不是只看命令串。"""
+    from pipeline.config import FINAL_AUDIO_SAMPLE_RATE
+
+    video = tmp_path / "silent.mp4"
+    quiet = tmp_path / "quiet.m4a"
+    merged = tmp_path / "merged.mp4"
+    assert _run_ok(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=180x320:d=6:r=30", "-pix_fmt", "yuv420p", "-an", str(video)])
+    assert _run_ok(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anoisesrc=color=pink:d=6:r=44100", "-af", "volume=-18dB", "-c:a", "aac", str(quiet)])
+
+    voice_bgm.merge_audio_video(str(video), str(quiet), str(merged), video_duration=6)
+
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=sample_rate", "-of", "csv=p=0", str(merged)],
+        capture_output=True, text=True, errors="replace", check=False,
+    )
+    assert probe.stdout.strip() == str(FINAL_AUDIO_SAMPLE_RATE), f"实际采样率是 {probe.stdout.strip()}，不是 {FINAL_AUDIO_SAMPLE_RATE}"

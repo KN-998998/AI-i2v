@@ -102,6 +102,11 @@ FINAL_RESOLUTION     = (1080, 1920)
 # 实测是 −20.4 / −26.2 / −31.1，彼此差了 10.7 dB。统一到这个值，成片之间响度才一致。
 FINAL_LOUDNESS_LUFS = -14.0
 
+# 成片音轨的采样率。11 条已发布的参考片全部是 aac / 44100 Hz / 立体声。
+# 必须显式收尾：loudnorm 内部按 192 kHz 工作，不加 aresample 的话 ffmpeg 会就近
+# 给 aac 挑 96 kHz，同样的码率摊到两倍采样点上，白白折损音质。
+FINAL_AUDIO_SAMPLE_RATE = 44100
+
 # 图片预处理规格
 PREP_TARGET_SHORT = 1080          # 目标短边 1080（1080×1920）
 PREP_MAX_LONG     = 2048          # API 允许的最大长边

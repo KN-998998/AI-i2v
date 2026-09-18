@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from pipeline.config import (
-    FINAL_LOUDNESS_LUFS,
+    FINAL_AUDIO_SAMPLE_RATE, FINAL_LOUDNESS_LUFS,
     QWEN_API_KEY, QWEN_TTS_BASE_URL, QWEN_TTS_MODEL, QWEN_TTS_MODELS,
     QWEN_TTS_NATIVE_BASE_URL, QWEN_TTS_CLONE_MODEL, QWEN_TTS_CLONED_VOICES,
     TTS_VOICE,
@@ -270,13 +270,17 @@ def merge_audio_video(video_path, audio_path, out_path, audio_volume=1.0, video_
     转码时削波；LRA=11 是响度范围，参考片的动态起伏大约就是这个量级。
     用单遍不用双遍：双遍要先跑一次分析再跑一次渲染，合成本来就慢，不值得为
     这点精度翻倍，单遍在成片这个长度上足够稳。
+
+    末尾的 aresample 必须是最后一环：loudnorm 内部按 192 kHz 工作，不收这一道的话
+    ffmpeg 会就近给 aac 挑 96 kHz，同样的码率摊到两倍采样点上，白白折损音质；
+    放在 loudnorm 前面则会被它重新抬上去。
     """
     cmd = [
         "ffmpeg", "-y",
         "-i", video_path,
         "-i", audio_path,
         "-c:v", "copy",
-        "-filter:a", f"volume={audio_volume},loudnorm=I={FINAL_LOUDNESS_LUFS}:TP=-1.5:LRA=11",
+        "-filter:a", f"volume={audio_volume},loudnorm=I={FINAL_LOUDNESS_LUFS}:TP=-1.5:LRA=11,aresample={FINAL_AUDIO_SAMPLE_RATE}",
         "-c:a", "aac", "-b:a", "192k",
     ]
     if video_duration is None:
