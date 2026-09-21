@@ -6,6 +6,8 @@ import { fetchCanvasClips, fetchDraft, persistDraft, recomposeCanvasImage, start
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
 import { browserDraftId } from "./draftIdentity";
 import { generatorGenerationBlockReason, generatorUpstreamNodes, hasSelectedGeneratedClip } from "./generatorReadiness";
+// 有手或厨师入镜时怎么改主运动对象，只留 effectRules.ts 那一份，别在这里再写一遍。
+import { promptConfigForVisualSubject } from "./effectRules";
 
 type NodeEditSnapshot = Pick<WorkflowState, "nodes" | "timeline" | "candidateClips" | "composeWorkspaces" | "bgmName" | "bgmUrl" | "composeJob" | "activePanel" | "selectedNodeId" | "selectedEdgeId">;
 
@@ -129,24 +131,6 @@ function normalizedVisualSubjectType(value: string | undefined): VisualSubjectTy
 
 function imageProcessingModeForVisualSubject(value: string | undefined): "matting_composite" | "preserve_original" {
   return normalizedVisualSubjectType(value) === "菜品主体" ? "matting_composite" : "preserve_original";
-}
-
-function promptConfigForVisualSubject(config: typeof DEFAULT_PROMPT_CONFIG, visualSubjectType: string | undefined) {
-  const visual = normalizedVisualSubjectType(visualSubjectType);
-  if (visual === "菜品主体") return { ...config, visual_subject_type: visual } as typeof DEFAULT_PROMPT_CONFIG;
-  const required = visual === "手部" ? ["hand"] : visual === "厨师上半身" ? ["chef"] : ["hand", "chef"];
-  const elements = [...config.elements];
-  required.forEach(subject => { if (!elements.includes(subject as typeof elements[number])) elements.push(subject as typeof elements[number]); });
-  const allowed = visual === "厨师上半身" ? ["chef"] : ["hand", "chef"];
-  const subject = allowed.includes(config.l1_subject) ? config.l1_subject : visual === "厨师上半身" ? "chef" : "hand";
-  return {
-    ...config,
-    visual_subject_type: visual,
-    elements,
-    l1_subject: subject,
-    l1_action_level: config.l1_action_level ?? 2,
-    l1_action_verb: config.l1_action_verb ?? (subject === "chef" ? "lift_plate" : "steady_plate"),
-  } as typeof DEFAULT_PROMPT_CONFIG;
 }
 
 function migrateImageProcessNode(nodes: WorkflowNode[], edges: Edge[]): { nodes: WorkflowNode[]; edges: Edge[] } {

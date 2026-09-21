@@ -315,3 +315,29 @@ def test_a_clip_without_frame_analysis_keeps_the_old_timings(monkeypatch, tmp_pa
     assert clip["sourceStartSeconds"] == 0.5
     assert clip["sourceEndSeconds"] == 3.0
     assert clip["timelineDuration"] == 2.5
+
+
+# ---------------------------------------------------------------------------
+# 第十三批：生成时按这道菜自己的冷热推导指令，不再照搬模板里存的那一份
+# ---------------------------------------------------------------------------
+def test_generation_derives_the_instruction_from_the_dish_itself():
+    legacy_prompt = {"kind": "prompt", "promptConfig": {
+        "mode": "single_image", "camera_move": "orbit_right", "camera_amplitude": "subtle", "shot_size": "close_up",
+        "elements": ["dish_hot", "garnish", "tableware", "surface", "backdrop"], "l1_subject": "dish_hot",
+        "l2_dynamics": [{"type": "specular", "target": "菜品"}], "food_type": "冷食",
+    }}
+
+    data = canvas_generation._prompt_data_for_asset(legacy_prompt, {"dishName": "玉子寿司", "foodType": "冷食", "visualSubjectType": "菜品主体"})
+    prompt, _negative, _keyframe = canvas_generation._prompt_from_node(data)
+
+    assert "湿润切面高光" in prompt
+    assert "油光" not in prompt
+
+
+def test_generation_still_rejects_an_unknown_visual_subject():
+    try:
+        canvas_generation._prompt_data_for_asset({"kind": "prompt"}, {"visualSubjectType": "外星人"})
+    except ValueError as error:
+        assert "画面主体" in str(error)
+    else:
+        raise AssertionError("an unknown visual subject type was silently accepted")

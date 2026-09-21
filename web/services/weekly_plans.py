@@ -415,6 +415,18 @@ def _base_node(template: dict[str, Any], kind: str, fallback_id: str) -> dict[st
     return copied
 
 
+def _batch_prompt_node(template: dict[str, Any], fallback_id: str) -> dict[str, Any]:
+    """批量生产的提示词节点：永远按冷热规则给每道菜配效果。
+
+    样板里在高级设置手调过的那一道菜只管它自己，不能把那份手调配置套给当天抽到的每道菜，
+    否则页面上写的批量规则就不准了——样板选了热气升腾，冷菜也照样冒热气，校验还不拦。
+    样板改过的规则（effectRules）原样带过去，同一类的菜都跟着换。
+    """
+    node = _base_node(template, "prompt", fallback_id)
+    node.setdefault("data", {})["effectMode"] = "rule"
+    return node
+
+
 def _create_daily_draft(connection: sqlite3.Connection, daily: sqlite3.Row, plan: sqlite3.Row) -> tuple[str, list[str]]:
     template = load_draft(str(plan["template_draft_id"]))
     if template is None:
@@ -432,7 +444,7 @@ def _create_daily_draft(connection: sqlite3.Connection, daily: sqlite3.Row, plan
         base = index * 4
         input_node = _base_node(template, "input", f"weekly_input_{base}")
         process_node = _base_node(template, "image_process", f"weekly_process_{base + 1}")
-        prompt_node = _base_node(template, "prompt", f"weekly_prompt_{base + 2}")
+        prompt_node = _batch_prompt_node(template, f"weekly_prompt_{base + 2}")
         generator_node = _base_node(template, "generator", f"weekly_generator_{base + 3}")
         source = Path(str(reservation["image_path"]))
         if not source.is_file():

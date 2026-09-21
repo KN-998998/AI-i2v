@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.config import CANVAS_CLIP_ROOT, KLING_ACCESS_KEY, KLING_API_KEY, KLING_SECRET_KEY, VIDEO_DURATION
+from pipeline.prompt_presets import effective_prompt_config
 from web.services import canvas_state
 from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
 from web.services.canvas_quality import analyze_video, infer_category
@@ -109,31 +110,16 @@ def _upstream_data(draft: dict[str, Any], start_id: str, kind: str, allow_legacy
 
 
 def _prompt_data_for_asset(prompt_data: dict[str, Any], input_data: dict[str, Any]) -> dict[str, Any]:
+    """按这道菜自己的冷热和画面主体推导配置，不照搬提示词节点里存着的那一份。
+
+    分步流程和批量生产都从这里出指令，所以两条路径拿到的是同一套规则。原来这里只是把
+    food_type 改成这道菜的，主运动还留着模板里的热菜写法——冷的玉子寿司于是拿到了
+    「仅表面油光随镜头角度缓慢流动」。补人物那段逻辑搬进了 prompt_presets 的自定义模式。
+    """
     visual = str(input_data.get("visualSubjectType") or "菜品主体")
     if visual not in _VISUAL_SUBJECT_TYPES:
         raise ValueError("素材画面主体类型无效，请重新选择")
-    raw = dict(prompt_data.get("promptConfig") or {}) if isinstance(prompt_data.get("promptConfig"), dict) else {}
-    raw["visual_subject_type"] = visual
-    food_type = str(input_data.get("foodType") or "")
-    if food_type in {"冷食", "热食", "混合/多温"}:
-        raw["food_type"] = food_type
-    if visual != "菜品主体":
-        required = {"手部" : ["hand"], "厨师上半身": ["chef"], "手部+厨师上半身": ["hand", "chef"]}[visual]
-        elements = list(raw.get("elements") or [])
-        for subject in required:
-            if subject not in elements:
-                elements.append(subject)
-        allowed_subjects = {"手部": {"hand", "chef"}, "厨师上半身": {"chef"}, "手部+厨师上半身": {"hand", "chef"}}[visual]
-        subject = str(raw.get("l1_subject") or "")
-        if subject not in allowed_subjects:
-            subject = "chef" if visual == "厨师上半身" else "hand"
-        raw.update({
-            "elements": elements,
-            "l1_subject": subject,
-            "l1_action_level": raw.get("l1_action_level") or 2,
-            "l1_action_verb": raw.get("l1_action_verb") or ("lift_plate" if subject == "chef" else "steady_plate"),
-        })
-    return {**prompt_data, "promptConfig": raw, "visualSubjectType": visual}
+    return {**prompt_data, "promptConfig": effective_prompt_config(prompt_data, input_data), "visualSubjectType": visual}
 
 
 def _prompt_from_node(data: dict[str, Any]) -> tuple[str, str, bool]:

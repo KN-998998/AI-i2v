@@ -1,6 +1,7 @@
 import type { Edge } from "@xyflow/react";
 import type { WorkflowNode } from "./model.ts";
-import { assemblePrompt, promptConfigFromData } from "./promptAssembler.ts";
+import { assemblePrompt } from "./promptAssembler.ts";
+import { effectivePromptConfig } from "./effectRules.ts";
 
 /** Return the immediate image-processing and input ancestors for a prompt node. */
 export function promptUpstreamNodes(promptNode: WorkflowNode, nodes: WorkflowNode[], edges: Edge[]) {
@@ -31,7 +32,9 @@ export function promptAssemblyBlockReason(promptNode: WorkflowNode, nodes: Workf
       ? "对应图片处理失败，请先到图片处理页面重试"
       : "请先完成该菜品的图片处理";
   }
-  const result = assemblePrompt(promptConfigFromData(promptNode.data));
+  // 校验的是这道菜实际会用的配置（按它自己的冷热现算），不是提示词节点里存着的那一份：
+  // 存着的那份可能是在知道冷热之前建的，校验通过、生成出来却是热菜写法。
+  const result = assemblePrompt(effectivePromptConfig(promptNode.data, input.data));
   if (result.blocked) return `提示词校验未通过：${result.errors[0]?.message ?? "请修正配置"}`;
   return null;
 }

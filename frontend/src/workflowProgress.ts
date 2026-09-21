@@ -45,9 +45,10 @@ export function deriveWorkflowProgress(nodes: WorkflowNode[], candidateClips: Ti
   // still enforces its own upstream checks before it can be processed/generated.
   const assetsComplete = chains.some(chain => Boolean(chain.input?.data.imagePreview));
   const imageProcessingComplete = chains.some(chain => Boolean(chain.process?.data.processedImagePreview));
+  // 第 3 步不再要人点「实时装配」：效果是按冷热现算的，算得出、生成没被拦下就算做完。
+  // 原来还要求 status === "已装配"，运营走到这一页会卡住，因为那颗按钮只是把状态改个名字。
   const promptsComplete = chains.some(chain => Boolean(
     chain.prompt
-    && chain.prompt.data.status === "已装配"
     && generatorGenerationBlockReason(chain.generator, nodes, edges) === null,
   ));
   const clipsComplete = candidateClips.some(clip => Boolean(clip.generatorNodeId && clip.sourcePath && clip.isSelected !== false));

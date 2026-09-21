@@ -135,3 +135,20 @@ def test_weekly_plan_can_pause_resume_and_cancel_unstarted_days(monkeypatch, tmp
     assert cancelled["status"] == "cancelled"
     assert not cancelled["active"]
     assert {day["status"] for day in cancelled["days"]} == {"cancelled"}
+
+
+# ---------------------------------------------------------------------------
+# 第十三批：批量永远按「冷热规则」给每道菜配效果
+# 样板里用高级设置手调过的那道菜只管它自己，不带进批量；样板改过的规则要原样带过去。
+# ---------------------------------------------------------------------------
+def test_batch_runs_always_use_the_template_effect_rules():
+    template = _template()
+    template["nodes"][2]["data"].update({"effectMode": "custom", "effectRules": {"cold": "push_in"}, "promptConfig": {"camera_move": "locked_off"}})
+
+    node = weekly_plans._batch_prompt_node(template, "weekly_prompt_3")
+
+    assert node["id"] == "weekly_prompt_3"
+    assert node["data"]["effectMode"] == "rule"
+    assert node["data"]["effectRules"] == {"cold": "push_in"}
+    node["data"]["effectRules"]["cold"] = "orbit"
+    assert template["nodes"][2]["data"]["effectRules"]["cold"] == "push_in", "批量草稿改动不能回写到样板"

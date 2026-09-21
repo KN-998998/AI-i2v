@@ -1,5 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type ActionVerb, type PromptConfig } from "./promptAssembler.ts";
+// 只取类型：effectRules.ts 反过来也要用 WorkflowNode，import type 在运行时会被整句擦掉，不成环。
+import type { EffectMode, EffectRules } from "./effectRules.ts";
 
 export type NodeKind = "input" | "image_process" | "prompt" | "generator" | "output" | "sound" | "custom";
 export type Panel = "prompt" | "voice" | "overlay";
@@ -171,6 +173,10 @@ export type WorkflowData = {
   promptEndImageName?: string;
   promptEndImagePreview?: string;
   promptConfig?: PromptConfig;
+  /** 这道菜的效果是现算的（rule / 没有这个字段=老草稿）还是在高级设置里手调过的（custom）。 */
+  effectMode?: EffectMode;
+  /** 样板里被改过的那几类菜用什么效果；所有提示词节点存同一份，批量生产复制时带过去。 */
+  effectRules?: EffectRules;
   outputTarget?: string;
   outputDuration?: string;
   outputAspect?: string;

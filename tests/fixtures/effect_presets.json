@@ -1,0 +1,8660 @@
+{
+ "note": "由 frontend/src/promptAssembler.ts 的 applyPromptPreset 生成（第十三批）。前端 effectivePromptConfig 与后端 pipeline/prompt_presets.py 在规则模式下都必须逐项等于这里的 expected。",
+ "slot_keys": [
+  "mode",
+  "camera_move",
+  "camera_amplitude",
+  "shot_size",
+  "elements",
+  "l1_subject",
+  "l1_action_level",
+  "l1_action_verb",
+  "l2_dynamics",
+  "speed_curve",
+  "seamless_loop",
+  "food_type",
+  "visual_subject_type"
+ ],
+ "cases": [
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_cold",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_cold",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_cold",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_cold",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "冷食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_cold",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "冷食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "热食",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "热食",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": "混合/多温",
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": "混合/多温",
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "none",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "菜品主体",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop"
+    ],
+    "l1_subject": "dish_hot",
+    "l1_action_level": null,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "菜品主体"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "chef"
+    ],
+    "l1_subject": "chef",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "glow",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "steam",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "chill",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "flame",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "push_in",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "orbit",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "loop",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": null,
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "pour",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "single_image",
+   "preset": "plating",
+   "expected": {
+    "mode": "single_image",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": null,
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "glow",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "steam",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "chill",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "ice_mist",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "flame",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "flame",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "push_in",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "dolly_in",
+    "camera_amplitude": "light",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "orbit",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "light",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "specular",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "loop",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "close_up",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 1,
+    "l1_action_verb": null,
+    "l2_dynamics": [
+     {
+      "type": "steam",
+      "target": "菜品"
+     }
+    ],
+    "speed_curve": "uniform",
+    "seamless_loop": true,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "pour",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "pour_sauce",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "sprinkle",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "locked_off",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "sprinkle_seasoning",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  },
+  {
+   "food_type": null,
+   "visual_subject_type": "手部+厨师上半身",
+   "mode": "keyframes",
+   "preset": "plating",
+   "expected": {
+    "mode": "keyframes",
+    "camera_move": "orbit_right",
+    "camera_amplitude": "subtle",
+    "shot_size": "medium_close",
+    "elements": [
+     "dish_hot",
+     "garnish",
+     "tableware",
+     "surface",
+     "backdrop",
+     "hand",
+     "chef"
+    ],
+    "l1_subject": "hand",
+    "l1_action_level": 2,
+    "l1_action_verb": "place_garnish",
+    "l2_dynamics": [],
+    "speed_curve": "uniform",
+    "seamless_loop": false,
+    "food_type": null,
+    "visual_subject_type": "手部+厨师上半身"
+   }
+  }
+ ]
+}
