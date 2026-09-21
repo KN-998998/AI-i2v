@@ -2,11 +2,14 @@ import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, capt
 import { applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, DEFAULT_PROMPT_CONFIG, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
-import { routeForPath } from "./router.ts";
+import { routeForPath, workflowRoutes } from "./router.ts";
 import { canAssemblePromptNode, promptAssemblyBlockReason, promptUpstreamNodes } from "./promptAssemblyReadiness.ts";
 import { generatorGenerationBlockReason } from "./generatorReadiness.ts";
 import { batchPlanReadiness, missingTemplateKinds, REQUIRED_TEMPLATE_KINDS } from "./batchPlanReadiness.ts";
 import { workflowSeed } from "./seed.ts";
+import { DEFAULT_EFFECT_RULES, EFFECT_CLASS_LABELS, EFFECT_COPY, effectClassFor, effectivePromptConfig, effectReason, presetForDish, withEffectRule } from "./effectRules.ts";
+import { tutorialChapters } from "./tutorial.ts";
+import { readFileSync } from "node:fs";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -390,5 +393,130 @@ assert(workflowSeed.composeClipCount === 6, "a default video should be cut from 
 // 第十二批：背景压暗的默认值从 0.72 调到 0.85。参考片画面平均亮度 109–123，
 // 工具合成的成片只有 65.7；这一步只能拉到 74 左右，剩下的差距在背景素材本身。
 assert(dataFor("image_process").backgroundBrightness === 0.85, "the background should no longer be dimmed to 0.72 by default");
+
+// ---------------------------------------------------------------------------
+// 第十三批（一）：批量生产能进审片
+// 批量生产的每日草稿编号是 weekly_<32 位 hex>，后端一直接受；前端原来只认 draft_ 开头，
+// 「进入片段审核」整页跳转后会把它当成无效编号，换成一份新的空草稿，审片页就是空的。
+// ---------------------------------------------------------------------------
+const weeklyDraftId = "weekly_" + "0123456789abcdef".repeat(2);
+const weeklyStorage = new Map<string, string>([[DRAFT_ID_STORAGE_KEY, weeklyDraftId]]);
+assert(browserDraftId({ getItem: key => weeklyStorage.get(key) ?? null, setItem: (key, value) => weeklyStorage.set(key, value) }) === weeklyDraftId, "a batch run's draft id must survive the page reload into clip review");
+assert(weeklyStorage.get(DRAFT_ID_STORAGE_KEY) === weeklyDraftId, "opening clip review must not overwrite the batch run's draft id");
+const junkStorage = new Map<string, string>([[DRAFT_ID_STORAGE_KEY, "weekly_../../etc"]]);
+assert(browserDraftId({ getItem: key => junkStorage.get(key) ?? null, setItem: (key, value) => junkStorage.set(key, value) }) !== "weekly_../../etc", "draft ids with path characters must still be rejected");
+
+// ---------------------------------------------------------------------------
+// 第十三批（二）：第 3 步「动态效果」——每道菜按自己的冷热自动配效果
+// Patrick 9/21 实测：模板是在知道这道菜是冷食之前建的，冷的玉子寿司拿到的指令是「表面油光」；
+// 批量生产照搬样板的效果，样板选了「热气升腾」的话冷菜也照样冒热气。
+// 改成：效果不再存死在模板里，而是按「冷菜 / 热菜 / 冷热混合 / 原图有手或厨师」四类规则、
+// 用每道菜自己的冷热和画面主体现算；样板里改了某一类，同一类的菜都跟着换。
+// ---------------------------------------------------------------------------
+assert(effectClassFor("冷食", "菜品主体") === "cold", "a cold dish photo is in the cold class");
+assert(effectClassFor("热食", "菜品主体") === "hot", "a hot dish photo is in the hot class");
+assert(effectClassFor("混合/多温", "菜品主体") === "mixed", "a mixed platter is in the mixed class");
+assert(effectClassFor(undefined, "菜品主体") === "mixed", "an unknown temperature falls back to the mixed class, whose default is safe for both");
+assert(effectClassFor("热食", "手部") === "person" && effectClassFor("冷食", "厨师上半身") === "person" && effectClassFor(undefined, "手部+厨师上半身") === "person", "any photo with hands or a chef is in the person class, whatever the temperature");
+assert(DEFAULT_EFFECT_RULES.cold === "glow" && DEFAULT_EFFECT_RULES.hot === "steam" && DEFAULT_EFFECT_RULES.mixed === "glow" && DEFAULT_EFFECT_RULES.person === "glow", "defaults: cold and mixed get 光泽流转, hot gets 热气升腾, hands or chef stay still with 光泽流转");
+assert(Object.keys(EFFECT_CLASS_LABELS).sort().join(",") === "cold,hot,mixed,person", "the batch rule panel lists exactly four classes");
+assert(EFFECT_CLASS_LABELS.cold === "冷菜" && EFFECT_CLASS_LABELS.hot === "热菜", "class labels are plain words the operator uses");
+
+// 前后端共用的对照表：规则模式下，每一类菜 × 每个可用效果 × 两种模式，都必须和现有 applyPromptPreset 逐项一致。
+// 后端 pipeline/prompt_presets.py 读同一份文件，两边就不会各配各的。
+const effectFixture = JSON.parse(readFileSync(new URL("../../tests/fixtures/effect_presets.json", import.meta.url), "utf-8"));
+assert(effectFixture.cases.length > 200, "the shared effect table should cover every class, preset and mode");
+for (const item of effectFixture.cases) {
+  const input = { foodType: item.food_type ?? undefined, visualSubjectType: item.visual_subject_type };
+  const promptData = { effectMode: "rule", effectRules: { [effectClassFor(input.foodType, input.visualSubjectType)]: item.preset }, promptConfig: { ...DEFAULT_PROMPT_CONFIG, mode: item.mode } };
+  const actual = effectivePromptConfig(promptData, input);
+  for (const key of effectFixture.slot_keys) {
+    assert(JSON.stringify(actual[key] ?? null) === JSON.stringify(item.expected[key]), `effect ${item.preset} for ${item.food_type}/${item.visual_subject_type}/${item.mode} differs from the shared table on ${key}`);
+  }
+}
+
+// Patrick 踩到的那一条：老模板里存的是热菜写法、没有 effectMode，冷的寿司必须拿到冷菜写法
+const legacyTemplate = { promptConfig: { ...DEFAULT_PROMPT_CONFIG, food_type: "冷食" } };
+const coldSushi = effectivePromptConfig(legacyTemplate, { foodType: "冷食", visualSubjectType: "菜品主体", dishName: "玉子寿司" });
+assert(coldSushi.l1_subject === "dish_cold" && coldSushi.elements.includes("dish_cold") && !coldSushi.elements.includes("dish_hot"), "a cold dish gets the cold dish subject even when the template was saved as hot");
+const coldSushiPrompt = assemblePrompt(coldSushi).prompt;
+assert(coldSushiPrompt.includes("湿润切面高光") && !coldSushiPrompt.includes("油光"), "the cold sushi instruction must not ask for an oily sheen");
+assert(matchPromptPreset(coldSushi) === "glow", "the default must be recognised as 光泽流转, not shown as 自定义");
+
+// 热菜默认冒热气；原图有手的，手保持不动
+const hotSoup = effectivePromptConfig({}, { foodType: "热食", visualSubjectType: "菜品主体" });
+assert(hotSoup.camera_move === "dolly_in" && hotSoup.l2_dynamics.some(item => item.type === "steam"), "a hot dish defaults to 热气升腾");
+const heldSushi = effectivePromptConfig({}, { foodType: "冷食", visualSubjectType: "手部" });
+assert(heldSushi.l1_subject === "hand" && heldSushi.l1_action_level === 1 && heldSushi.l1_action_verb === null, "a dish held in a hand keeps the hand still by default");
+assert(!assemblePrompt(heldSushi).prompt.includes("热气"), "a cold dish in a hand must not steam");
+
+// 样板里改了一类，同一类跟着换，别的类不受影响
+const coldRule = { effectRules: { cold: "push_in" } };
+const pushedCold = effectivePromptConfig(coldRule, { foodType: "冷食", visualSubjectType: "菜品主体" });
+assert(pushedCold.camera_move === "dolly_in" && pushedCold.camera_amplitude === "light" && pushedCold.shot_size === "medium_close", "a cold rule of 只推近镜头 applies to cold dishes");
+assert(effectivePromptConfig(coldRule, { foodType: "热食", visualSubjectType: "菜品主体" }).l2_dynamics.some(item => item.type === "steam"), "changing the cold rule must not touch hot dishes");
+
+// 规则对这道菜不适用时退回光泽流转：冷菜不能冒热气，没有手的图不能淋酱
+assert(presetForDish("冷食", "手部", { person: "steam" }) === "glow", "a steaming rule falls back to 光泽流转 for a cold dish");
+assert(presetForDish("热食", "手部", { person: "steam" }) === "steam", "the same rule still applies where it fits");
+assert(presetForDish("冷食", "菜品主体", { cold: "pour" }) === "glow", "a hands-only effect cannot apply to a photo without hands");
+assert(presetForDish("冷食", "菜品主体", undefined) === "glow", "no rules means the class default");
+
+// 自定义（在高级设置里手调过）：按原样用，但菜的冷热、手和人要对上
+const handTuned = effectivePromptConfig({ effectMode: "custom", promptConfig: { ...DEFAULT_PROMPT_CONFIG, camera_move: "locked_off", l2_dynamics: [] } }, { foodType: "冷食", visualSubjectType: "菜品主体" });
+assert(handTuned.camera_move === "locked_off" && handTuned.l2_dynamics.length === 0, "a hand-tuned config is used as it is");
+assert(handTuned.l1_subject === "dish_cold" && handTuned.elements.includes("dish_cold") && !handTuned.elements.includes("dish_hot"), "even a hand-tuned config must match the dish temperature");
+const handTunedHeld = effectivePromptConfig({ effectMode: "custom", promptConfig: { ...DEFAULT_PROMPT_CONFIG } }, { foodType: "热食", visualSubjectType: "手部" });
+assert(handTunedHeld.elements.includes("hand") && handTunedHeld.l1_subject === "hand", "a hand-tuned config still follows the hands in the photo");
+
+// 这一页上给运营看的说法
+assert(effectReason({}, { foodType: "冷食", visualSubjectType: "菜品主体" }) === "按冷食自动选", "why a cold dish got its effect");
+assert(effectReason({}, { foodType: "热食", visualSubjectType: "菜品主体" }) === "按热食自动选", "why a hot dish got its effect");
+assert(effectReason({}, { foodType: "冷食", visualSubjectType: "手部" }).includes("手"), "a hand-held dish explains that the hand stays still");
+assert(effectReason(coldRule, { foodType: "冷食", visualSubjectType: "菜品主体" }).includes("你改的"), "an overridden class says the operator changed it");
+assert(effectReason({ effectMode: "custom" }, { foodType: "冷食", visualSubjectType: "菜品主体" }).includes("自定义"), "a hand-tuned dish says it is custom");
+for (const preset of PROMPT_PRESETS) {
+  const copy = EFFECT_COPY[preset.id];
+  assert(Boolean(copy?.camera && copy.moving && copy.still), `effect ${preset.id} needs plain-language camera / moving / still lines`);
+  assert(copy.sentence("玉子寿司").includes("玉子寿司"), `effect ${preset.id} should describe the dish by name`);
+}
+assert(!EFFECT_COPY.glow.sentence("玉子寿司").includes("油"), "the default effect sentence must not promise an oily sheen");
+
+// 换效果：写进所有提示词节点的规则里（批量从样板复制的就是它），只把这一道菜改回自动
+const effectNodes = [
+  { ...createWorkflowNode("prompt", "p_cold", { x: 0, y: 0 }) },
+  { ...createWorkflowNode("prompt", "p_other", { x: 0, y: 0 }) },
+  { ...createWorkflowNode("input", "not_prompt", { x: 0, y: 0 }) },
+];
+effectNodes[0].data = { ...effectNodes[0].data, effectMode: "custom", effectRules: { hot: "flame" } };
+const switchedNodes = withEffectRule(effectNodes, "p_cold", { foodType: "冷食", visualSubjectType: "菜品主体" }, "push_in");
+const switchedCold = switchedNodes.find(node => node.id === "p_cold");
+const switchedOther = switchedNodes.find(node => node.id === "p_other");
+assert(switchedCold?.data.effectRules?.cold === "push_in" && switchedOther?.data.effectRules?.cold === "push_in", "a rule change is written to every prompt node, so batch runs pick it up");
+assert(switchedCold?.data.effectRules?.hot === "flame", "other classes keep their rules");
+assert(switchedCold?.data.effectMode === "rule" && switchedOther?.data.effectMode === undefined, "only the dish you changed goes back to automatic mode");
+assert(switchedNodes.find(node => node.id === "not_prompt")?.data.effectRules === undefined, "non-prompt nodes are left alone");
+assert(withEffectRule(effectNodes, "p_cold", { foodType: "冷食", visualSubjectType: "菜品主体" }, "steam") === effectNodes, "an effect the dish cannot use is refused");
+
+// 第 3 步算不算做完：效果算得出、没有被拦下就算，不再要人点「实时装配」
+const autoNodes = initialNodes.map(node => ({ ...node, data: { ...node.data } }));
+const autoInput = autoNodes.find(node => node.data.kind === "input");
+const autoProcess = autoNodes.find(node => node.data.kind === "image_process");
+const autoPrompt = autoNodes.find(node => node.data.kind === "prompt");
+if (!autoInput || !autoProcess || !autoPrompt) throw new Error("workflow seed is missing the dish chain");
+autoInput.data = { ...autoInput.data, dishName: "玉子寿司", foodType: "冷食", imagePreview: "/assets/dish.png" };
+autoProcess.data = { ...autoProcess.data, processedImagePreview: "/assets/dish-processed.png" };
+autoPrompt.data = { ...autoPrompt.data, status: "可生成" };
+assert(promptAssemblyBlockReason(autoPrompt, autoNodes, initialEdges) === null, "a ready dish chain has nothing to fix on step 3");
+const autoProgress = deriveWorkflowProgress(autoNodes, [], [], initialEdges);
+assert(autoProgress.steps[2].complete && autoProgress.steps[3].unlocked, "step 3 counts as done once the effect is valid; nobody has to click 实时装配 any more");
+
+// 改名：这一步叫「动态效果」，说法里不再有装配、槽位
+const effectStep = workflowRoutes.find(item => item.path === "/workflow/prompts");
+assert(effectStep?.label === "动态效果", "step 3 is renamed 动态效果");
+assert(Boolean(effectStep) && !effectStep!.goal.includes("装配") && effectStep!.goal.includes("冷热"), "step 3's goal line explains that effects follow each dish's temperature");
+const effectChapter = tutorialChapters.find(chapter => chapter.route === "/workflow/prompts");
+assert(effectChapter?.title === "动态效果", "the tutorial chapter follows the rename");
+assert(Boolean(effectChapter) && !/L0|L1|L2|槽位|装配/.test(`${effectChapter!.description}${effectChapter!.bullets.join("")}${effectChapter!.checkpoint ?? ""}`), "the tutorial no longer teaches slots or assembly");
 
 console.log("model tests passed");

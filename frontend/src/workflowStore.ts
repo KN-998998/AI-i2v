@@ -3,11 +3,12 @@ import { create } from "zustand";
 import { assetIdForDishName, clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode, type ImageRecomposeResult } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, recomposeCanvasImage, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
-import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch } from "./promptAssembler";
+import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type PromptConfig, type PromptPresetId } from "./promptAssembler";
 import { browserDraftId } from "./draftIdentity";
 import { generatorGenerationBlockReason, generatorUpstreamNodes, hasSelectedGeneratedClip } from "./generatorReadiness";
 // 有手或厨师入镜时怎么改主运动对象，只留 effectRules.ts 那一份，别在这里再写一遍。
-import { promptConfigForVisualSubject } from "./effectRules";
+import { promptConfigForVisualSubject, withEffectRule } from "./effectRules";
+import { promptUpstreamNodes } from "./promptAssemblyReadiness";
 
 type NodeEditSnapshot = Pick<WorkflowState, "nodes" | "timeline" | "candidateClips" | "composeWorkspaces" | "bgmName" | "bgmUrl" | "composeJob" | "activePanel" | "selectedNodeId" | "selectedEdgeId">;
 
@@ -59,6 +60,9 @@ type WorkflowState = {
   discardNodeEdit: () => void;
   setActivePanel: (panel: Panel) => void;
   updateNodeData: (nodeId: string, patch: Partial<WorkflowData>) => void;
+  setDishEffect: (promptNodeId: string, presetId: PromptPresetId) => void;
+  setPromptCustomConfig: (promptNodeId: string, config: PromptConfig) => void;
+  resetPromptEffect: (promptNodeId: string) => void;
   registerGeneratorClip: (nodeId: string) => void;
   attachGeneratedClip: (nodeId: string, clip: TimelineClip) => void;
   selectGeneratorClip: (nodeId: string, clipId: string) => void;
@@ -569,6 +573,29 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       composeWorkspaces,
       revision: state.revision + 1,
     };
+  }),
+  // 第 3 步换效果：写成「这一类菜用这个效果」的规则，同一类的菜和批量生产都跟着换。
+  setDishEffect: (promptNodeId, presetId) => set(state => {
+    const promptNode = state.nodes.find(item => item.id === promptNodeId && item.data.kind === "prompt");
+    if (!promptNode) return {};
+    const { input } = promptUpstreamNodes(promptNode, state.nodes, state.edges);
+    const nodes = withEffectRule(state.nodes, promptNodeId, input?.data ?? {}, presetId);
+    // 这道菜用不了这个效果时 withEffectRule 原样返回，什么也别改（也别白占一次自动保存）。
+    if (nodes === state.nodes) return {};
+    return { nodes, revision: state.revision + 1 };
+  }),
+  // 在高级设置里逐项调过：从此按存着的配置走，不再跟着冷热规则变。
+  setPromptCustomConfig: (promptNodeId, config) => set(state => {
+    const nodes = state.nodes.map(item => item.id === promptNodeId && item.data.kind === "prompt"
+      ? { ...item, data: { ...item.data, effectMode: "custom" as const, promptConfig: config, ...promptLegacyPatch(config) } }
+      : item);
+    return { nodes, revision: state.revision + 1 };
+  }),
+  resetPromptEffect: promptNodeId => set(state => {
+    const nodes = state.nodes.map(item => item.id === promptNodeId && item.data.kind === "prompt"
+      ? { ...item, data: { ...item.data, effectMode: "rule" as const } }
+      : item);
+    return { nodes, revision: state.revision + 1 };
   }),
   registerGeneratorClip: nodeId => set(state => {
     const node = state.nodes.find(item => item.id === nodeId && item.data.kind === "generator");

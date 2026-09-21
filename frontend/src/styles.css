@@ -1605,3 +1605,75 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .clip-review-card.redo { border-color: #e8bfa6; background: #fffaf5; }
 .clip-redo-flag { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; color: var(--amber); font-size: 13px; line-height: 1.6; }
 .clip-redo-flag strong { padding: 2px 8px; border-radius: 999px; background: #fdecd9; font-size: 12px; }
+
+/* ---------------------------------------------------------------------------
+ * 第 3 步「动态效果」。样式取自 .tmp/batch13-效果图参考.html，复用第 2 步已有的
+ * image-process-node-* / ip-* / prompt-preset* 那几套，新增的只有 effect-* 这一组。
+ * 首帧上那两个循环动画是「示意」而不是真预览：真片子得等第 4 步生成出来才有。
+ * ------------------------------------------------------------------------- */
+.effect-dish-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.effect-dish-card { grid-template-columns: 62px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 12px; text-align: left; }
+.effect-dish-thumb { width: 62px; height: 84px; object-fit: cover; border: 1px solid var(--line); border-radius: 8px; }
+.effect-dish-thumb-empty { display: grid; place-items: center; color: var(--dim); background: #f7f7fb; font-size: 12px; }
+.effect-dish-body { display: grid; gap: 3px; min-width: 0; }
+.effect-dish-head { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.effect-dish-head strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.effect-dish-tags { color: var(--muted); font-size: 12.5px; }
+.effect-studio { grid-template-columns: 300px minmax(0, 1fr); }
+.effect-frame { width: 300px; overflow: hidden; }
+.effect-frame img { object-fit: cover; }
+.node-status.is-ok { color: var(--green); background: #eaf6f0; border-color: #cfe9dc; }
+.effect-meta-name { color: var(--text); font-weight: 600; }
+.effect-meta-name em { font-style: normal; font-weight: 400; color: var(--green); }
+
+.effect-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.effect-legend { position: absolute; left: 12px; right: 12px; bottom: 12px; display: grid; gap: 4px; padding: 10px 12px;
+  border-radius: 12px; background: rgba(20, 20, 32, .72); color: #fff; font-size: 13px; line-height: 1.5; backdrop-filter: blur(6px); }
+.effect-legend b { display: inline-block; min-width: 3.2em; color: #c9c6ff; font-weight: 600; }
+
+.effect-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; font-size: 22px; }
+.effect-auto-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+  background: #eaf6f0; color: var(--green); font-size: 13px; font-weight: 600; letter-spacing: 0; }
+.effect-auto-tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.effect-plain { margin: 6px 0 0; color: var(--text); font-size: 15px; line-height: 1.75; }
+.effect-plain .link-button { margin-left: 6px; font-size: 14px; }
+.effect-dish-line { margin: 0 0 4px; color: var(--muted); font-size: 14px; }
+.effect-sub { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 16px; }
+.effect-sub small { color: var(--muted); font-size: 13px; font-weight: 400; }
+.effect-presets { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.prompt-preset { position: relative; text-align: left; cursor: pointer; font: inherit; color: inherit; background: #fff; }
+.prompt-preset .effect-auto-mini { position: absolute; top: 9px; right: 10px; color: var(--green); font-size: 12px; font-weight: 600; }
+.effect-more { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.effect-more summary { padding: 12px 14px; cursor: pointer; color: var(--text); font-size: 14px; font-weight: 600; list-style: none; }
+.effect-more summary::before { content: "▸"; display: inline-block; width: 16px; color: var(--muted); }
+.effect-more[open] summary::before { content: "▾"; }
+.effect-more summary small { margin-left: 8px; color: var(--muted); font-weight: 400; }
+.effect-instruction { margin: 0; padding: 0 16px 14px 30px; color: #3c3d4a; font-size: 13px; line-height: 1.85; white-space: pre-wrap; font-family: inherit; }
+.effect-instruction-note { margin: 0; padding: 0 16px 14px 30px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.effect-advanced-open { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 0 16px 14px 30px; font-size: 13px; }
+
+.effect-batch-rule { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 28px; align-items: center; }
+.effect-batch-rule h2 { margin: 0 0 4px; font-size: 17px; }
+.effect-batch-rule p { margin: 0; }
+.effect-rule-list { display: flex; gap: 10px; flex-wrap: wrap; margin: 0; }
+.effect-rule-list div { display: grid; gap: 2px; min-width: 150px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.effect-rule-list dt { color: var(--muted); font-size: 12.5px; }
+.effect-rule-list dd { margin: 0; color: var(--text); font-size: 14.5px; font-weight: 600; }
+
+/* 镜头怎么走，首帧就怎么动：环绕小幅左右摆，推近缓慢放大。幅度按提示词里那句
+ * 「画面极轻微变化（约 8%）」来，太大就不是示意而是骗人了。 */
+@keyframes effect-orbit { 0%, 100% { transform: translateX(-2.5%) scale(1.06); } 50% { transform: translateX(2.5%) scale(1.06); } }
+@keyframes effect-dolly { 0% { transform: scale(1); } 100% { transform: scale(1.08); } }
+.effect-frame img.effect-anim-orbit { animation: effect-orbit 6s ease-in-out infinite; }
+.effect-frame img.effect-anim-dolly { animation: effect-dolly 5s ease-in-out infinite alternate; }
+/* 有人把系统动效关掉就是不想看东西动；示意图静止照样看得懂，图例里写着怎么动。 */
+@media (prefers-reduced-motion: reduce) {
+  .effect-frame img.effect-anim-orbit, .effect-frame img.effect-anim-dolly { animation: none; transform: none; }
+}
+
+@media (max-width: 1100px) {
+  .effect-dish-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .effect-studio { grid-template-columns: minmax(0, 1fr); }
+  .effect-frame { width: min(100%, 300px); }
+  .effect-batch-rule { grid-template-columns: minmax(0, 1fr); }
+}

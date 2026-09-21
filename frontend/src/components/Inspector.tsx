@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, normalizeDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
 import { fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
-import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, promptConfigFromData, promptLegacyPatch, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
+import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
+import { effectivePromptConfig } from "../effectRules";
+import { promptUpstreamNodes } from "../promptAssemblyReadiness";
 import { ImageProcessControlFields } from "./ImageProcessControls";
 import { Field, formatNodeValue, SectionTitle, Select, Tag } from "./ui";
 
@@ -69,17 +71,27 @@ function AssetFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
 
 function PromptFields({ node, onToast }: { node: WorkflowNode; onToast: (message: string) => void }) {
   const updateNodeData = useWorkflowStore(state => state.updateNodeData);
+  const setDishEffect = useWorkflowStore(state => state.setDishEffect);
+  const setPromptCustomConfig = useWorkflowStore(state => state.setPromptCustomConfig);
+  const resetPromptEffect = useWorkflowStore(state => state.resetPromptEffect);
+  const nodes = useWorkflowStore(state => state.nodes);
+  const edges = useWorkflowStore(state => state.edges);
   const draftId = useWorkflowStore(state => state.draftId);
   const data = node.data;
-  const config = promptConfigFromData(data);
+  // 显示的是这道菜实际会用的那一份配置（按它自己的冷热现算），不是节点里存着的那一份：
+  // 存着的可能是在知道冷热之前建的，抽屉里显示成「自定义」而人一项都没改过。
+  const { input } = promptUpstreamNodes(node, nodes, edges);
+  const config = effectivePromptConfig(data, input?.data ?? {});
+  const custom = data.effectMode === "custom";
   const result = assemblePrompt(config);
+  // 这里逐项改动一律记成「手调过」：之后这道菜按存着的配置走，不再跟着冷热规则变。
   const commit = (patch: Partial<PromptConfig>) => {
     const next: PromptConfig = { ...config, ...patch, elements: patch.elements ? [...patch.elements] : [...config.elements], l2_dynamics: patch.l2_dynamics ? patch.l2_dynamics.map(item => ({ ...item })) : config.l2_dynamics.map(item => ({ ...item })) };
     if (next.mode === "single_image") next.speed_curve = null;
     if (next.mode === "keyframes" && !next.speed_curve) next.speed_curve = "uniform";
     if (!["hand", "chef"].includes(next.l1_subject)) { next.l1_action_level = null; next.l1_action_verb = null; }
     if (next.l1_action_level === 1) next.l1_action_verb = null;
-    updateNodeData(node.id, { promptConfig: next, ...promptLegacyPatch(next) });
+    setPromptCustomConfig(node.id, next);
   };
   const elementLabels = config.elements.map(id => ELEMENT_OPTIONS.find(item => item.id === id)?.lockLabel).filter((label): label is string => Boolean(label)).filter((label, index, list) => list.indexOf(label) === index);
   const l1Options = ELEMENT_OPTIONS.filter(item => item.canBeL1 && (config.elements.includes(item.id) || item.id === config.l1_subject));
@@ -120,10 +132,10 @@ function PromptFields({ node, onToast }: { node: WorkflowNode; onToast: (message
   const [advancedOpen, setAdvancedOpen] = useState(activePreset === null);
   return <div className="prompt-fields-compact">
     <SectionTitle>想要什么效果</SectionTitle>
-    <p className="prompt-preset-hint">点一个效果就够了，镜头、动作和校验会一起配好。{activePreset ? "想微调再展开下面的高级设置。" : "当前是手动调整过的自定义配置；点任一效果会覆盖这些调整。"}</p>
-    <div className="prompt-preset-grid">{presets.map(preset => <button type="button" key={preset.id} className={`prompt-preset ${activePreset === preset.id ? "active" : ""}`} aria-pressed={activePreset === preset.id} onClick={() => { commit(applyPromptPreset(config, preset.id)); onToast(`已套用「${preset.label}」`); }}><strong>{preset.label}</strong><small>{preset.description}</small></button>)}</div>
+    <p className="prompt-preset-hint">点一个效果就够了，镜头、动作和校验会一起配好。{custom ? "当前是在这里手调过的配置；点任一效果会改回按冷热自动选。" : "想微调再展开下面的高级设置。"}</p>
+    <div className="prompt-preset-grid">{presets.map(preset => <button type="button" key={preset.id} className={`prompt-preset ${activePreset === preset.id ? "active" : ""}`} aria-pressed={activePreset === preset.id} onClick={() => { setDishEffect(node.id, preset.id); onToast(`已套用「${preset.label}」`); }}><strong>{preset.label}</strong><small>{preset.description}</small></button>)}</div>
     <details className="prompt-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
-    <summary><span>高级设置 · 逐项调整镜头、画面元素和动作</span><small>{activePresetLabel ? `当前：${activePresetLabel}` : "当前：自定义"}</small></summary>
+    <summary><span>高级设置 · 逐项调整镜头、画面元素和动作</span><small>{custom ? "当前：自定义" : activePresetLabel ? `当前：${activePresetLabel}` : "当前：自定义"}</small>{custom && <button type="button" className="link-button" onClick={event => { event.preventDefault(); resetPromptEffect(node.id); onToast("已改回按冷热自动选"); }}>改回自动</button>}</summary>
     <div className="prompt-control-grid">
     <Field label="模式"><Select value={config.mode === "keyframes" ? "首尾帧模式" : "单图模式"} options={["单图模式", "首尾帧模式"]} onChange={value => commit({ mode: value === "首尾帧模式" ? "keyframes" : "single_image" })} /></Field>
     <Field label="镜头运动"><Select value={CAMERA_OPTIONS.find(item => item.value === config.camera_move)?.label ?? CAMERA_OPTIONS[0].label} options={CAMERA_OPTIONS.map(item => item.label)} onChange={value => commit({ camera_move: CAMERA_OPTIONS.find(item => item.label === value)!.value })} /></Field>

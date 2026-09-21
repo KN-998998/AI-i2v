@@ -20,7 +20,7 @@ export type GuidedWorkflowRoute =
 const guidedWorkflowSteps = [
   { path: "/workflow/assets", step: "1", label: "素材与菜品" },
   { path: "/workflow/image-processing", step: "2", label: "图片处理" },
-  { path: "/workflow/prompts", step: "3", label: "提示词装配" },
+  { path: "/workflow/prompts", step: "3", label: "动态效果" },
   { path: "/workflow/generator", step: "4", label: "生成视频片段" },
   { path: "/workflow/compose", step: "5", label: "成片合成" },
   { path: "/workflow/sound", step: "6", label: "声音与文字" },

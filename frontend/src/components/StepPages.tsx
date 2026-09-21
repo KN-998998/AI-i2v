@@ -1,8 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { getCanvasComposeStatus, isActiveTaskStatus, runCanvasPreflight, startCanvasCompose, type PreflightReport } from "../api";
 import { captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, nodeCatalog, repairCaptionVoiceSegments, totalTimelineDuration, type ComposeJob, type NodeKind, type TimelineClip, type WorkflowNode } from "../model";
-import { promptConfigFromData } from "../promptAssembler";
-import { canAssemblePromptNode, promptAssemblyBlockReason } from "../promptAssemblyReadiness";
 import { useWorkflowStore } from "../workflowStore";
 import { InlineSoundEditor, Inspector } from "./Inspector";
 import { StepHeading } from "./ui";
@@ -12,6 +10,7 @@ import { deriveWorkflowProgress, isWorkflowRouteUnlocked } from "../workflowProg
 import { generatorGenerationBlockReason } from "../generatorReadiness";
 import { StoryboardTimeline } from "./StoryboardTimeline";
 import { AssetLibraryBatchPanel } from "./AssetLibraryBatchPanel";
+import { EffectStepPage } from "./EffectStepPage";
 
 type StepPageProps = { onToast: (message: string) => void };
 type ManagedNodeKind = Extract<NodeKind, "input" | "prompt" | "generator" | "output" | "sound">;
@@ -22,7 +21,7 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
   const kind = managedKindForRoute(route);
   const nodeId = resolveStepNodeId(kind, nodes, selectedNodeId);
   const panel = route === "/workflow/sound" ? "voice" : route === "/workflow/prompts" ? "prompt" : undefined;
-  const title = route === "/workflow/assets" ? "素材与菜品" : route === "/workflow/prompts" ? "提示词装配" : route === "/workflow/sound" ? "声音与文字" : "成片结果";
+  const title = route === "/workflow/assets" ? "素材与菜品" : route === "/workflow/prompts" ? "动态效果" : route === "/workflow/sound" ? "声音与文字" : "成片结果";
   const setSelection = useWorkflowStore(state => state.setSelection);
   const setActivePanel = useWorkflowStore(state => state.setActivePanel);
   useEffect(() => {
@@ -31,7 +30,7 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
   }, [nodeId, panel, setActivePanel, setSelection]);
 
   if (route === "/workflow/prompts") return <><StepFrame route={route} title={title} onToast={onToast}>
-    <div className="prompt-step-layout"><PromptNodeWorkspace onToast={onToast} /><div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div>
+    <EffectStepPage onToast={onToast} />
   </StepFrame><Inspector onToast={onToast} /></>;
   if (route === "/workflow/sound") return <StepFrame route={route} title={title} onToast={onToast}>
     <div className="step-page-main step-page-main-sound">
@@ -61,30 +60,6 @@ function resolveStepNodeId(kind: ManagedNodeKind | null, nodes: WorkflowNode[], 
   const selectedNode = nodes.find(node => node.id === selectedNodeId && node.data.kind === kind);
   if (selectedNode) return selectedNode.id;
   return kind === "input" ? "assets" : kind === "prompt" ? "prompt" : kind === "sound" ? "sound" : "output";
-}
-
-function PromptNodeWorkspace({ onToast }: { onToast: (message: string) => void }) {
-  const allNodes = useWorkflowStore(state => state.nodes);
-  const nodes = allNodes.filter(node => node.data.kind === "prompt");
-  const edges = useWorkflowStore(state => state.edges);
-  const setSelection = useWorkflowStore(state => state.setSelection);
-  const beginNodeEdit = useWorkflowStore(state => state.beginNodeEdit);
-  const updateNodeData = useWorkflowStore(state => state.updateNodeData);
-  const addNode = useWorkflowStore(state => state.addNode);
-  return <section className="prompt-node-workspace">
-    <div className="panel-section-head"><div><span className="panel-label">PROMPT NODES</span><h2>提示词节点 · {nodes.length} 个</h2><p className="muted">点“编辑”给这道菜选一个效果（热气升腾、淋酱、只推近镜头……），校验通过后点“实时装配”。01 是通用模板序号，不是版本或质量等级；带菜品名的才对应具体菜品。</p></div><button type="button" className="btn btn-primary" onClick={() => { addNode("prompt"); onToast("已新增提示词节点"); }}>＋ 新增提示词节点</button></div>
-    <div className="prompt-node-list">{nodes.map((node, index) => {
-      const assemblyReason = promptAssemblyBlockReason(node, allNodes, edges);
-      return <article className="prompt-node-card" key={node.id}>
-        <div className="prompt-node-card-head" onClick={() => setSelection(node.id)}>
-          <span className="node-record-index">{String(index + 1).padStart(2, "0")}</span>
-          <div><strong>{node.data.title}</strong><small>{node.data.description || "配置画面元素、镜头和动作"}</small></div>
-          <div className="prompt-node-card-meta"><span className="node-status">{node.data.status}</span><span>L0 {promptConfigFromData(node.data).elements.length}</span></div>
-          <div className="node-record-actions"><button type="button" className="btn" onClick={event => { event.stopPropagation(); setSelection(node.id); beginNodeEdit(node.id); }}>编辑节点</button><button type="button" className="btn btn-primary" disabled={Boolean(assemblyReason)} title={assemblyReason ?? "校验并完成提示词装配"} onClick={event => { event.stopPropagation(); updateNodeData(node.id, { status: "已装配" }); onToast(`${node.data.title} 已装配`); }}>实时装配</button>{assemblyReason && <small className="action-hint">{assemblyReason}</small>}</div>
-        </div>
-      </article>;
-    })}</div>
-  </section>;
 }
 
 // 节点管理器按类型给运营看得懂的文案；此前所有类型都套用生成节点的“片段输出槽位”说法。
@@ -205,14 +180,13 @@ function StepSummary({ route, nodeId }: { route: WorkflowRoute; nodeId: string |
   const firstOverlay = soundSegments.find(segment => segment.overlay.enabled !== false)?.overlay;
   const summaries: Record<string, string> = {
     "/workflow/assets": `${node?.dishName || "未选择菜品"} · 素材待确认`,
-    "/workflow/prompts": `已选择 ${node?.kind === "prompt" ? promptConfigFromData(node).elements.length : 0} 个 L0 画面元素`,
     "/workflow/sound": `${firstVoice?.voiceName || "未配置音色"} · ${firstOverlay?.text || "未配置画面文字"}`,
     "/workflow/output": `${timeline.length} 个片段 · ${totalTimelineDuration(timeline).toFixed(1)}s 时间线`,
   };
   return <div className="step-summary"><span className="panel-label">CURRENT DATA</span><strong>{summaries[route] || "当前草稿"}</strong><p>本页修改会自动保存到同一份画布草稿。</p></div>;
 }
 
-function StepNext({ route }: { route: WorkflowRoute }) {
+export function StepNext({ route }: { route: WorkflowRoute }) {
   const nodes = useWorkflowStore(state => state.nodes);
   const edges = useWorkflowStore(state => state.edges);
   const candidateClips = useWorkflowStore(state => state.candidateClips);
@@ -425,7 +399,7 @@ export function OutputPage({ onToast }: StepPageProps) {
 function StepFrame({ route, title, children }: StepPageProps & { route: WorkflowRoute; title: string; children: ReactNode }) {
   const guides: Partial<Record<WorkflowRoute, string>> = {
     "/workflow/assets": "先完成菜品素材、分类、冷热属性和主体类型确认，再进入下一步；批量建稿的“应用到画布”会创建对应节点。",
-    "/workflow/prompts": "先给每道菜选一个效果预设，看一眼校验结果是绿色的；想微调再展开高级设置。都通过后点“实时装配”，再进入生成片段。",
+    "/workflow/prompts": "画面来自第 2 步的首帧，这一步只决定它怎么动：镜头怎么走、哪里在动、哪里保持不动。一般不用改，直接点「下一步」。",
     "/workflow/sound": "先在第 5 步完成至少一条无声成片，再配置多轨人声、文字和 BGM；文字与人声可分别拖动并允许重叠。",
     "/workflow/output": "无声成片用于检查片段顺序，有声成片用于发布；需要修改声音或文字时返回第 6 步。",
   };

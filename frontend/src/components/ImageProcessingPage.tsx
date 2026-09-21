@@ -84,7 +84,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
   useEffect(() => { if (node) setSelection(node.id); }, [node, setSelection]);
   useEffect(() => { fetchBackgroundTemplates().then(setTemplates).catch(error => onToast(error instanceof Error ? error.message : "背景模板加载失败")); }, [onToast]);
 
-  if (!node) return <main className="step-main"><div className="step-header"><StepHeading route="/workflow/image-processing" /></div><section className="step-panel empty-panel"><h2>尚未创建图片处理节点</h2><p>新增节点后，将其连接在“素材与菜品”和“提示词装配”之间。</p><button type="button" className="btn btn-primary" onClick={() => addNode("image_process")}>新增图片处理节点</button></section></main>;
+  if (!node) return <main className="step-main"><div className="step-header"><StepHeading route="/workflow/image-processing" /></div><section className="step-panel empty-panel"><h2>尚未创建图片处理节点</h2><p>新增节点后，将其连接在“素材与菜品”和“动态效果”之间。</p><button type="button" className="btn btn-primary" onClick={() => addNode("image_process")}>新增图片处理节点</button></section></main>;
 
   const update = (patch: Partial<typeof node.data>) => updateNodeData(node.id, patch);
   const selectTemplate = (id: string) => {
@@ -111,7 +111,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
     setBusy(true);
     try {
       const result = await processImageNode(node.id);
-      onToast(result.processingMode === "preserve_original" ? "已保留原图并跳过抠图，可进入提示词装配" : "已完成抠图和背景合成，可进入提示词装配");
+      onToast(result.processingMode === "preserve_original" ? "已保留原图并跳过抠图，可进入动态效果" : "已完成抠图和背景合成，可进入动态效果");
     } catch (error) {
       onToast(imageProcessingErrorMessage(error));
     } finally {
@@ -168,7 +168,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
         </div>
       </section>
 
-      <div className="step-context"><button type="button" className="btn btn-primary ip-next" disabled={!node.data.processedImagePreview} onClick={() => navigate("/workflow/prompts")}>下一步：提示词装配</button><span className="muted">{node.data.processedImagePreview ? "这张首帧会用于后面的视频生成" : "先完成这道菜的图片处理"}</span></div>
+      <div className="step-context"><button type="button" className="btn btn-primary ip-next" disabled={!node.data.processedImagePreview} onClick={() => navigate("/workflow/prompts")}>下一步：动态效果</button><span className="muted">{node.data.processedImagePreview ? "这张首帧会用于后面的视频生成" : "先完成这道菜的图片处理"}</span></div>
     </div><Inspector onToast={onToast} /></div>
   </main>;
 }

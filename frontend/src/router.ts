@@ -17,7 +17,7 @@ export type WorkflowRoute =
 export const workflowRoutes: Array<{ path: WorkflowRoute; label: string; step: string; goal: string }> = [
   { path: "/workflow/assets", label: "素材与菜品", step: "1", goal: "上传菜品图，填菜名和分类，告诉工具画面里有没有手或人。做完得到一份待处理的菜品清单。" },
   { path: "/workflow/image-processing", label: "图片处理", step: "2", goal: "把菜品从原图里抠出来，换到门店背景上。做完得到视频的第一帧。" },
-  { path: "/workflow/prompts", label: "提示词装配", step: "3", goal: "给这道菜选一个动态效果（热气、淋酱、推近镜头……）。做完得到一段给 AI 的生成指令。" },
+  { path: "/workflow/prompts", label: "动态效果", step: "3", goal: "工具已按冷热给每道菜配好怎么动，看一眼，不合适再换。做完得到给 AI 的生成指令。" },
   { path: "/workflow/generator", label: "生成视频片段", step: "4", goal: "AI 按上一步的效果生成 3 秒动态片段，一道菜可以多生成几条挑最好的。做完得到可用片段。" },
   { path: "/workflow/compose", label: "成片合成", step: "5", goal: "把几道菜的片段拼成一条 12–15 秒的竖版视频。做完得到无声成片。" },
   { path: "/workflow/sound", label: "声音与文字", step: "6", goal: "加 BGM、旁白和字幕。做完得到可以直接发布的成片。" },
