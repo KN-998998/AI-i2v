@@ -65,7 +65,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
   const body: Record<typeof kind, ReactNode> = {
     input: <>
       <div className="dish-preview"><div className="dish-image-fallback">{data.imagePreview ? <img src={data.imagePreview} alt={formatNodeValue(data.dishName, "菜品素材")} /> : "素材"}</div></div>
-      <Row label="当前菜品" value={formatNodeValue(data.dishName, "未选择菜品")} />
+      <Row label="当前菜品" value={formatNodeValue(data.dishName, "未命名菜品")} />
       <Row label="首帧 / 尾帧" value={`${formatNodeValue(data.imageName, "未上传")} / 可选`} />
       <div className="tag-list"><Tag good>{formatNodeValue(data.foodType, "待确认")}</Tag><Tag>{dishCategory}</Tag><Tag>{formatNodeValue(data.visualSubjectType, "菜品主体")}</Tag><Tag>{formatNodeValue(data.assetMode, "单图模式")}</Tag></div>
       <Footer><ActionButton onClick={() => action()}>编辑素材</ActionButton></Footer>

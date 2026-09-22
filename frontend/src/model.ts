@@ -840,16 +840,12 @@ function legacyVoiceId(value: string): string {
 
 export const promptL0Options = ["菜品主体·冷食", "菜品主体·热食", "配菜／装饰", "餐具器皿", "桌面／台面", "手部", "厨师上半身", "背景陈设"];
 
-export const clips: TimelineClip[] = [
-  { id: "clip_salmon_01", dish: "炙烤三文鱼", label: "平稳推进", tone: "#355e62", timelineDuration: 2.5, dishCategory: "主菜" },
-  { id: "clip_salmon_02", dish: "炙烤三文鱼", label: "小幅弧线", tone: "#4b5d68", timelineDuration: 2.5, dishCategory: "主菜" },
-  { id: "clip_tempura_01", dish: "天妇罗", label: "右向横移", tone: "#665038", timelineDuration: 2.5, dishCategory: "炸物" },
-  { id: "clip_sashimi_01", dish: "刺身拼盘", label: "固定机位", tone: "#4c4265", timelineDuration: 2.5, dishCategory: "刺身" },
-];
 
 export function dataFor(kind: NodeKind): WorkflowData {
   const base = { kind, ...nodeCatalog[kind] };
-  if (kind === "input") return { ...base, dishName: "炙烤三文鱼", foodType: "热食", dishCategory: "主菜", assetMode: "单图模式", imageName: "当前素材" };
+  // 空白起步：原来预填「炙烤三文鱼 · 当前素材」还标着「已就绪」，其实一张图都没有，
+  // 9/22 实测把人骗到了——新加的卡也跟着预填这个假菜名。有图才叫已就绪，见 inputNodeStatus。
+  if (kind === "input") return { ...base, dishName: "", foodType: "热食", dishCategory: "主菜", assetMode: "单图模式", imageName: "", status: "待上传" };
   // 背景亮度 0.85：参考片的画面平均亮度是 109–123，工具合成的成片只有 65.7，压暗到 0.72 是成因之一。
   // 只调这一步大约能到 74，到不了 109——剩下的差距在背景素材本身偏暗，见 README「为什么成片比参考片暗」。
   if (kind === "image_process") return { ...base, processingMode: "matting_composite", backgroundBlur: 4, backgroundBrightness: 0.85, subjectScale: 0.68, subjectX: 0.5, subjectY: 0.58 };
@@ -862,6 +858,63 @@ export function dataFor(kind: NodeKind): WorkflowData {
 
 export function createWorkflowNode(kind: NodeKind, id: string, position: { x: number; y: number }): WorkflowNode {
   return { id, type: "workflow", position, data: dataFor(kind) };
+}
+
+/** 素材节点的状态只看有没有图：填了菜名但没上传图，后面一步也做不了。 */
+export function inputNodeStatus(data: { imagePreview?: string }): "已就绪" | "待上传" {
+  return (data.imagePreview ?? "").trim() ? "已就绪" : "待上传";
+}
+
+/**
+ * 一道菜 = 四个节点带边：素材 → 图片处理 → 动态效果 → 生成片段 → 共用的 output。
+ *
+ * 9/22 实测：第 1 步点「＋ 新增菜品」、上传了图，第 2 步还是灰的——原来 addNode("input")
+ * 只造一个素材节点，而侧栏（deriveWorkflowProgress）只认从生成节点往上游追得到的链，
+ * 孤节点上传了图也不算数。批量建稿本来就是四个一起造的，新增和复制现在都走这里。
+ */
+export function createDishChain(
+  nodeNumber: number,
+  options: { y?: number; input?: Partial<WorkflowData> } = {},
+): { nodes: WorkflowNode[]; edges: Edge[]; nextNodeNumber: number; inputId: string; generatorId: string } {
+  const y = options.y ?? 520;
+  const inputId = `node_input_${nodeNumber}`;
+  const processId = `node_image_process_${nodeNumber + 1}`;
+  const promptId = `node_prompt_${nodeNumber + 2}`;
+  const generatorId = `node_generator_${nodeNumber + 3}`;
+  const input = createWorkflowNode("input", inputId, { x: 24, y });
+  input.data = { ...input.data, ...(options.input ?? {}) };
+  // 合并完再重算状态：复制一道没有图的菜，复制出来的也该是「待上传」。
+  input.data = { ...input.data, status: inputNodeStatus(input.data) };
+  const edge = (source: string, target: string): Edge => ({ id: `${source}-${target}`, source, target, type: "smoothstep" });
+  return {
+    nodes: [
+      input,
+      createWorkflowNode("image_process", processId, { x: 286, y }),
+      createWorkflowNode("prompt", promptId, { x: 548, y }),
+      createWorkflowNode("generator", generatorId, { x: 810, y }),
+    ],
+    edges: [edge(inputId, processId), edge(processId, promptId), edge(promptId, generatorId), edge(generatorId, "output")],
+    nextNodeNumber: nodeNumber + 4,
+    inputId,
+    generatorId,
+  };
+}
+
+/** 这道菜的整条链（素材 + 它下游的图片处理 / 动态效果 / 生成片段）。删一道菜要整条一起删。 */
+export function dishChainNodeIds(inputId: string, nodes: WorkflowNode[], edges: Edge[]): Set<string> {
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const ids = new Set<string>([inputId]);
+  let current = inputId;
+  for (const kind of ["image_process", "prompt", "generator"] as const) {
+    const next = edges
+      .filter(edge => edge.source === current)
+      .map(edge => nodeById.get(edge.target))
+      .find(node => node?.data.kind === kind);
+    if (!next) break;
+    ids.add(next.id);
+    current = next.id;
+  }
+  return ids;
 }
 
 export function createPendingGeneratorClip(nodeId: string, _nodeNumber: number, dish = "待配置菜品", dishCategory: DishCategory = "其他", assetId = `asset_${nodeId}`): TimelineClip {

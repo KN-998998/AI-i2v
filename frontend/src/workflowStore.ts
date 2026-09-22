@@ -1,6 +1,6 @@
 import { addEdge as addReactFlowEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from "@xyflow/react";
 import { create } from "zustand";
-import { assetIdForDishName, clips, createPendingGeneratorClip, createWorkflowNode, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode, type ImageRecomposeResult } from "./model";
+import { assetIdForDishName, createDishChain, createPendingGeneratorClip, createWorkflowNode, dishChainNodeIds, inputNodeStatus, inferDishCategory, nodeCatalog, normalizeDishCategory, normalizeTimelineClip, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, soundConfigFromData, type AssetLibraryPlan, type AssetLibraryPlanItem, type ClipLibraryItem, type ComposeJob, type ComposeWorkspace, type DraftPayload, type FoodType, type GenerationJob, type ImageProcessingJob, type NodeKind, type Panel, type SoundConfig, type TimelineClip, type VisualSubjectType, type WorkflowData, type WorkflowNode, type ImageRecomposeResult } from "./model";
 import { workflowSeed } from "./seed";
 import { fetchCanvasClips, fetchDraft, persistDraft, recomposeCanvasImage, startCanvasGeneration, startCanvasImageProcessing, waitForCanvasGeneration, waitForCanvasImageProcessing } from "./api";
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type PromptConfig, type PromptPresetId } from "./promptAssembler";
@@ -251,22 +251,6 @@ function removeNodeArtifacts(state: Pick<WorkflowState, "candidateClips" | "comp
 
 type DishNodeDedupeResult = { nodes: WorkflowNode[]; edges: Edge[]; removedGeneratorIds: Set<string> };
 
-function workflowChainForInput(inputId: string, nodes: WorkflowNode[], edges: Edge[]): Set<string> {
-  const nodeById = new Map(nodes.map(node => [node.id, node]));
-  const ids = new Set<string>([inputId]);
-  let current = inputId;
-  for (const kind of ["image_process", "prompt", "generator"] as const) {
-    const next = edges
-      .filter(edge => edge.source === current)
-      .map(edge => nodeById.get(edge.target))
-      .find(node => node?.data.kind === kind);
-    if (!next) break;
-    ids.add(next.id);
-    current = next.id;
-  }
-  return ids;
-}
-
 /** Keep one connected workflow chain per dish, preserving the latest input node. */
 export function dedupeDishWorkflowNodes(nodes: WorkflowNode[], edges: Edge[]): DishNodeDedupeResult {
   const groups = new Map<string, WorkflowNode[]>();
@@ -279,7 +263,7 @@ export function dedupeDishWorkflowNodes(nodes: WorkflowNode[], edges: Edge[]): D
   groups.forEach(inputs => {
     const canonical = inputs.at(-1)!;
     inputs.slice(0, -1).forEach(input => {
-      const chain = workflowChainForInput(input.id, nodes, edges);
+      const chain = dishChainNodeIds(input.id, nodes, edges);
       chain.forEach(id => {
         removeIds.add(id);
         if (nodes.find(node => node.id === id)?.data.kind === "generator") removedGeneratorIds.add(id);
@@ -509,6 +493,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         if (item.id !== nodeId) return item;
         const nextData = { ...item.data, ...patch };
         if (item.data.kind === "prompt" && promptConfigurationChanged(patch) && !("status" in patch)) nextData.status = "可生成";
+        // 素材节点的状态只看有没有图：上传了 → 已就绪，清掉了 → 待上传。
+        if (item.data.kind === "input") nextData.status = inputNodeStatus(nextData);
         return { ...item, data: nextData };
       });
       if (node?.data.kind !== "sound") return { nodes, revision: state.revision + 1 };
@@ -522,7 +508,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const dish = data.dishName || "待配置菜品";
     const dishCategory = normalizeDishCategory(data.dishCategory, data.dishName ? dish : "");
     const foodType = dishCategory === "套餐" ? "混合/多温" : data.foodType as FoodType | undefined;
-    const nextInputData = { ...data, foodType };
+    const nextInputData = { ...data, foodType, status: inputNodeStatus(data) };
     const visualSubjectType = data.visualSubjectType ?? "菜品主体";
     const syncClip = (clip: TimelineClip) => clip.generatorNodeId ? { ...clip, dish, dishCategory, foodType, visualSubjectType } : clip;
     const candidateClips = state.candidateClips.map(syncClip);
@@ -707,6 +693,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     return result;
   },
   addNode: kind => set(state => {
+    // 一道菜要四个节点带边一起造，不然第 2 步永远是灰的（侧栏只认接在链上的菜）。
+    // y 的算法和 createBatchWorkflows 一致：样板那条链之后每道菜往下排一行。
+    if (kind === "input") {
+      const existing = state.nodes.filter(node => node.data.kind === "input" && node.id !== "assets").length;
+      const chain = createDishChain(state.nextNodeNumber, { y: 520 + existing * 250 });
+      return {
+        nodes: [...state.nodes, ...chain.nodes],
+        edges: [...state.edges, ...chain.edges],
+        nextNodeNumber: chain.nextNodeNumber,
+        selectedNodeId: chain.inputId,
+        selectedEdgeId: null,
+        revision: state.revision + 1,
+      };
+    }
     const id = `node_${kind}_${state.nextNodeNumber}`;
     const index = state.nextNodeNumber - 1;
     return {
@@ -737,7 +737,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const dishKey = item.dishName.normalize("NFKC").trim().toLocaleLowerCase();
         const existingInput = nodes.find(node => node.data.kind === "input" && node.data.dishName?.normalize("NFKC").trim().toLocaleLowerCase() === dishKey);
         if (existingInput) {
-          const chainIds = workflowChainForInput(existingInput.id, nodes, edges);
+          const chainIds = dishChainNodeIds(existingInput.id, nodes, edges);
           const processNode = [...chainIds].map(id => nodes.find(node => node.id === id)).find(node => node?.data.kind === "image_process");
           const promptNode = [...chainIds].map(id => nodes.find(node => node.id === id)).find(node => node?.data.kind === "prompt");
           const generatorNode = [...chainIds].map(id => nodes.find(node => node.id === id)).find(node => node?.data.kind === "generator");
@@ -861,6 +861,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
   deleteNode: nodeId => set(state => {
     if (protectedNodeIds.has(nodeId)) return {};
+    const target = state.nodes.find(node => node.id === nodeId);
+    // 素材节点删的是整条链：只删素材会留下三个孤节点，画布上看着还在、却什么也做不了。
+    if (target?.data.kind === "input") {
+      const chainIds = dishChainNodeIds(nodeId, state.nodes, state.edges);
+      let nodes = state.nodes;
+      let edges = state.edges;
+      chainIds.forEach(id => { ({ nodes, edges } = removeNodeAndEdges(nodes, edges, id)); });
+      const generatorIds = new Set([...chainIds].filter(id => state.nodes.find(node => node.id === id)?.data.kind === "generator"));
+      const artifacts = removeNodeArtifacts(state, generatorIds);
+      return {
+        nodes,
+        edges,
+        ...artifacts,
+        selectedNodeId: chainIds.has(state.selectedNodeId ?? "") ? null : state.selectedNodeId,
+        revision: state.revision + 1,
+      };
+    }
     const next = removeNodeAndEdges(state.nodes, state.edges, nodeId);
     const artifacts = removeNodeArtifacts(state, new Set([nodeId]));
     return {
@@ -873,6 +890,33 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   duplicateNode: nodeId => set(state => {
     const source = state.nodes.find(node => node.id === nodeId);
     if (!source) return {};
+    // 复制一道菜同样是一条新链；assetId 不复制，新链自己拿新的。
+    if (source.data.kind === "input") {
+      const existing = state.nodes.filter(node => node.data.kind === "input" && node.id !== "assets").length;
+      const chain = createDishChain(state.nextNodeNumber, {
+        y: 520 + existing * 250,
+        input: {
+          title: source.data.title,
+          dishName: source.data.dishName,
+          foodType: source.data.foodType,
+          dishCategory: source.data.dishCategory,
+          visualSubjectType: source.data.visualSubjectType,
+          assetMode: source.data.assetMode,
+          sourceLibraryCategory: source.data.sourceLibraryCategory,
+          imageName: source.data.imageName,
+          imagePreview: source.data.imagePreview,
+          assetAnalysis: source.data.assetAnalysis,
+        },
+      });
+      return {
+        nodes: [...state.nodes, ...chain.nodes],
+        edges: [...state.edges, ...chain.edges],
+        nextNodeNumber: chain.nextNodeNumber,
+        selectedNodeId: chain.inputId,
+        selectedEdgeId: null,
+        revision: state.revision + 1,
+      };
+    }
     const id = `node_${source.data.kind}_${state.nextNodeNumber}`;
     const copy = {
       ...source,
@@ -946,7 +990,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     };
   }),
   toggleClip: clipId => set(state => {
-    const clip = state.candidateClips.find(item => item.id === clipId) ?? state.availableClips.find(item => item.id === clipId) ?? clips.find(item => item.id === clipId);
+    // 第三处兜底原来查的是 model.ts 里那三条演示片段，随它们一起退役：能点到的片段
+    // 要么在候选池里，要么在本地片段库里。
+    const clip = state.candidateClips.find(item => item.id === clipId) ?? state.availableClips.find(item => item.id === clipId);
     if (!clip) return {};
     const exists = state.timeline.some(item => item.id === clipId);
     const timeline = exists ? state.timeline.filter(item => item.id !== clipId) : [...state.timeline, clip];

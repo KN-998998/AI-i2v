@@ -59,7 +59,7 @@ function AssetFields({ node, onToast }: { node: WorkflowNode; onToast: (message:
   }, [data.imagePreview]);
   return <>
     <SectionTitle>素材与菜品</SectionTitle>
-    <Field label="当前菜品"><input className="input" value={formatNodeValue(data.dishName, "")} onChange={event => updateNodeData(node.id, { dishName: event.target.value })} /></Field>
+    <Field label="当前菜品"><input className="input" placeholder="例如：玉子寿司" value={formatNodeValue(data.dishName, "")} onChange={event => updateNodeData(node.id, { dishName: event.target.value })} /></Field>
     <Field label="菜品类型"><Select value={dishFoodType} options={[...FOOD_TYPE_OPTIONS]} onChange={value => updateNodeData(node.id, { foodType: value as FoodType })} /></Field>
     <Field label="菜品分类"><Select value={dishCategory} options={[...DISH_CATEGORY_OPTIONS]} onChange={value => updateNodeData(node.id, { dishCategory: value as typeof DISH_CATEGORY_OPTIONS[number], foodType: value === "套餐" ? "混合/多温" : value === "甜品" || value === "水果" ? "冷食" : data.foodType })} /></Field>
     <Field label="画面主体类型"><Select value={data.visualSubjectType ?? "菜品主体"} options={[...VISUAL_SUBJECT_TYPE_OPTIONS]} onChange={value => updateNodeData(node.id, { visualSubjectType: value as VisualSubjectType })} /></Field>

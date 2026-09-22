@@ -119,7 +119,7 @@ export function ImageProcessingPage({ onToast }: { onToast: (message: string) =>
     }
   };
 
-  const dishName = sourceNode?.data.dishName || node.data.dishName || "未选择菜品";
+  const dishName = sourceNode?.data.dishName || node.data.dishName || "未命名菜品";
   const frameImage = showSource || !node.data.processedImagePreview ? sourcePreview : node.data.processedImagePreview;
   const liveState = busy ? { className: "is-busy", text: preserveOriginal ? "处理中…" : "抠图中…" }
     : recomposing ? { className: "is-busy", text: "更新预览…" }

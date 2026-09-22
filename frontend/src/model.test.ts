@@ -1,4 +1,4 @@
-import { assetIdForDishName, bgmModeFor, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, dataFor, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, type TimelineClip, voiceItemsFromData } from "./model.ts";
+import { assetIdForDishName, bgmLabel, bgmModeFor, bgmTrackTitle, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createDishChain, createPendingGeneratorClip, createWorkflowNode, dataFor, dishChainNodeIds, DISH_CATEGORY_OPTIONS, inferDishCategory, inputNodeStatus, isTrimConfirmed, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, type TimelineClip, voiceItemsFromData } from "./model.ts";
 import { applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, DEFAULT_PROMPT_CONFIG, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
@@ -573,5 +573,85 @@ assert(bgmModeFor({ bgmName: "默认曲库", bgmUrl: "" }) === "default", "the n
 assert(bgmModeFor({ bgmName: "", bgmUrl: "" }) === "none", "no name and no file means no music");
 assert(soundConfigFromData(dataFor("sound"), "默认 BGM", "").bgmMode === "default", "the seed sound config starts on the default library");
 assert(workflowSeed.composeWorkspaces[0].soundConfig?.bgmMode === "default", "a new draft's first workspace uses the default library");
+
+// ---------------------------------------------------------------------------
+// 第十五批（一）：第 1 步「新增菜品」造整条链，不再是孤零零一个素材节点
+// 9/22 实测：Patrick 点「＋ 新增菜品」、上传了图，第 2 步还是灰的——addNode("input") 只造
+// 一个素材节点，后面没接图片处理 / 动态效果 / 生成片段，而侧栏只认从生成节点往上游追得到
+// 的链。样板那张「炙烤三文鱼 · 当前素材」也是骗人的：没有图却标着「已就绪」。
+// ---------------------------------------------------------------------------
+const chain = createDishChain(7);
+assert(chain.nodes.map(node => node.id).join(",") === "node_input_7,node_image_process_8,node_prompt_9,node_generator_10", "a dish is four nodes with consecutive numbers");
+assert(chain.nodes.map(node => node.data.kind).join(",") === "input,image_process,prompt,generator", "in pipeline order");
+assert(chain.nextNodeNumber === 11, "the next dish starts after the four numbers used");
+assert(chain.inputId === "node_input_7" && chain.generatorId === "node_generator_10", "the helper hands back the two ids the store needs");
+const chainEdges = chain.edges.map(edge => `${edge.source}>${edge.target}`);
+assert(JSON.stringify(chainEdges) === JSON.stringify(["node_input_7>node_image_process_8", "node_image_process_8>node_prompt_9", "node_prompt_9>node_generator_10", "node_generator_10>output"]), "the chain is wired through to the shared output node");
+assert(chain.edges.every(edge => edge.id === `${edge.source}-${edge.target}` && edge.type === "smoothstep"), "edge ids and type follow the existing convention");
+const chainInput = chain.nodes[0];
+assert(chainInput.data.dishName === "" && chainInput.data.imageName === "" && chainInput.data.imagePreview === undefined, "a new dish starts blank, not as a fake 炙烤三文鱼");
+assert(chainInput.data.status === "待上传", "a dish without a picture is not 已就绪");
+const named = createDishChain(3, { input: { dishName: "玉子寿司", foodType: "冷食", dishCategory: "寿司" } });
+assert(named.nodes[0].data.dishName === "玉子寿司" && named.nodes[0].data.foodType === "冷食" && named.nodes[0].id === "node_input_3", "duplicating a dish can seed the new input");
+assert(named.nodes[0].data.status === "待上传", "copying a dish without a picture keeps it 待上传");
+assert(dataFor("input").dishName === "" && dataFor("input").imageName === "" && dataFor("input").status === "待上传", "the seed dish card is blank too");
+
+assert(inputNodeStatus({}) === "待上传");
+assert(inputNodeStatus({ imagePreview: "" }) === "待上传");
+assert(inputNodeStatus({ imagePreview: "blob:x" }) === "已就绪", "a picture is what makes a dish ready");
+
+assert(JSON.stringify([...dishChainNodeIds("node_input_7", chain.nodes, chain.edges)].sort()) === JSON.stringify(["node_generator_10", "node_image_process_8", "node_input_7", "node_prompt_9"]), "deleting a dish takes its whole chain");
+assert([...dishChainNodeIds("nope", chain.nodes, chain.edges)].join(",") === "nope", "an unknown input is just itself");
+
+// 第 2 步只认接在链上的菜：链上的菜有图就解锁；孤零零的素材节点有图也不算（那就是原来的 bug）
+const sharedOutput = createWorkflowNode("output", "output", { x: 0, y: 0 });
+const chainWithPicture = chain.nodes.map(node => node.id === "node_input_7" ? { ...node, data: { ...node.data, imagePreview: "blob:x", status: inputNodeStatus({ imagePreview: "blob:x" }) } } : node);
+const chainProgress = deriveWorkflowProgress([...chainWithPicture, sharedOutput], [], [], chain.edges);
+assert(chainProgress.steps[0].complete && chainProgress.steps[1].unlocked, "a dish added on step 1 unlocks step 2 once it has a picture");
+const orphanInput = createWorkflowNode("input", "node_input_99", { x: 0, y: 0 });
+orphanInput.data = { ...orphanInput.data, imagePreview: "blob:y" };
+const orphanProgress = deriveWorkflowProgress([orphanInput, sharedOutput], [], [], []);
+assert(!orphanProgress.steps[1].unlocked, "an input node with nothing behind it still cannot unlock step 2");
+
+// ---------------------------------------------------------------------------
+// 第十五批（二）：工具自己挑的 1.8 秒窗口就算确认过了
+// 9/22 实测：片段带着 trimConfirmed: false 进第 5 步，列表写「待确认裁剪」，预检拦下合成，
+// 人得逐条点「确定所选片段」。没有这个字段 = 工具给的窗口 = 已确认；只有人拖过入点/出点
+// （拖动那两处本来就置 false）才回到未确认。
+// ---------------------------------------------------------------------------
+assert(isTrimConfirmed({}) === true, "no flag means the tool's own window, which needs no confirmation");
+assert(isTrimConfirmed({ trimConfirmed: true }) === true);
+assert(isTrimConfirmed({ trimConfirmed: false }) === false, "only a trim someone dragged and left unconfirmed blocks");
+
+// ---------------------------------------------------------------------------
+// 第十五批（三）：新草稿的「成片 1」不再预塞三条假片段
+// 9/22 实测：炙烤三文鱼 / 天妇罗 / 刺身拼盘三条「待下载」是样板里的演示片段，永远下载不了，
+// 又没绑生成节点，自己生成的片段顶替不了它们，人得先 × 三次。现在样板只放一条绑在
+// 生成节点 clips 上的待生成占位，真片一到自动顶上。
+// ---------------------------------------------------------------------------
+const seedLists: Array<[string, TimelineClip[]]> = [["candidateClips", workflowSeed.candidateClips], ["timeline", workflowSeed.timeline], ["成片 1", workflowSeed.composeWorkspaces[0].clips]];
+for (const [listName, list] of seedLists) {
+  assert(list.length === 1, `${listName}: the seed holds exactly one placeholder`);
+  assert(list[0].generatorNodeId === "clips" && list[0].status === "pending" && !list[0].sourcePath, `${listName}: the placeholder is bound to the seed generator and has no file`);
+}
+assert(!workflowSeed.candidateClips.some(clip => ["炙烤三文鱼", "天妇罗", "刺身拼盘"].includes(clip.dish)), "the demo dishes are gone");
+const seedInput = workflowSeed.nodes.find(node => node.id === "assets")!;
+assert(seedInput.data.dishName === "" && !seedInput.data.imagePreview && seedInput.data.status === "待上传", "the seed dish card is blank and 待上传");
+const generatedForSeed = { id: "clip_canvas_job9", filename: "sushi.mp4", dish: "玉子寿司", label: "生成片段", tone: "", timelineDuration: 1.8, sourcePath: "/clips/sushi.mp4", sourceUrl: "/api/canvas/clips/library/sushi.mp4", status: "generated" as const, generatorNodeId: "clips", generationJobId: "job9", draftId: "draft_seed", isSelected: true };
+const seeded = reconcileDraftClips({ draftId: "draft_seed", candidateClips: workflowSeed.candidateClips.map(clip => ({ ...clip })), timeline: workflowSeed.timeline.map(clip => ({ ...clip })), available: [generatedForSeed], activeGenerationNodeIds: new Set() });
+assert(seeded.candidateClips.length === 1 && seeded.candidateClips[0].sourcePath === "/clips/sushi.mp4", "the first generated clip takes the placeholder's seat, nothing to × away");
+assert(seeded.timeline.length === 1 && seeded.timeline[0].sourcePath === "/clips/sushi.mp4", "same on the timeline");
+
+// ---------------------------------------------------------------------------
+// 第十五批（四）：默认曲库可以指定一首
+// 9/22 Patrick：「想改成能选择的默认 BGM」。bgmTrack 是曲库里的文件名，空 = 随机（老行为）。
+// 指定了一首，这条成片和用这份样板批量生产的每条成片都用它（Patrick 已拍板）。
+// ---------------------------------------------------------------------------
+assert(bgmTrackTitle("ほんわかぷっぷー.mp3") === "ほんわかぷっぷー" && bgmTrackTitle("shuffle_shuffle.MP3") === "shuffle_shuffle" && bgmTrackTitle("") === "", "the title is the file name without its extension");
+assert(bgmLabel({ bgmMode: "default", bgmName: "默认曲库", bgmUrl: "", bgmTrack: "ほんわかぷっぷー.mp3" }) === "默认曲库 · ほんわかぷっぷー", "a pinned track is named wherever the BGM is shown");
+assert(bgmLabel({ bgmMode: "default", bgmName: "默认曲库", bgmUrl: "", bgmTrack: "" }) === "默认曲库（随机一首）", "no pin means random, as before");
+assert(bgmLabel({ bgmMode: "default", bgmName: "默认曲库", bgmUrl: "" }) === "默认曲库（随机一首）", "old drafts have no bgmTrack at all");
+assert(bgmLabel({ bgmMode: "custom", bgmName: "own.mp3", bgmUrl: "/x/own.mp3", bgmTrack: "ほんわかぷっぷー.mp3" }) === "own.mp3", "a pin is ignored outside default mode");
+assert(bgmLabel({ bgmMode: "none", bgmName: "", bgmUrl: "", bgmTrack: "ほんわかぷっぷー.mp3" }) === "不要音乐");
 
 console.log("model tests passed");
