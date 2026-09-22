@@ -307,6 +307,8 @@ export type TimelineClip = {
   filename?: string;
   generatorNodeId?: string;
   generationJobId?: string;
+  /** 这条片段是哪份草稿生成的。只有本草稿的片段才进候选池（见 clipLibrary.ts）；老片段没有这个字段。 */
+  draftId?: string;
   qualityScore?: number;
   qualityLabel?: "good" | "warning" | "reject";
   qualityWarnings?: string[];

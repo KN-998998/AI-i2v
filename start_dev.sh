@@ -114,7 +114,12 @@ done
 
 # ffmpeg 能不能画字要单独查：片尾卡和字幕都靠 drawtext，而它要编进 libfreetype 才有。
 # 2026-09-21 实测 Homebrew 的 ffmpeg 9.0.2 就没编，不查的话要等点「合成此条」才炸。
-if command -v ffmpeg >/dev/null 2>&1 && ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q drawtext; then
+# 先把滤镜表抓进变量再判断：脚本开着 set -o pipefail，而 `ffmpeg | grep -q` 里 grep
+# 一匹配上就关管道，ffmpeg 收到 SIGPIPE，整条管道的返回码变成非 0——照抄那种写法会在
+# 明明有 drawtext 的机器上报「不会画字」。
+FFMPEG_FILTERS=""
+command -v ffmpeg >/dev/null 2>&1 && FFMPEG_FILTERS="$(ffmpeg -hide_banner -filters 2>/dev/null || true)"
+if [ -n "${FFMPEG_FILTERS}" ] && ! printf '%s' "${FFMPEG_FILTERS}" | grep drawtext >/dev/null 2>&1; then
   warn "这台机器的 ffmpeg 不会画字（没有 drawtext 滤镜），片尾卡和字幕都渲染不了。"
   warn "修法: brew install ffmpeg@7 && export PATH=\"/opt/homebrew/opt/ffmpeg@7/bin:\$PATH\"（本机实测 @8 和 9.0.x 都没有 drawtext）"
 fi

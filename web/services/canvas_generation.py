@@ -215,6 +215,9 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
         "id": f"clip_canvas_{job.get('job_id') or filename}",
         "clipId": f"clip_canvas_{job.get('job_id') or filename}",
         "assetId": asset_id,
+        # 哪份草稿生成的：前端靠它把别的草稿的片段挡在候选池外面（每份草稿都有一个
+        # 叫 "clips" 的生成节点，光看节点 id 会认错人）。
+        "draftId": job.get("draft_id"),
         "clipVersion": clip_version,
         "isSelected": True,
         "filename": filename,

@@ -9,7 +9,7 @@
 // 效果由 effectRules.ts 按这道菜的冷热自动选好，不合适再点一个换。
 // ---------------------------------------------------------------------------
 import { assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, type PromptConfig, type PromptPresetId } from "../promptAssembler";
-import { DEFAULT_EFFECT_RULES, EFFECT_CLASS_LABELS, EFFECT_COPY, effectClassFor, effectivePromptConfig, effectReason, presetForDish, type EffectClass, type EffectRules } from "../effectRules";
+import { DEFAULT_EFFECT_RULES, EFFECT_CLASS_LABELS, EFFECT_COPY, effectClassFor, effectivePromptConfig, effectReason, effectRuleOverridden, presetForDish, type EffectClass, type EffectRules } from "../effectRules";
 import { promptAssemblyBlockReason, promptUpstreamNodes } from "../promptAssemblyReadiness";
 import type { WorkflowData } from "../model";
 import { useWorkflowStore } from "../workflowStore";
@@ -192,7 +192,7 @@ export function EffectStepPage({ onToast }: { onToast: (message: string) => void
         <div className="ip-divider" />
         <h3 className="effect-sub">换一个效果<small>这道菜能用的 {presets.length} 个</small></h3>
         <div className="prompt-preset-grid effect-presets">{presets.map(preset => <button type="button" key={preset.id} className={`prompt-preset ${activePreset === preset.id ? "active" : ""}`} aria-pressed={activePreset === preset.id} onClick={() => chooseEffect(preset.id)}>
-          {activePreset === preset.id && <span className="effect-auto-mini">{!custom && !rules[dishClass] ? "自动选的" : "当前"}</span>}
+          {activePreset === preset.id && <span className="effect-auto-mini">{!custom && !effectRuleOverridden(rules, dishClass) ? "自动选的" : "当前"}</span>}
           <strong>{preset.label}</strong>
           <small>{preset.description}</small>
         </button>)}</div>

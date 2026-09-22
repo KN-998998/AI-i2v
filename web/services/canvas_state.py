@@ -130,7 +130,34 @@ def load_draft(draft_id: str) -> dict[str, Any] | None:
             payload = json.load(stream)
     if not isinstance(payload, dict) or payload.get("version") != DRAFT_VERSION:
         raise ValueError("草稿版本不受支持")
-    return _repair_mojibake(payload)
+    return _lift_legacy_background_brightness(_repair_mojibake(payload))
+
+
+# 第十二批把背景亮度默认值从 0.72 调到 0.85（参考片画面平均亮度 109–123，工具只有 65.7），
+# 但草稿里存着的还是旧值，批量生产深拷贝样板的图片处理节点时也跟着旧。
+_LEGACY_BACKGROUND_BRIGHTNESS = 0.72
+_BACKGROUND_BRIGHTNESS = 0.85
+
+
+def _lift_legacy_background_brightness(payload: dict[str, Any]) -> dict[str, Any]:
+    """图片处理节点上正好等于旧默认值 0.72 的背景亮度，读出来时改成 0.85。
+
+    「正好等于旧默认值」就当作没人动过。特意调成 0.72 的也会被改，Patrick 拍板时知道
+    这个风险——比让每份老草稿继续出偏暗的片子划算。其它数值一律不碰，没有这个字段的不补。
+
+    放在读取这一层：分步流程（前端 fetchDraft）和批量生产（_create_daily_draft 里的
+    load_draft(样板)）都从这儿过，改一处两条路都对；前端拿到 0.85 后自动保存会写回去。
+    已经用 0.72 处理过的首帧不会自动重做，人再碰一下滑块才会更新。
+    """
+    for node in payload.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        data = node.get("data")
+        if not isinstance(data, dict) or data.get("kind") != "image_process":
+            continue
+        if data.get("backgroundBrightness") == _LEGACY_BACKGROUND_BRIGHTNESS:
+            data["backgroundBrightness"] = _BACKGROUND_BRIGHTNESS
+    return payload
 
 
 def _stable_json(value: Any, *, drop_timing: bool = False) -> str:

@@ -92,11 +92,23 @@ done
 
 # ffmpeg 能不能画字要单独查：片尾卡和字幕都靠 drawtext，而它要编进 libfreetype 才有。
 # 2026-09-21 实测 Homebrew 的 ffmpeg 9.0.2 就没编，不查的话要等点「合成此条」才炸。
+# 先把滤镜表抓进变量再判断：脚本开着 set -o pipefail，而 `ffmpeg | grep -q` 里 grep
+# 一匹配上就关管道，ffmpeg 收到 SIGPIPE，整条管道的返回码变成非 0——照抄那种写法会在
+# 明明有 drawtext 的机器上报「不会画字」。
 DRAWTEXT_OK=1
-if [ "${FFMPEG_OK}" -eq 1 ] && ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q drawtext; then
-  DRAWTEXT_OK=0
+if [ "${FFMPEG_OK}" -eq 1 ]; then
+  FFMPEG_FILTERS="$(ffmpeg -hide_banner -filters 2>/dev/null || true)"
+  case "${FFMPEG_FILTERS}" in
+    *drawtext*) ;;
+    *) DRAWTEXT_OK=0 ;;
+  esac
 fi
 
+if [ "${DRAWTEXT_OK}" -eq 0 ]; then
+  warn "这台机器的 ffmpeg 不会画字（没有 drawtext 滤镜），片尾卡和字幕都渲染不了。"
+  warn "修法: brew install ffmpeg@7 && export PATH=\"/opt/homebrew/opt/ffmpeg@7/bin:\$PATH\"（本机实测 @8 和 9.0.x 都没有 drawtext）"
+  warn "这种情况下 test_startup_recovery_finishes_persisted_compose_job 会因为渲染片尾卡而红，那不是代码的问题。"
+fi
 info "3/3 后端测试"
 mkdir -p .tmp
 "${PYTHON_EXE}" -X utf8 -m pytest || fail "后端测试失败。"
@@ -106,10 +118,5 @@ echo
 if [ "${FFMPEG_OK}" -eq 0 ]; then
   warn "这台机器上没有 ffmpeg / ffprobe，几条端到端用例被跳过了，本次不算完整验证。"
   warn "而且没有 ffmpeg 就合成不了成片，本地根本跑不到第 5 步。安装: brew install ffmpeg"
-fi
-if [ "${DRAWTEXT_OK}" -eq 0 ]; then
-  warn "这台机器的 ffmpeg 不会画字（没有 drawtext 滤镜），片尾卡和字幕都渲染不了。"
-  warn "修法: brew install ffmpeg@7 && export PATH=\"/opt/homebrew/opt/ffmpeg@7/bin:\$PATH\"（本机实测 @8 和 9.0.x 都没有 drawtext）"
-  warn "这种情况下 test_startup_recovery_finishes_persisted_compose_job 会因为渲染片尾卡而红，那不是代码的问题。"
 fi
 pass "全部验证通过，可以提交。"

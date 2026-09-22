@@ -197,7 +197,7 @@ def _canvas_clip_payload(clip_path: Path) -> dict[str, Any] | None:
         "qualityWarnings": analysis.get("qualityWarnings", []),
         "analysisMode": analysis.get("analysisMode", "technical_rules"),
         "dishCategory": analysis.get("category", "其他"),
-        **{key: manifest[key] for key in ("clipId", "assetId", "clipVersion", "isSelected", "generatorNodeId", "generationJobId", "foodType", "visualSubjectType", "prompt", "videoTaskId") if key in manifest},
+        **{key: manifest[key] for key in ("clipId", "assetId", "clipVersion", "isSelected", "generatorNodeId", "generationJobId", "draftId", "foodType", "visualSubjectType", "prompt", "videoTaskId") if key in manifest},
     }
 
 

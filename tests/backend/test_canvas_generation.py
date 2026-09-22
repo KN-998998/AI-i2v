@@ -341,3 +341,15 @@ def test_generation_still_rejects_an_unknown_visual_subject():
         assert "画面主体" in str(error)
     else:
         raise AssertionError("an unknown visual subject type was silently accepted")
+
+
+# ---------------------------------------------------------------------------
+# 第十四批：片段库里的每条片段记下它是哪份草稿生成的
+# 前端靠这个把别的草稿的片段挡在候选池外面（见 model.test.ts 第十四批（二））。
+# ---------------------------------------------------------------------------
+def test_a_generated_clip_remembers_which_draft_it_belongs_to(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_generation, "analyze_video", lambda *_args: _fake_analysis())
+
+    clip = canvas_generation._build_clip(dict(_FAKE_JOB, draft_id="draft_abc"), tmp_path / "clip.mp4", "玉子寿司", "寿司")
+
+    assert clip["draftId"] == "draft_abc"

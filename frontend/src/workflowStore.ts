@@ -6,6 +6,7 @@ import { fetchCanvasClips, fetchDraft, persistDraft, recomposeCanvasImage, start
 import { DEFAULT_PROMPT_CONFIG, promptLegacyPatch, type PromptConfig, type PromptPresetId } from "./promptAssembler";
 import { browserDraftId } from "./draftIdentity";
 import { generatorGenerationBlockReason, generatorUpstreamNodes, hasSelectedGeneratedClip } from "./generatorReadiness";
+import { ownDraftClips, reconcileDraftClips } from "./clipLibrary";
 // 有手或厨师入镜时怎么改主运动对象，只留 effectRules.ts 那一份，别在这里再写一遍。
 import { promptConfigForVisualSubject, withEffectRule } from "./effectRules";
 import { promptUpstreamNodes } from "./promptAssemblyReadiness";
@@ -201,38 +202,6 @@ function sameClipList(left: TimelineClip[], right: TimelineClip[]): boolean {
 
 function withResolvedDishCategory<T extends TimelineClip>(clip: T): T {
   return clip.dishCategory ? clip : { ...clip, dishCategory: inferDishCategory(clip.dish) };
-}
-
-function mergeAvailableClips(persisted: TimelineClip[], available: ClipLibraryItem[]): TimelineClip[] {
-  const matched = new Set<string>();
-  const merged = persisted.map(item => {
-    const match = available.find(candidate =>
-      (item.sourcePath && candidate.sourcePath === item.sourcePath)
-      || (item.filename && candidate.filename === item.filename),
-    );
-    if (!match) return item;
-    matched.add(match.id);
-    return {
-      ...match,
-      id: item.id,
-      generatorNodeId: item.generatorNodeId ?? match.generatorNodeId,
-      generationJobId: item.generationJobId ?? match.generationJobId,
-      assetId: item.assetId ?? match.assetId,
-      clipId: item.clipId ?? match.clipId,
-      clipVersion: item.clipVersion ?? match.clipVersion,
-      isSelected: item.isSelected ?? match.isSelected,
-      dishCategory: item.dishCategory ?? match.dishCategory,
-      // The draft is the source of truth for clip timing. This also keeps
-      // trims made before the explicit confirmation flag was introduced.
-      ...(item.sourceStartSeconds !== undefined || item.sourceEndSeconds !== undefined ? {
-        sourceStartSeconds: item.sourceStartSeconds,
-        sourceEndSeconds: item.sourceEndSeconds,
-        timelineDuration: item.timelineDuration,
-        trimConfirmed: item.trimConfirmed,
-      } : {}),
-    };
-  });
-  return [...merged, ...available.filter(item => !matched.has(item.id) && !persisted.some(existing => existing.sourcePath === item.sourcePath || existing.filename === item.filename))];
 }
 
 function syncGeneratorNodeStatuses(nodes: WorkflowNode[], candidateClips: TimelineClip[]): WorkflowNode[] {
@@ -996,26 +965,16 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
             && Boolean(node.data.generationJobId)
             && !completedJobKeys.has(`${node.id}:${node.data.generationJobId}`))
           .map(node => node.id));
-        const normalizedTimeline = reconcileStalePendingGeneratorClips(
-          state.timeline.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
-          availableClips,
+        // 只认本草稿自己生成的片段：别的草稿的成品和没来历的本地测试片段不许进候选池，
+        // 也不许顶替本草稿的占位（每份草稿都有一个叫 "clips" 的生成节点，光看它会认错人）。
+        const { candidateClips, timeline } = reconcileDraftClips({
+          draftId: state.draftId,
+          candidateClips: state.candidateClips.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
+          timeline: state.timeline.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
+          available: availableClips,
           activeGenerationNodeIds,
-          "replace",
-        );
-        const normalizedCandidates = reconcileStalePendingGeneratorClips(
-          state.candidateClips.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
-          availableClips,
-          activeGenerationNodeIds,
-        );
-        const seedIds = new Set(clips.map(item => item.id));
-        const isUnlinkedSeedTimeline = normalizedTimeline.length > 0 && normalizedTimeline.every(item => seedIds.has(item.id) && !item.sourcePath);
-        const timeline = isUnlinkedSeedTimeline && availableClips.length
-          ? normalizedTimeline.map((item, index) => availableClips[index] ? { ...availableClips[index] } : item)
-          : normalizedTimeline;
-        const isUnlinkedSeedCandidates = normalizedCandidates.length > 0 && normalizedCandidates.every(item => seedIds.has(item.id) && !item.sourcePath);
-        const candidateClips = isUnlinkedSeedCandidates && availableClips.length
-          ? availableClips.map(item => ({ ...item }))
-          : mergeAvailableClips(normalizedCandidates, availableClips);
+        });
+        const myClips = ownDraftClips(availableClips, state.draftId);
         const nodes = syncGeneratorNodeStatuses(state.nodes, candidateClips);
         const timelineChanged = !sameClipList(timeline, state.timeline);
         const candidateClipsChanged = !sameClipList(candidateClips, state.candidateClips);
@@ -1023,7 +982,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const workspaces = state.composeWorkspaces.map((workspace, index) => {
           const workspaceClips = reconcileStalePendingGeneratorClips(
             workspace.clips.map(clip => withResolvedDishCategory(normalizeTimelineClip(clip))),
-            availableClips,
+            myClips,
             activeGenerationNodeIds,
             "replace",
           );

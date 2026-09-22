@@ -1,4 +1,4 @@
-import { assetIdForDishName, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, dataFor, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, type TimelineClip, voiceItemsFromData } from "./model.ts";
+import { assetIdForDishName, bgmModeFor, captionSegmentsFromData, captionSegmentsPatch, captionSegmentsWithTimings, connectWouldCycle, createPendingGeneratorClip, createWorkflowNode, dataFor, DISH_CATEGORY_OPTIONS, inferDishCategory, initialEdges, initialNodes, normalizeDishCategory, OVERLAY_FONT_OPTIONS, overlayCoordinatesFromItem, overlayItemsFromData, overlayStyleFromItem, randomizeClipSelection, recommendClipSelection, reconcileStalePendingGeneratorClips, removeNodeAndEdges, reorderById, repairCaptionVoiceSegments, resolveDishCategory, resolveGeneratorNodeStatus, soundConfigFromData, totalTimelineDuration, type TimelineClip, voiceItemsFromData } from "./model.ts";
 import { applyPromptPreset, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, DEFAULT_PROMPT_CONFIG, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, PROMPT_PRESETS, SHOT_SIZE_OPTIONS, type PromptConfig } from "./promptAssembler.ts";
 import { browserDraftId, DRAFT_ID_STORAGE_KEY } from "./draftIdentity.ts";
 import { deriveWorkflowProgress, firstIncompleteWorkflowRoute, isWorkflowRouteUnlocked } from "./workflowProgress.ts";
@@ -10,6 +10,7 @@ import { workflowSeed } from "./seed.ts";
 import { DEFAULT_EFFECT_RULES, EFFECT_CLASS_LABELS, EFFECT_COPY, effectClassFor, effectivePromptConfig, effectReason, presetForDish, withEffectRule } from "./effectRules.ts";
 import { tutorialChapters } from "./tutorial.ts";
 import { readFileSync } from "node:fs";
+import { reconcileDraftClips } from "./clipLibrary.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -518,5 +519,59 @@ assert(Boolean(effectStep) && !effectStep!.goal.includes("装配") && effectStep
 const effectChapter = tutorialChapters.find(chapter => chapter.route === "/workflow/prompts");
 assert(effectChapter?.title === "动态效果", "the tutorial chapter follows the rename");
 assert(Boolean(effectChapter) && !/L0|L1|L2|槽位|装配/.test(`${effectChapter!.description}${effectChapter!.bullets.join("")}${effectChapter!.checkpoint ?? ""}`), "the tutorial no longer teaches slots or assembly");
+
+// ---------------------------------------------------------------------------
+// 第十四批（一）：效果换回该类的默认值后，不该再说「你改的」
+// 9/21 验收时看到：把热菜从「只推近镜头」换回「热气升腾」，标签仍写「你改的，热菜都用它」。
+// ---------------------------------------------------------------------------
+assert(effectReason({ effectRules: { hot: "steam" } }, { foodType: "热食", visualSubjectType: "菜品主体" }) === "按热食自动选", "a rule equal to the class default reads as automatic");
+assert(effectReason({ effectRules: { cold: "glow" } }, { foodType: "冷食", visualSubjectType: "菜品主体" }) === "按冷食自动选", "same for cold dishes");
+assert(effectReason({ effectRules: { hot: "push_in" } }, { foodType: "热食", visualSubjectType: "菜品主体" }).includes("你改的"), "a rule that differs from the default still reads as changed");
+
+// ---------------------------------------------------------------------------
+// 第十四批（二）：新草稿不再被片段库里的旧片段污染
+// 9/21 实测：新建草稿一打开，候选池里就多了 20 条别的草稿和测试用的片段，第 4 步还没生成
+// 就打了勾，「智能推荐方案」会把测试片段挑进成片。根源是 loadClipLibrary 把整个片段库并进
+// 候选池，还按 generatorNodeId 用别的草稿的成品替换本草稿的占位（每份草稿都有 "clips" 节点）。
+// 改成：片段库里的片段带 draftId，只有本草稿的片段才进候选池、才能替换占位。
+// ---------------------------------------------------------------------------
+const seedCandidates = workflowSeed.candidateClips.map(clip => ({ ...clip }));
+const seedTimeline = workflowSeed.timeline.map(clip => ({ ...clip }));
+const libraryOfOthers = [
+  { id: "clip_canvas_test_01.mp4", filename: "test_01.mp4", dish: "test_01", label: "本地片段", tone: "", timelineDuration: 2.5, sourcePath: "/clips/test_01.mp4", sourceUrl: "/api/canvas/clips/library/test_01.mp4", status: "generated" as const },
+  { id: "clip_canvas_old.mp4", filename: "old.mp4", dish: "玉子寿司", label: "生成片段", tone: "", timelineDuration: 1.8, sourcePath: "/clips/old.mp4", sourceUrl: "/api/canvas/clips/library/old.mp4", status: "generated" as const, generatorNodeId: "clips", generationJobId: "j-old", draftId: "draft_old", isSelected: true },
+];
+const untouched = reconcileDraftClips({ draftId: "draft_new", candidateClips: seedCandidates, timeline: seedTimeline, available: libraryOfOthers, activeGenerationNodeIds: new Set() });
+assert(JSON.stringify(untouched.candidateClips) === JSON.stringify(seedCandidates), "a fresh draft must not inherit clips from the library or from other drafts");
+assert(JSON.stringify(untouched.timeline) === JSON.stringify(seedTimeline), "seed placeholders are never swapped for library clips");
+
+const pendingOwn = { ...createPendingGeneratorClip("clips", 1, "玉子寿司", "寿司"), generationJobId: "j-mine" };
+const mine = { ...libraryOfOthers[1], id: "clip_canvas_mine.mp4", filename: "mine.mp4", sourcePath: "/clips/mine.mp4", sourceUrl: "/api/canvas/clips/library/mine.mp4", generationJobId: "j-mine", draftId: "draft_a" };
+const foreign = reconcileDraftClips({ draftId: "draft_a", candidateClips: [pendingOwn], timeline: [pendingOwn], available: [libraryOfOthers[1]], activeGenerationNodeIds: new Set() });
+assert(foreign.candidateClips.length === 1 && !foreign.candidateClips[0].sourcePath && foreign.candidateClips[0].status === "pending", "another draft's finished clip on the same node id must not replace my pending placeholder");
+const own = reconcileDraftClips({ draftId: "draft_a", candidateClips: [pendingOwn], timeline: [pendingOwn], available: [mine, libraryOfOthers[0]], activeGenerationNodeIds: new Set() });
+assert(own.candidateClips.length === 1 && own.candidateClips[0].sourcePath === "/clips/mine.mp4", "my own finished clip replaces my pending placeholder");
+assert(own.timeline.length === 1 && own.timeline[0].sourcePath === "/clips/mine.mp4", "the timeline placeholder is replaced the same way");
+assert(!own.candidateClips.some(clip => clip.filename === "test_01.mp4"), "unlinked local test clips never enter the candidate pool");
+
+const persisted = { ...mine, id: "kept-id", qualityScore: 10, sourceStartSeconds: 1.0, sourceEndSeconds: 2.8, timelineDuration: 1.8, trimConfirmed: true };
+const refreshed = reconcileDraftClips({ draftId: "draft_a", candidateClips: [persisted], timeline: [], available: [{ ...mine, qualityScore: 99 }], activeGenerationNodeIds: new Set() });
+assert(refreshed.candidateClips.length === 1 && refreshed.candidateClips[0].id === "kept-id" && refreshed.candidateClips[0].qualityScore === 99, "a persisted clip is refreshed from the library but keeps its id");
+assert(refreshed.candidateClips[0].sourceStartSeconds === 1.0 && refreshed.candidateClips[0].trimConfirmed === true, "the draft stays the source of truth for trims");
+const appended = reconcileDraftClips({ draftId: "draft_a", candidateClips: [], timeline: [], available: [mine, libraryOfOthers[0], libraryOfOthers[1]], activeGenerationNodeIds: new Set() });
+assert(appended.candidateClips.length === 1 && appended.candidateClips[0].sourcePath === "/clips/mine.mp4", "only my own clips are added when missing from the draft");
+
+// ---------------------------------------------------------------------------
+// 第十四批（三）：默认曲库
+// 「默认 BGM」原来只是个名字，背后没有文件，没配人声的成片连音轨都没有。现在
+// assets/bgm/default/ 里放几首，每条成片随机用一首；人传了自己的就用自己的；也可以不要音乐。
+// ---------------------------------------------------------------------------
+assert(bgmModeFor({ bgmMode: "none", bgmName: "默认 BGM", bgmUrl: "" }) === "none", "an explicit mode wins");
+assert(bgmModeFor({ bgmName: "song.mp3", bgmUrl: "/api/canvas/drafts/d/files/x.mp3" }) === "custom", "an uploaded file means custom");
+assert(bgmModeFor({ bgmName: "默认 BGM", bgmUrl: "" }) === "default", "old drafts that say 默认 BGM get the default library");
+assert(bgmModeFor({ bgmName: "默认曲库", bgmUrl: "" }) === "default", "the new label too");
+assert(bgmModeFor({ bgmName: "", bgmUrl: "" }) === "none", "no name and no file means no music");
+assert(soundConfigFromData(dataFor("sound"), "默认 BGM", "").bgmMode === "default", "the seed sound config starts on the default library");
+assert(workflowSeed.composeWorkspaces[0].soundConfig?.bgmMode === "default", "a new draft's first workspace uses the default library");
 
 console.log("model tests passed");

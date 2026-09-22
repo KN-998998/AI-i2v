@@ -433,3 +433,40 @@ def test_canvas_compose_accepts_sound_render_flag(monkeypatch):
     )
     assert response.status_code == 200
     assert captured == {"draft_id": "default", "workspace_id": None, "include_sound": True}
+
+
+# ---------------------------------------------------------------------------
+# 第十四批：片段库接口把草稿编号带出来；默认曲库有接口能列、能播
+# ---------------------------------------------------------------------------
+def test_canvas_clip_library_exposes_the_owning_draft(monkeypatch, tmp_path):
+    clip_dir = tmp_path / "canvas_clips"
+    clip_dir.mkdir(parents=True)
+    (clip_dir / "玉子寿司_clips_1_3s.mp4").write_bytes(b"fake-mp4")
+    (clip_dir / "manifest.json").write_text(
+        '[{"filename": "玉子寿司_clips_1_3s.mp4", "generatorNodeId": "clips", "generationJobId": "j1", "draftId": "draft_abc"}]',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api_routes, "CANVAS_CLIP_ROOT", clip_dir)
+    monkeypatch.setattr(api_routes, "_read_video_duration_seconds", lambda _path: 3.0)
+
+    item = TestClient(create_app()).get("/api/canvas/clips").json()[0]
+
+    assert item["draftId"] == "draft_abc"
+    assert item["generatorNodeId"] == "clips"
+
+
+def test_default_bgm_routes_list_and_serve_the_library(monkeypatch, tmp_path):
+    from web.services import default_bgm
+
+    pool = tmp_path / "bgm"
+    pool.mkdir()
+    (pool / "calm.mp3").write_bytes(b"ID3fake")
+    monkeypatch.setattr(default_bgm, "DEFAULT_BGM_DIR", pool)
+    client = TestClient(create_app())
+
+    listing = client.get("/api/canvas/bgm/default")
+    assert listing.status_code == 200
+    assert listing.json() == [{"name": "calm.mp3", "url": "/api/canvas/bgm/default/calm.mp3"}]
+    assert client.get("/api/canvas/bgm/default/calm.mp3").content == b"ID3fake"
+    assert client.get("/api/canvas/bgm/default/../../.env").status_code in {400, 404}
+    assert client.get("/api/canvas/bgm/default/missing.mp3").status_code == 404

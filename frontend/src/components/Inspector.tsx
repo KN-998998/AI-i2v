@@ -361,7 +361,7 @@ export function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (m
         <div className="bgm-state">{bgmMode === "default"
           ? (defaultBgmCount === 0 ? "默认曲库是空的，把音乐放进 assets/bgm/default/" : `默认曲库 · 每条成片随机一首${defaultBgmCount === null ? "" : `（共 ${defaultBgmCount} 首）`}`)
           : bgmMode === "custom" ? `自己传的：${bgmName || "未命名文件"}` : "不要音乐"}</div>
-        <div className="upload-row"><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /><span>换成自己的音乐</span></div>
+        <div className="upload-row"><span>换成自己的音乐</span><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /></div>
         <div className="bgm-actions">
           {bgmMode !== "default" && <button type="button" className="btn" onClick={() => { useDefaultBgm(); onToast("这条成片改用默认曲库"); }}>用默认曲库</button>}
           {bgmMode !== "none" && <button type="button" className="btn" onClick={() => { clearBgm(); onToast("这条成片不加音乐"); }}>不要音乐</button>}

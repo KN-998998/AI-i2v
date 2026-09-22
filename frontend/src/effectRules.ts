@@ -148,13 +148,22 @@ export function effectivePromptConfig(promptData: EffectPromptData, inputData: E
   return applyPromptPreset(base, presetForDish(food, visual, promptData.effectRules));
 }
 
+/**
+ * 这一类的效果是不是真被人改过。等于该类的默认值就算没改过——9/21 验收时看到：
+ * 把热菜从「只推近镜头」换回「热气升腾」，标签还写着「你改的，热菜都用它」。
+ */
+export function effectRuleOverridden(rules: EffectRules | undefined, klass: EffectClass): boolean {
+  const wanted = rules?.[klass];
+  return Boolean(wanted) && wanted !== DEFAULT_EFFECT_RULES[klass];
+}
+
 /** 卡片和标题旁那行小字：为什么这道菜配了这个效果。写给运营看，不出现类名和字段名。 */
 export function effectReason(promptData: EffectPromptData, inputData: EffectInputData): string {
   if (promptData.effectMode === "custom") return "自定义（高级设置）";
   const klass = effectClassFor(inputData.foodType, inputData.visualSubjectType);
   const overridden = promptData.effectRules?.[klass];
-  // 规则改过、而且这道菜确实用得上（没退回光泽流转）时，才说是人改的。
-  if (overridden && presetForDish(inputData.foodType, inputData.visualSubjectType, promptData.effectRules) === overridden) {
+  // 规则改过（且不等于默认值）、而且这道菜确实用得上（没退回光泽流转）时，才说是人改的。
+  if (effectRuleOverridden(promptData.effectRules, klass) && presetForDish(inputData.foodType, inputData.visualSubjectType, promptData.effectRules) === overridden) {
     return `你改的，${EFFECT_CLASS_LABELS[klass]}都用它`;
   }
   if (klass === "person") {
