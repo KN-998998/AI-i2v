@@ -168,13 +168,14 @@ def test_stale_client_save_does_not_remove_completed_final_job(tmp_path, monkeyp
     assert saved["composeWorkspaces"][0]["finalJob"]["job_id"] == completed["job_id"]
 
 
-def test_preflight_blocks_real_clip_without_trim_confirmation(monkeypatch, tmp_path):
+def test_preflight_blocks_real_clip_whose_trim_was_dragged_but_not_confirmed(monkeypatch, tmp_path):
+    """第十五批改了约定：没有 trimConfirmed = 工具挑的窗口 = 已确认；只有明确的 False（人拖过）才拦。"""
     clip_path = tmp_path / "clip.mp4"
     clip_path.write_bytes(b"video")
     monkeypatch.setattr(canvas_quality, "analyze_video", lambda *args: {"qualityLabel": "good"})
 
     report = canvas_quality.preflight_draft(
-        {"timeline": [{"id": "clip", "dish": "测试菜", "sourcePath": str(clip_path), "timelineDuration": 2.5}]},
+        {"timeline": [{"id": "clip", "dish": "测试菜", "sourcePath": str(clip_path), "timelineDuration": 2.5, "trimConfirmed": False}]},
         "default",
         include_sound=False,
     )
@@ -609,3 +610,89 @@ def test_preflight_warns_when_the_default_library_is_empty(monkeypatch, tmp_path
     assert "MISSING_BGM" not in codes, "默认曲库空了是另一回事，别报成「本地音频文件不存在」"
     message = next(item["message"] for item in report["warnings"] if item["code"] == "DEFAULT_BGM_EMPTY")
     assert "assets/bgm/default" in message
+
+
+# ---------------------------------------------------------------------------
+# 第十五批（二）：预检只拦「人拖过又没确认」的裁剪
+# ---------------------------------------------------------------------------
+def test_preflight_only_blocks_a_trim_someone_dragged_and_left_unconfirmed(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_quality, "analyze_video", lambda *_args: {"qualityLabel": "good"})
+    monkeypatch.setattr(canvas_compose, "BRAND_END_CARD_LINES", [])
+    monkeypatch.setattr(video_render, "drawtext_missing", lambda: False)
+    draft = _preflight_draft_with_one_ready_clip(tmp_path)
+    del draft["timeline"][0]["trimConfirmed"]
+
+    report = canvas_quality.preflight_draft(draft, "default", include_sound=False)
+
+    assert "TRIM_NOT_CONFIRMED" not in [item["code"] for item in report["errors"]], "没有这个字段 = 工具给的窗口 = 已确认"
+    assert report["ok"] is True
+
+    draft["timeline"][0]["trimConfirmed"] = False
+    report = canvas_quality.preflight_draft(draft, "default", include_sound=False)
+
+    assert "TRIM_NOT_CONFIRMED" in [item["code"] for item in report["errors"]], "人拖过入点出点又没确认，才拦"
+
+
+# ---------------------------------------------------------------------------
+# 第十五批（四）：默认曲库可以指定一首
+# bgmTrack 是曲库里的文件名；空 / 没有 = 随机（第十四批的行为不变）。
+# ---------------------------------------------------------------------------
+def test_a_pinned_track_beats_the_stable_pick(monkeypatch, tmp_path):
+    from web.services import default_bgm
+
+    monkeypatch.setattr(default_bgm, "DEFAULT_BGM_DIR", _bgm_pool(tmp_path, ["a.mp3", "b.mp3", "c.mp3"]))
+
+    assert all(default_bgm.pick_default_bgm(seed, "b.mp3") == default_bgm.DEFAULT_BGM_DIR / "b.mp3" for seed in ("job-1", "job-2", "job-3")), "指定了就每条都是它"
+    assert default_bgm.pick_default_bgm("job-1", "") == default_bgm.pick_default_bgm("job-1"), "空字符串 = 没指定 = 随机"
+    assert default_bgm.pick_default_bgm("job-1", None) == default_bgm.pick_default_bgm("job-1")
+
+
+def test_a_missing_or_unsafe_pin_falls_back_to_the_stable_pick(monkeypatch, tmp_path):
+    from web.services import default_bgm
+
+    monkeypatch.setattr(default_bgm, "DEFAULT_BGM_DIR", _bgm_pool(tmp_path, ["a.mp3", "b.mp3", "readme.md"]))
+    (tmp_path / "secret.mp3").write_bytes(b"mp3")
+
+    assert default_bgm.pick_default_bgm("job-1", "gone.mp3") == default_bgm.pick_default_bgm("job-1"), "曲子被人拿走了：不报错，改用随机"
+    assert default_bgm.pick_default_bgm("job-1", "../secret.mp3") == default_bgm.pick_default_bgm("job-1"), "只认曲库里的纯文件名"
+    assert default_bgm.pick_default_bgm("job-1", "readme.md") == default_bgm.pick_default_bgm("job-1"), "不是音频的文件不能被指定"
+    assert default_bgm.has_default_track("a.mp3") is True
+    assert default_bgm.has_default_track("gone.mp3") is False
+    assert default_bgm.has_default_track("../secret.mp3") is False
+    assert default_bgm.has_default_track("") is False
+
+
+def test_resolve_bgm_path_honours_the_pinned_track(monkeypatch, tmp_path):
+    from web.services import default_bgm
+
+    monkeypatch.setattr(default_bgm, "DEFAULT_BGM_DIR", _bgm_pool(tmp_path, ["a.mp3", "b.mp3", "c.mp3"]))
+    sound = {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": "", "bgmTrack": "c.mp3"}
+
+    assert default_bgm.resolve_bgm_path("default", sound, "job-1") == default_bgm.DEFAULT_BGM_DIR / "c.mp3"
+    assert default_bgm.resolve_bgm_path("default", {**sound, "bgmTrack": ""}, "job-1") == default_bgm.pick_default_bgm("job-1")
+    assert default_bgm.resolve_bgm_path("default", {**sound, "bgmMode": "none"}, "job-1") is None, "不要音乐时指定的曲子也不算数"
+
+
+def test_preflight_warns_when_the_pinned_track_is_gone(monkeypatch, tmp_path):
+    from web.services import default_bgm
+
+    monkeypatch.setattr(canvas_quality, "analyze_video", lambda *_args: {"qualityLabel": "good"})
+    monkeypatch.setattr(canvas_compose, "BRAND_END_CARD_LINES", [])
+    monkeypatch.setattr(video_render, "drawtext_missing", lambda: False)
+    monkeypatch.setattr(default_bgm, "DEFAULT_BGM_DIR", _bgm_pool(tmp_path, ["a.mp3"]))
+    draft = _preflight_draft_with_one_ready_clip(tmp_path)
+    draft["composeWorkspaces"] = [{"id": "compose_1", "clips": draft["timeline"], "soundConfig": {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": "", "bgmTrack": "gone.mp3", "endCardEnabled": False}}]
+
+    report = canvas_quality.preflight_draft(draft, "default", "compose_1", include_sound=True)
+
+    codes = [item["code"] for item in report["warnings"]]
+    assert "DEFAULT_BGM_TRACK_MISSING" in codes
+    assert "DEFAULT_BGM_EMPTY" not in codes, "曲库不空，只是指定的那首不在"
+    assert report["ok"] is True, "指定的曲子不在只是提示，改用随机一首，不拦合成"
+    message = next(item["message"] for item in report["warnings"] if item["code"] == "DEFAULT_BGM_TRACK_MISSING")
+    assert "gone.mp3" in message and "随机" in message
+
+    draft["composeWorkspaces"][0]["soundConfig"]["bgmTrack"] = "a.mp3"
+    report = canvas_quality.preflight_draft(draft, "default", "compose_1", include_sound=True)
+
+    assert "DEFAULT_BGM_TRACK_MISSING" not in [item["code"] for item in report["warnings"]]

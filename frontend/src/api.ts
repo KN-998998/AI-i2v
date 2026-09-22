@@ -1,6 +1,7 @@
 import type { AssetLibraryPlan, BackgroundTemplate, ClipLibraryItem, ComposeJob, DraftPayload, GenerationJob, ImageProcessingJob, ImageRecomposeResult, ManualAssetReviewScan, MediaAnalysis, WorkflowData } from "./model";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+// 试听默认曲库时组件要自己拼地址，所以导出。
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {

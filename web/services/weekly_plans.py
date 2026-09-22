@@ -435,7 +435,12 @@ def _batch_sound_config(template: dict[str, Any]) -> dict[str, Any]:
         source = {"bgmName": template.get("bgmName", ""), "bgmUrl": template.get("bgmUrl", "")}
     mode = bgm_mode(source)
     if mode == "default":
-        return {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": ""}
+        config = {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": ""}
+        # 样板指定了一首就带上，批量的每条成片都用它；留在随机时不带这个键（= 按任务号各挑一首）。
+        track = str(source.get("bgmTrack") or "")
+        if track:
+            config["bgmTrack"] = track
+        return config
     if mode == "custom":
         return {"bgmMode": "custom", "bgmName": str(source.get("bgmName") or ""), "bgmUrl": str(source.get("bgmUrl") or "")}
     return {"bgmMode": "none", "bgmName": "", "bgmUrl": ""}

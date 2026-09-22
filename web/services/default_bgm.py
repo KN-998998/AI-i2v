@@ -54,11 +54,25 @@ def list_default_bgm() -> list[dict[str, str]]:
     return [{"name": item.name, "url": f"/api/canvas/bgm/default/{item.name}"} for item in sorted(files, key=lambda item: item.name)]
 
 
-def pick_default_bgm(seed: str) -> Path | None:
-    """按 seed（用合成任务的 job_id）挑一首：同一个 seed 永远同一首，不同 seed 轮着来。
+def has_default_track(name: str) -> bool:
+    """这个名字是不是曲库里真有的一首。只认纯文件名，`../secret.mp3` 这种一律不认。"""
+    if not name or Path(name).name != name:
+        return False
+    return any(item["name"] == name for item in list_default_bgm())
 
+
+def pick_default_bgm(seed: str, track: str | None = None) -> Path | None:
+    """这条成片用哪一首。
+
+    指定了（track 是曲库里的一首）就用它：Patrick 9/22 拍板——指定之后这条成片和用这份
+    样板批量生产的每条成片都用同一首。指定的曲子被人从文件夹里拿走了**不报错**，静默改用
+    随机那一套，不能因为一首曲子没了就出不了片。
+
+    没指定时按 seed（合成任务的 job_id）挑：同一个 seed 永远同一首，不同 seed 轮着来。
     用 sha1 而不是 random：随机数会让同一条成片每次重渲染换一首音乐，人会以为是工具在乱来。
     """
+    if track and has_default_track(track):
+        return Path(DEFAULT_BGM_DIR) / track
     names = [item["name"] for item in list_default_bgm()]
     if not names:
         return None
@@ -72,7 +86,7 @@ def resolve_bgm_path(draft_id: str, sound: dict[str, Any] | None, seed: str) -> 
     if mode == "none":
         return None
     if mode == "default":
-        return pick_default_bgm(seed)
+        return pick_default_bgm(seed, str((sound or {}).get("bgmTrack") or ""))
     url = str((sound or {}).get("bgmUrl") or "")
     if not url:
         return None

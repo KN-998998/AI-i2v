@@ -229,6 +229,9 @@ def _build_clip(job: dict[str, Any], path: Path, dish: str, category: str) -> di
         "sourceDurationSeconds": round(duration, 2),
         "sourceStartSeconds": start_seconds,
         "sourceEndSeconds": end_seconds,
+        # 工具自己挑的窗口（分析窗口和兜底窗口都算）就是确认过的窗口，不用人再点一次
+        # 「确定所选片段」；只有人拖过入点/出点才会被置成 false。
+        "trimConfirmed": True,
         "status": "generated",
         "sourcePath": str(path.resolve()),
         "sourceUrl": f"/api/canvas/clips/library/{filename}",

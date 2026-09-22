@@ -511,7 +511,8 @@ def preflight_draft(
         if not source.is_file():
             errors.append({"code": "MISSING_CLIP", "message": f"第 {index} 个片段没有关联本地视频文件"})
             continue
-        if clip.get("trimConfirmed") is not True:
+        # 没有这个字段 = 工具给的窗口 = 已确认；只有人拖过入点/出点又没确认（false）才拦。
+        if clip.get("trimConfirmed") is False:
             errors.append({"code": "TRIM_NOT_CONFIRMED", "message": f"第 {index} 个片段尚未确认裁剪区间，请先在第 5 步点击“确定所选片段”"})
         quality = analyze_video(source, str(clip.get("dish") or ""), str(clip.get("dishCategory") or ""), True)
         if quality.get("decodeOk") is False:
@@ -554,15 +555,22 @@ def preflight_draft(
 
     # BGM 分三种：自己传的（文件得在）、默认曲库（曲库得有曲子）、不要音乐（不提）。
     # 默认曲库空了和「本地音频文件不存在」是两回事，混在一起报会让人去翻自己没传过的文件。
-    from web.services.default_bgm import bgm_mode, list_default_bgm
+    from web.services.default_bgm import bgm_mode, has_default_track, list_default_bgm
 
     mode = bgm_mode(sound)
+    bgm_track = str(sound.get("bgmTrack") or "")
     if mode == "custom" and _uploaded_path(draft_id, str(sound.get("bgmUrl") or "")) is None:
         warnings.append({"code": "MISSING_BGM", "message": "草稿记录了 BGM，但本地音频文件不存在"})
     elif mode == "default" and not list_default_bgm():
         warnings.append({
             "code": "DEFAULT_BGM_EMPTY",
             "message": "默认曲库是空的，成片会没有音乐：把音乐文件放进 assets/bgm/default/，或在第 6 步上传一首",
+        })
+    elif mode == "default" and bgm_track and not has_default_track(bgm_track):
+        # 指定的曲子被人从文件夹里拿走了：改用随机一首照样出片，所以只提示、不拦。
+        warnings.append({
+            "code": "DEFAULT_BGM_TRACK_MISSING",
+            "message": f"样板指定的曲子「{bgm_track}」不在曲库里，这条成片会改用随机一首",
         })
 
     # 机器上没有中文字体时 ffmpeg 不报错，它会默默换一个字体，中文全变成方框。

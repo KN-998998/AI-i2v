@@ -1682,3 +1682,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
  * 「未上传」，而那句「未上传」在用默认曲库时是骗人的。 */
 .bgm-state { margin-bottom: 8px; color: var(--text); font-size: 14px; line-height: 1.6; }
 .bgm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* 第 6 步 BGM 选曲：默认曲库列出每一首、能试听、能指定一首。
+ * 第十四批只写得出「共 N 首」，人不知道是哪几首，也没法听、没法挑。 */
+.bgm-track-list { display: grid; gap: 6px; margin: 8px 0 6px; }
+.bgm-track { display: grid; grid-template-columns: 18px 28px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: inherit;
+  font: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease; }
+.bgm-track:hover { border-color: var(--cyan); }
+/* 效果图是宽面板，真实的第 6 步抽屉只有 190px 左右：「随机」那行带一句解释，挤成
+ * 「随机 · 每...」就看不懂了，所以让它换行、右侧备注掉到第二行。曲名保持单行省略号。 */
+.bgm-track.random { grid-template-columns: 18px minmax(0, 1fr); row-gap: 2px; }
+.bgm-track.random .name { overflow: visible; white-space: normal; }
+.bgm-track.random .note { grid-column: 2; white-space: normal; }
+.bgm-track.selected { border-color: var(--cyan); background: var(--cyan-soft, #f2f1ff); }
+.bgm-track .radio { width: 14px; height: 14px; border: 1px solid var(--muted); border-radius: 50%; }
+.bgm-track.selected .radio { border-color: var(--cyan); box-shadow: inset 0 0 0 3px var(--cyan); }
+.bgm-track .play { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--line); background: #fff; color: var(--cyan); font-size: 11px; line-height: 1; }
+.bgm-track .play.playing { border-color: var(--cyan); background: var(--cyan); color: #fff; }
+.bgm-track .name { overflow: hidden; min-width: 0; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; }
+.bgm-track .note { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+/* 预检提示框原来三段挤成一行：标题后面补了「：」，每条提示单独占一行。 */
+.step-callout small { display: block; margin-top: 4px; }

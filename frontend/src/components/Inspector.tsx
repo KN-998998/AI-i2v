@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { bgmModeFor, captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, normalizeDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
-import { fetchDefaultBgm, fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
+import { bgmModeFor, bgmTrackTitle, captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, normalizeDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
+import { API_BASE_URL, fetchDefaultBgm, fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { effectivePromptConfig } from "../effectRules";
@@ -204,15 +204,48 @@ export function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (m
   const setBgm = useWorkflowStore(state => state.setBgm);
   const clearBgm = useWorkflowStore(state => state.clearBgm);
   const useDefaultBgm = useWorkflowStore(state => state.useDefaultBgm);
+  const setDefaultBgmTrack = useWorkflowStore(state => state.setDefaultBgmTrack);
+  const bgmTrack = (activeWorkspace?.soundConfig?.bgmTrack ?? "").trim();
   const [ttsOptions, setTtsOptions] = useState<TTSVoiceOption[]>([]);
-  // 默认曲库有几首要问后端：曲库在磁盘上（音频不进 git），前端猜不出来。
-  const [defaultBgmCount, setDefaultBgmCount] = useState<number | null>(null);
+  // 曲库在磁盘上（音频不进 git），前端猜不出有哪几首，问一次后端；null = 还没问到。
+  const [defaultTracks, setDefaultTracks] = useState<Array<{ name: string; url: string }> | null>(null);
+  const defaultBgmCount = defaultTracks?.length ?? null;
+  // 试听：整栏共用一个 <audio>，同时只响一首。
+  const auditionRef = useRef<HTMLAudioElement | null>(null);
+  const [auditioning, setAuditioning] = useState<string | null>(null);
   useEffect(() => {
     fetchTTSOptions().then(result => setTtsOptions(result.voices)).catch(() => setTtsOptions([]));
   }, []);
   useEffect(() => {
-    fetchDefaultBgm().then(items => setDefaultBgmCount(items.length)).catch(() => setDefaultBgmCount(null));
+    fetchDefaultBgm().then(setDefaultTracks).catch(() => setDefaultTracks(null));
   }, []);
+  // 切走默认曲库、或这一栏被收起来时，别让音乐还在后台响着。
+  useEffect(() => {
+    if (bgmMode !== "default") stopAudition();
+  }, [bgmMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => stopAudition(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function stopAudition() {
+    const audio = auditionRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+    }
+    setAuditioning(null);
+  }
+
+  const toggleAudition = (track: { name: string; url: string }) => {
+    const audio = auditionRef.current;
+    if (!audio) return;
+    if (auditioning === track.name) {
+      stopAudition();
+      return;
+    }
+    audio.pause();
+    audio.src = `${API_BASE_URL}${track.url}`;
+    setAuditioning(track.name);
+    void audio.play().catch(() => { onToast(`试听「${bgmTrackTitle(track.name)}」失败`); setAuditioning(null); });
+  };
   const [captionSplitBusy, setCaptionSplitBusy] = useState(false);
   const data = node.data.kind === "sound" ? { ...node.data, ...(activeWorkspace?.soundConfig ?? {}) } : node.data;
   const [bulkCaptionText, setBulkCaptionText] = useState(data.captionSourceText ?? "");
@@ -359,8 +392,27 @@ export function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (m
       <Field label="BGM 音量"><input className="range" type="range" min="0" max="100" value={formatNodeValue(data.bgmVolume, "30")} onChange={event => updateNodeData(node.id, { bgmVolume: event.target.value })} /></Field>
       <Field label="BGM">
         <div className="bgm-state">{bgmMode === "default"
-          ? (defaultBgmCount === 0 ? "默认曲库是空的，把音乐放进 assets/bgm/default/" : `默认曲库 · 每条成片随机一首${defaultBgmCount === null ? "" : `（共 ${defaultBgmCount} 首）`}`)
+          ? (defaultBgmCount === 0 ? "默认曲库是空的，把音乐放进 assets/bgm/default/"
+            : bgmTrack ? `默认曲库 · 指定「${bgmTrackTitle(bgmTrack)}」`
+            : `默认曲库 · 每条成片随机一首${defaultBgmCount === null ? "" : `（共 ${defaultBgmCount} 首）`}`)
           : bgmMode === "custom" ? `自己传的：${bgmName || "未命名文件"}` : "不要音乐"}</div>
+        {bgmMode === "default" && Boolean(defaultTracks?.length) && <>
+          <div className="bgm-track-list">
+            <button type="button" className={`bgm-track random ${bgmTrack ? "" : "selected"}`} aria-pressed={!bgmTrack} onClick={() => { setDefaultBgmTrack(""); stopAudition(); onToast("这条成片改回随机一首"); }}>
+              <span className="radio" aria-hidden="true" />
+              <span className="name"><strong>随机</strong> · 每条成片轮着用</span>
+              <span className="note">推荐 · 共 {defaultTracks!.length} 首</span>
+            </button>
+            {defaultTracks!.map(track => <button type="button" key={track.name} className={`bgm-track ${bgmTrack === track.name ? "selected" : ""}`} aria-pressed={bgmTrack === track.name} onClick={() => { setDefaultBgmTrack(track.name); onToast(`这条成片固定用「${bgmTrackTitle(track.name)}」`); }}>
+              <span className="radio" aria-hidden="true" />
+              <span className={`play ${auditioning === track.name ? "playing" : ""}`} role="button" tabIndex={-1} aria-label={auditioning === track.name ? `停止试听 ${bgmTrackTitle(track.name)}` : `试听 ${bgmTrackTitle(track.name)}`} onClick={event => { event.stopPropagation(); toggleAudition(track); }}>{auditioning === track.name ? "❚❚" : "▶"}</span>
+              <span className="name">{bgmTrackTitle(track.name)}</span>
+              <span className="note">{auditioning === track.name ? "试听中" : ""}</span>
+            </button>)}
+          </div>
+          <small className="hint">指定了一首：这条成片和用这份样板批量生产的每条成片都用它。留在「随机」：几条成片轮着用。</small>
+          <audio ref={auditionRef} preload="none" onEnded={() => setAuditioning(null)} />
+        </>}
         <div className="upload-row"><span>换成自己的音乐</span><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /></div>
         <div className="bgm-actions">
           {bgmMode !== "default" && <button type="button" className="btn" onClick={() => { useDefaultBgm(); onToast("这条成片改用默认曲库"); }}>用默认曲库</button>}

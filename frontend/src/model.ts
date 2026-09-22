@@ -79,6 +79,8 @@ export type SoundConfig = {
   bgmName: string;
   bgmUrl: string;
   bgmMode?: BgmMode;
+  /** 默认曲库里指定的那一首（文件名）；空 / 没有 = 每条成片按任务号轮着用。 */
+  bgmTrack?: string;
   bgmVolume?: string;
 };
 
@@ -209,10 +211,18 @@ export function bgmModeFor({ bgmMode, bgmName, bgmUrl }: { bgmMode?: BgmMode; bg
   return ["默认 BGM", "默认曲库"].includes((bgmName ?? "").trim()) ? "default" : "none";
 }
 
+/** 曲库里一首曲子给人看的名字：去掉扩展名。文件名就是曲名，不另存一份标题。 */
+export function bgmTrackTitle(filename: string): string {
+  return (filename ?? "").replace(/\.[^.]+$/, "");
+}
+
 /** 界面上那几处「BGM：xxx」显示什么。别再出现「默认 BGM」或「未上传」这种骗人的说法。 */
-export function bgmLabel(config: { bgmMode?: BgmMode; bgmName?: string; bgmUrl?: string } | undefined): string {
+export function bgmLabel(config: { bgmMode?: BgmMode; bgmName?: string; bgmUrl?: string; bgmTrack?: string } | undefined): string {
   const mode = bgmModeFor(config ?? {});
-  if (mode === "default") return "默认曲库（随机一首）";
+  if (mode === "default") {
+    const track = (config?.bgmTrack ?? "").trim();
+    return track ? `默认曲库 · ${bgmTrackTitle(track)}` : "默认曲库（随机一首）";
+  }
   if (mode === "custom") return (config?.bgmName ?? "").trim() || "自己传的音乐";
   return "不要音乐";
 }
@@ -325,6 +335,16 @@ export type TimelineClip = {
  * Once the local library has a completed clip for the same node, an inactive
  * placeholder is stale and must not be shown as another version.
  */
+/**
+ * 这条片段的裁剪算不算确认过。**没有这个字段 = 工具挑的窗口 = 已确认**：
+ * _build_clip 已经把动得最多的那 1.8 秒写进起止时间，不该再要人点一次「确定所选片段」
+ * （9/22 实测 Patrick 就被预检拦在这里）。只有人拖过入点/出点（拖动那两处会置 false）
+ * 才回到未确认。
+ */
+export function isTrimConfirmed(clip: { trimConfirmed?: boolean }): boolean {
+  return clip.trimConfirmed !== false;
+}
+
 export function reconcileStalePendingGeneratorClips(
   items: TimelineClip[],
   availableClips: TimelineClip[],

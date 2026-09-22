@@ -353,3 +353,25 @@ def test_a_generated_clip_remembers_which_draft_it_belongs_to(monkeypatch, tmp_p
     clip = canvas_generation._build_clip(dict(_FAKE_JOB, draft_id="draft_abc"), tmp_path / "clip.mp4", "玉子寿司", "寿司")
 
     assert clip["draftId"] == "draft_abc"
+
+
+# ---------------------------------------------------------------------------
+# 第十五批：工具自己挑的 1.8 秒窗口就算确认过了
+# 9/22 实测：片段带着 trimConfirmed: false 进第 5 步，预检报「尚未确认裁剪区间」拦下合成，
+# 人得逐条点「确定所选片段」。批量那条路是审片通过时顺手置 true 的，分步这条路不该更麻烦。
+# ---------------------------------------------------------------------------
+def test_the_auto_picked_window_counts_as_confirmed(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_generation, "analyze_video", lambda *_args: _fake_analysis(bestWindowStart=1.21, bestWindowEnd=3.01))
+
+    clip = canvas_generation._build_clip(dict(_FAKE_JOB), tmp_path / "clip.mp4", "玉子寿司", "寿司")
+
+    assert clip["trimConfirmed"] is True
+    assert clip["sourceStartSeconds"] == 1.21 and clip["sourceEndSeconds"] == 3.01
+
+
+def test_the_fallback_window_counts_as_confirmed_too(monkeypatch, tmp_path):
+    monkeypatch.setattr(canvas_generation, "analyze_video", lambda *_args: _fake_analysis())
+
+    clip = canvas_generation._build_clip(dict(_FAKE_JOB), tmp_path / "clip.mp4", "玉子寿司", "寿司")
+
+    assert clip["trimConfirmed"] is True, "拿不到分析窗口时的「0.5s 到结尾」也是工具给的，同样不用人确认"

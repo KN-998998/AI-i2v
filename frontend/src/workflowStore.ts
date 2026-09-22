@@ -88,6 +88,7 @@ type WorkflowState = {
   setBgm: (name: string, url: string) => void;
   clearBgm: () => void;
   useDefaultBgm: () => void;
+  setDefaultBgmTrack: (track: string) => void;
   updateWorkspaceSoundConfig: (workspaceId: string, patch: Partial<SoundConfig>) => void;
   setComposeJob: (job: ComposeJob | null) => void;
   setComposeBatchCount: (count: number) => void;
@@ -1041,6 +1042,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
     const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
       ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName: "默认曲库", bgmUrl: "", bgmMode: "default" as const }, finalJob: null }
+      : workspace);
+    return { bgmName: "默认曲库", bgmUrl: "", composeWorkspaces, revision: state.revision + 1 };
+  }),
+  // 指定默认曲库里的哪一首（"" = 回到随机）。useDefaultBgm / setBgm / clearBgm 都不碰
+  // bgmTrack：切去「不要音乐」再切回来，上次指定的那首还在。
+  setDefaultBgmTrack: track => set(state => {
+    const workspaceId = state.activeComposeWorkspaceId;
+    const soundNode = state.nodes.find(node => node.data.kind === "sound");
+    const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
+      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName: "默认曲库", bgmUrl: "", bgmMode: "default" as const, bgmTrack: track }, finalJob: null }
       : workspace);
     return { bgmName: "默认曲库", bgmUrl: "", composeWorkspaces, revision: state.revision + 1 };
   }),

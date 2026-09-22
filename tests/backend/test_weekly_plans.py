@@ -162,3 +162,17 @@ def test_batch_sound_config_carries_the_template_bgm_mode():
     custom = weekly_plans._batch_sound_config({"bgmName": "own.mp3", "bgmUrl": "/api/canvas/drafts/t/files/own.mp3"})
     assert custom["bgmMode"] == "custom" and custom["bgmUrl"].endswith("own.mp3")
     assert weekly_plans._batch_sound_config({"composeWorkspaces": [{"id": "compose_1", "soundConfig": {"bgmMode": "none", "bgmName": "", "bgmUrl": ""}}]})["bgmMode"] == "none", "样板第一个成片方案里的设置优先"
+
+
+# ---------------------------------------------------------------------------
+# 第十五批：样板指定了一首默认曲库的曲子，批量生产的每条成片都用它（Patrick 9/22 拍板）
+# ---------------------------------------------------------------------------
+def test_batch_sound_config_carries_the_pinned_track():
+    pinned = weekly_plans._batch_sound_config({"composeWorkspaces": [{"id": "compose_1", "soundConfig": {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": "", "bgmTrack": "b.mp3"}}]})
+    assert pinned == {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": "", "bgmTrack": "b.mp3"}
+
+    random_pick = weekly_plans._batch_sound_config({"bgmName": "默认 BGM", "bgmUrl": ""})
+    assert random_pick["bgmMode"] == "default" and not random_pick.get("bgmTrack"), "样板留在随机，批量继续轮着用"
+
+    custom = weekly_plans._batch_sound_config({"composeWorkspaces": [{"id": "compose_1", "soundConfig": {"bgmMode": "custom", "bgmName": "own.mp3", "bgmUrl": "/api/canvas/drafts/t/files/own.mp3", "bgmTrack": "b.mp3"}}]})
+    assert custom["bgmMode"] == "custom" and not custom.get("bgmTrack"), "自己传的音乐不带曲库里的指定"

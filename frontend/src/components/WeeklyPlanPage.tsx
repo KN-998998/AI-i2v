@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createWeeklyPlan, fetchWeeklyPlanReadiness, fetchWeeklyPlans, updateWeeklyPlanDay, updateWeeklyPlanStatus, uploadAssetLibraryFolder, type WeeklyDailyPlan, type WeeklyPlan, type WeeklyPlanReadiness } from "../api";
 import { batchPlanReadiness, missingTemplateKinds } from "../batchPlanReadiness";
 import { DRAFT_ID_STORAGE_KEY } from "../draftIdentity";
-import { DISH_CATEGORY_OPTIONS } from "../model";
+import { bgmLabel, DISH_CATEGORY_OPTIONS } from "../model";
 import { navigate } from "../router";
 import { useWorkflowStore } from "../workflowStore";
 
@@ -73,6 +73,8 @@ export function WeeklyPlanPage({ onToast }: Props) {
   const maxVideoCount = Math.max(1, Math.floor(MAX_CANDIDATES_PER_DAY / Math.max(1, form.clips_per_video)));
   const total = useMemo(() => Object.values(form.category_counts).reduce((sum, value) => sum + value, 0), [form]);
   const templateDishes = nodes.filter(node => node.data.kind === "input" && node.data.dishName).length;
+  // 批量的每条成片配什么音乐，照样板第一个成片方案来（weekly_plans._batch_sound_config 也读它）。
+  const templateSound = useWorkflowStore(state => state.composeWorkspaces[0]?.soundConfig);
   // 这三个参数以前藏在「高级设置」里，人不点开根本不知道系统替他定了什么。现在写成一句话常显。
   const tweaked = form.clips_per_video !== defaultForm().clips_per_video || manualCandidates || manualCounts;
   const categorySummary = manualCounts ? `分类已手动指定（合计 ${total} 道）` : "分类由库存自动分配";
@@ -235,7 +237,7 @@ export function WeeklyPlanPage({ onToast }: Props) {
           <span className="batch-row-index">3</span>
           <div className="batch-row-body">
             <h2>用哪个样板、什么时候开工</h2>
-            <p className="batch-row-value">{templateDishes > 0 ? `当前样板 · ${templateDishes} 道菜的设置` : "当前样板 · 还没调过，会用默认参数"}<button type="button" className="link-button batch-row-switch" onClick={() => navigate("/workflow/assets")}>去调样板</button></p>
+            <p className="batch-row-value">{`${templateDishes > 0 ? `当前样板 · ${templateDishes} 道菜的设置` : "当前样板 · 还没调过，会用默认参数"} · 音乐：${bgmLabel(templateSound)}${templateSound?.bgmTrack ? "（每条都用这首）" : ""}`}<button type="button" className="link-button batch-row-switch" onClick={() => navigate("/workflow/assets")}>去调样板</button></p>
             <div className="batch-schedule">
               <span>从</span>
               <input className="input" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} />
