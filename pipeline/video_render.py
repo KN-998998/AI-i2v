@@ -14,6 +14,36 @@ FADE_IN_SECONDS = 0.3
 # 片尾信息卡时长。参考片全部有，约 1 秒。
 END_CARD_SECONDS = 1.0
 
+# 片尾卡和字幕都靠 drawtext 这个滤镜，而它要 ffmpeg 编进 libfreetype 才有。
+# 2026-09-21 实测：Homebrew 的 ffmpeg 9.0.2 就没编，点「合成此条」才报一屏
+# "No such filter: 'drawtext'"。这句话要能直接照着做，别让运营去查 ffmpeg 原文。
+#
+# 写 ffmpeg@7 而不是 @8：2026-09-22 在本机逐个量过，@7（7.1.5）有 drawtext、编了
+# libfreetype，@8（8.1.2）和默认的 9.0.2 都没有。指到 @8 等于让人白装一次。
+DRAWTEXT_HELP = (
+    "这台机器的 ffmpeg 没有画字功能（drawtext 滤镜），片尾卡和字幕都渲染不了。"
+    "macOS：brew install ffmpeg@7，再把 /opt/homebrew/opt/ffmpeg@7/bin 放到 PATH 最前面；"
+    "Linux：apt install ffmpeg。"
+)
+_DRAWTEXT_MISSING_MARK = "No such filter: 'drawtext'"
+
+
+@lru_cache(maxsize=1)
+def ffmpeg_can_draw_text() -> bool:
+    """这台机器的 ffmpeg 会不会画字。问一次就够，结果缓存起来（换 ffmpeg 要重启进程）。"""
+    try:
+        result = subprocess.run(["ffmpeg", "-hide_banner", "-filters"], capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        # 连 ffmpeg 都没有，那更不会画字；这里不抛，交给调用方按「不会画字」处理。
+        return False
+    # 有的构建把滤镜表打到 stderr，两边一起看。
+    output = (result.stdout or b"") + b"\n" + (result.stderr or b"")
+    return b"drawtext" in output
+
+
+def drawtext_missing() -> bool:
+    return not ffmpeg_can_draw_text()
+
 
 def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
     """执行 ffmpeg，并将底层错误保留给页面与日志。"""
@@ -22,6 +52,9 @@ def _run_ffmpeg(cmd, timeout: int, action: str) -> None:
         return
     raw_detail = result.stderr or result.stdout or b"ffmpeg returned no error output"
     detail = raw_detail.decode("utf-8", errors="replace").strip()
+    # 缺 drawtext 是已知且有修法的一种失败，给人话；其余照旧留 ffmpeg 原文的尾巴。
+    if _DRAWTEXT_MISSING_MARK in detail:
+        raise RuntimeError(f"{action}失败: {DRAWTEXT_HELP}")
     raise RuntimeError(f"{action}失败: {detail[-500:]}")
 
 

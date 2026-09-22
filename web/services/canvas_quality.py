@@ -527,6 +527,8 @@ def preflight_draft(
 
     workspace_sound = (workspace or {}).get("soundConfig") if workspace is not None else None
     sound = workspace_sound if isinstance(workspace_sound, dict) else next((node.get("data", {}) for node in draft.get("nodes", []) if node.get("data", {}).get("kind") == "sound"), {})
+    # 无声那一遍不烧字幕，但片尾卡照样渲，所以片尾卡要问草稿里真正的配置，不能跟着被清空。
+    sound_for_end_card = sound
     if not include_sound:
         sound = {}
     overlays = [item for item in _timeline_items(sound, "overlayItems", []) if item.get("enabled") is not False]
@@ -564,6 +566,15 @@ def preflight_draft(
                 "code": "MISSING_CAPTION_FONT",
                 "message": "这台机器上找不到中文字体，字幕里的中文会渲染成方框。安装 fonts-noto-cjk，或用环境变量 CAPTION_FONT_FILE 指定一个字体文件",
             })
+
+    # 字体只是会渲成方框，缺 drawtext 滤镜是整条渲不出来，所以这条算错误、直接拦下。
+    # canvas_compose 顶层已经 import 了本模块，这里只能延迟 import，否则成环。
+    from pipeline import video_render
+    from web.services.canvas_compose import _end_card_lines
+
+    needs_drawtext = bool(_end_card_lines(sound_for_end_card)) or any(str(item.get("text") or "").strip() for item in overlays)
+    if needs_drawtext and video_render.drawtext_missing():
+        errors.append({"code": "MISSING_DRAWTEXT", "message": video_render.DRAWTEXT_HELP})
 
     return {
         "ok": not errors,

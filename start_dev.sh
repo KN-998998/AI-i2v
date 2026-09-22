@@ -112,6 +112,13 @@ for tool in ffmpeg ffprobe; do
     || warn "未找到 ${tool}，合成与预览会失败。macOS 安装: brew install ffmpeg"
 done
 
+# ffmpeg 能不能画字要单独查：片尾卡和字幕都靠 drawtext，而它要编进 libfreetype 才有。
+# 2026-09-21 实测 Homebrew 的 ffmpeg 9.0.2 就没编，不查的话要等点「合成此条」才炸。
+if command -v ffmpeg >/dev/null 2>&1 && ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q drawtext; then
+  warn "这台机器的 ffmpeg 不会画字（没有 drawtext 滤镜），片尾卡和字幕都渲染不了。"
+  warn "修法: brew install ffmpeg@7 && export PATH=\"/opt/homebrew/opt/ffmpeg@7/bin:\$PATH\"（本机实测 @8 和 9.0.x 都没有 drawtext）"
+fi
+
 # --- 3. 前端：热更新 / 生产构建 / 跳过 --------------------------------------
 if [ "${WATCH}" -eq 1 ]; then
   info "热更新模式：不做生产构建，稍后启动 Vite 开发服务器"
