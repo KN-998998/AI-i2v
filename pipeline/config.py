@@ -50,6 +50,12 @@ CANVAS_CLIP_ROOT = Path(os.environ.get("CANVAS_CLIP_ROOT", OUTPUT_ROOT / "canvas
 BACKGROUND_TEMPLATE_DIR = Path(
     os.environ.get("BACKGROUND_TEMPLATE_DIR", OUTPUT_ROOT / "background_templates")
 )
+# 默认曲库：第 6 步没传自己的音乐时，每条成片按任务号从这里稳定地挑一首，几条下来轮着用
+# （参考片 11 条全有音乐，而工具原来的「默认 BGM」只是个名字，背后没有文件）。
+# 音频文件不进 git：仓库是公开的，免费曲通常允许用在视频里、不允许再分发音频本身，
+# 所以 .gitignore 里的 *.mp3 把它们挡着，仓库里只留 assets/bgm/README.md。
+# 部署时把这个目录一起拷到服务器，或用环境变量指到服务器上放音乐的地方。
+DEFAULT_BGM_DIR = Path(os.environ.get("DEFAULT_BGM_DIR", PROJECT_ROOT / "assets" / "bgm" / "default"))
 
 # ── API Keys（从 .env / 环境变量读取，代码里不硬编码）──────────────
 KLING_API_KEY     = os.environ.get("KLING_API_KEY", "")

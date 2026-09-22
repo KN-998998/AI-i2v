@@ -1677,3 +1677,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .effect-frame { width: min(100%, 300px); }
   .effect-batch-rule { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* 第 6 步 BGM 三态：默认曲库 / 自己传的 / 不要音乐。原来只有一个文件选择框和
+ * 「未上传」，而那句「未上传」在用默认曲库时是骗人的。 */
+.bgm-state { margin-bottom: 8px; color: var(--text); font-size: 14px; line-height: 1.6; }
+.bgm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }

@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.config import BRAND_END_CARD_LINES, CANVAS_CLIP_ROOT, OUTPUT_ROOT
-from web.services.canvas_state import draft_directory, load_draft, save_draft, uploaded_file
+from web.services.canvas_state import draft_directory, load_draft, save_draft
+from web.services.default_bgm import resolve_bgm_path
 from web.services.canvas_quality import preflight_draft
 from web.services.task_contract import is_recoverable, task_metadata, update_task
 
@@ -165,7 +166,24 @@ def _append_end_card(output_dir: Path, sound: dict[str, Any], clip_paths: list[s
     return float(END_CARD_SECONDS)
 
 
-def _overlay_items(sound: dict[str, Any], voice_timings: dict[str, tuple[float, float]] | None = None) -> list[dict[str, Any]]:
+def _clamp_to_content(items: list[dict[str, Any]], content_seconds: float | None) -> list[dict[str, Any]]:
+    """把字幕夹在片尾卡之前。
+
+    9/21 真片：默认文案「本周限定优惠」配的是 0–2.5s，成片内容只有 1.8s，片尾卡从 1.8s
+    开始，字幕就压在店名地址上。人声不夹——旁白响到片尾卡上没问题，字压在店名上才是问题。
+    """
+    if content_seconds is None:
+        return items
+    limit = max(0.0, float(content_seconds))
+    kept = []
+    for item in items:
+        if float(item["start"]) >= limit:
+            continue   # 整段都落在片尾卡上，这条干脆不画
+        kept.append({**item, "end": min(float(item["end"]), limit)})
+    return kept
+
+
+def _overlay_items(sound: dict[str, Any], voice_timings: dict[str, tuple[float, float]] | None = None, content_seconds: float | None = None) -> list[dict[str, Any]]:
     items = sound.get("overlayItems")
     if isinstance(items, list):
         result = []
@@ -188,7 +206,7 @@ def _overlay_items(sound: dict[str, Any], voice_timings: dict[str, tuple[float, 
                 "sync_voice_id": sync_voice_id or None,
                 "style": item.get("style") if isinstance(item.get("style"), dict) else {},
             })
-        return result
+        return _clamp_to_content(result, content_seconds)
     main = str(sound.get("overlayMain", "")).strip()
     cta = str(sound.get("overlayCta", "")).strip()
     start = max(0.0, float(str(sound.get("overlayStart", "0")).rstrip("s")) or 0)
@@ -199,14 +217,7 @@ def _overlay_items(sound: dict[str, Any], voice_timings: dict[str, tuple[float, 
         result.append({"text": main, "start": start, "end": end, "position": position, "style": {}})
     if cta and cta != main:
         result.append({"text": cta, "start": max(0.0, end - 2), "end": end, "position": "top", "style": {}})
-    return result
-
-
-def _uploaded_audio_path(draft_id: str, url: str | None) -> Path | None:
-    if not url:
-        return None
-    path = uploaded_file(draft_id, Path(url.split("?", 1)[0]).name)
-    return path
+    return _clamp_to_content(result, content_seconds)
 
 
 def _voice_items(sound: dict[str, Any]) -> list[dict[str, Any]]:
@@ -348,10 +359,11 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                 from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
                 _update_job(draft_id, job, status="running", stage="生成并测量 Qwen 人声")
-                video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared) + end_card_seconds
+                content_seconds = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
+                video_duration = content_seconds + end_card_seconds
                 bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
                 audio_path = output_dir / "mixed_audio.m4a"
-                bgm_file = _uploaded_audio_path(draft_id, sound.get("bgmUrl"))
+                bgm_file = resolve_bgm_path(draft_id, sound, str(job["job_id"]))
                 voice_segments = []
                 for voice_index, item in enumerate(_voice_items(sound)):
                     if item["voice"] in {"", "none", "无"} and not item.get("voice_id"):
@@ -368,7 +380,7 @@ def start_compose(draft_id: str, workspace_id: str | None = None, include_sound:
                     voice_segments.append((generated, item["start"], effective_end, item["volume"]))
                     if item.get("id"):
                         voice_timings[item["id"]] = (item["start"], effective_end)
-                subtitles = _overlay_items(sound, voice_timings)
+                subtitles = _overlay_items(sound, voice_timings, content_seconds=content_seconds)
                 _update_job(draft_id, job, status="running", stage="渲染视频与多轨文字")
                 concat_clips(trimmed_paths, str(output_path), subtitles=subtitles, brand_info=None)
                 if voice_segments or (bgm_file and bgm_file.exists() and bgm_volume > 0):
@@ -480,10 +492,11 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
             from pipeline.audio import generate_tts, get_audio_duration, merge_audio_video, mix_voice_segments
 
             _update_job(draft_id, job, status="running", stage="恢复并生成 Qwen 人声")
-            video_duration = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared) + end_card_seconds
+            content_seconds = sum(float(clip.get("timelineDuration") or 2.5) for clip, _source in prepared)
+            video_duration = content_seconds + end_card_seconds
             bgm_volume = max(0.0, min(float(sound.get("bgmVolume", 30) or 30) / 100, 1.0))
             audio_path = output_dir / "mixed_audio.m4a"
-            bgm_file = _uploaded_audio_path(draft_id, sound.get("bgmUrl"))
+            bgm_file = resolve_bgm_path(draft_id, sound, str(job["job_id"]))
             voice_segments = []
             for voice_index, item in enumerate(_voice_items(sound)):
                 if item["voice"] in {"", "none", "无"} and not item.get("voice_id"):
@@ -501,7 +514,7 @@ def _recover_compose_job(draft_id: str, job: dict[str, Any]) -> None:
                 if item.get("id"):
                     voice_timings[item["id"]] = (item["start"], effective_end)
             _update_job(draft_id, job, status="running", stage="恢复渲染视频与多轨文字")
-            concat_clips(trimmed_paths, str(output_path), subtitles=_overlay_items(sound, voice_timings), brand_info=None)
+            concat_clips(trimmed_paths, str(output_path), subtitles=_overlay_items(sound, voice_timings, content_seconds=content_seconds), brand_info=None)
             if voice_segments or (bgm_file and bgm_file.exists() and bgm_volume > 0):
                 _update_job(draft_id, job, status="running", stage="恢复混合 BGM 与人声")
                 mix_voice_segments(voice_segments, str(bgm_file) if bgm_file and bgm_file.exists() and bgm_volume > 0 else None, str(audio_path), bgm_volume=bgm_volume, video_duration=video_duration)

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, normalizeDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
-import { fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
+import { bgmModeFor, captionSegmentsFromData, captionSegmentsPatch, DISH_CATEGORY_OPTIONS, FOOD_TYPE_OPTIONS, normalizeDishCategory, nodeCatalog, OVERLAY_FONT_OPTIONS, OVERLAY_POSITION_OPTIONS, overlayPositionCoordinates, overlayStyleFromItem, VISUAL_SUBJECT_TYPE_OPTIONS, type CaptionSegment, type FoodType, type NodeKind, type OverlayItem, type OverlayStyle, type VoiceItem, type VisualSubjectType, type WorkflowData, type WorkflowNode } from "../model";
+import { fetchDefaultBgm, fetchTTSOptions, splitCaptionText, uploadDraftFile, type TTSVoiceOption } from "../api";
 import { ACTION_LEVEL_OPTIONS, ACTION_VERB_OPTIONS, AMPLITUDE_OPTIONS, assemblePrompt, availablePromptPresets, CAMERA_OPTIONS, ELEMENT_OPTIONS, L2_OPTIONS, matchPromptPreset, SHOT_SIZE_OPTIONS, SPEED_CURVE_OPTIONS, type ActionLevel, type ActionVerb, type ElementId, type L2Item, type L2Type, type PromptConfig, type PromptMode, type SpeedCurve } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { effectivePromptConfig } from "../effectRules";
@@ -199,11 +199,19 @@ export function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (m
   const legacyBgmUrl = useWorkflowStore(state => state.bgmUrl);
   const bgmName = activeWorkspace?.soundConfig?.bgmName ?? legacyBgmName;
   const bgmUrl = activeWorkspace?.soundConfig?.bgmUrl ?? legacyBgmUrl;
+  const bgmMode = bgmModeFor({ bgmMode: activeWorkspace?.soundConfig?.bgmMode, bgmName, bgmUrl });
   const draftId = useWorkflowStore(state => state.draftId);
   const setBgm = useWorkflowStore(state => state.setBgm);
+  const clearBgm = useWorkflowStore(state => state.clearBgm);
+  const useDefaultBgm = useWorkflowStore(state => state.useDefaultBgm);
   const [ttsOptions, setTtsOptions] = useState<TTSVoiceOption[]>([]);
+  // 默认曲库有几首要问后端：曲库在磁盘上（音频不进 git），前端猜不出来。
+  const [defaultBgmCount, setDefaultBgmCount] = useState<number | null>(null);
   useEffect(() => {
     fetchTTSOptions().then(result => setTtsOptions(result.voices)).catch(() => setTtsOptions([]));
+  }, []);
+  useEffect(() => {
+    fetchDefaultBgm().then(items => setDefaultBgmCount(items.length)).catch(() => setDefaultBgmCount(null));
   }, []);
   const [captionSplitBusy, setCaptionSplitBusy] = useState(false);
   const data = node.data.kind === "sound" ? { ...node.data, ...(activeWorkspace?.soundConfig ?? {}) } : node.data;
@@ -349,7 +357,16 @@ export function SoundFields({ node, onToast }: { node: WorkflowNode; onToast: (m
       </div>; })}</div>
       {voiceItems.length === 0 && <div className="empty-state compact">还没有人声，点击“添加人声”创建第一段。</div>}
       <Field label="BGM 音量"><input className="range" type="range" min="0" max="100" value={formatNodeValue(data.bgmVolume, "30")} onChange={event => updateNodeData(node.id, { bgmVolume: event.target.value })} /></Field>
-      <Field label="BGM"><div className="upload-row"><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /><span>{bgmName || "未上传"}</span>{bgmUrl && <button type="button" className="clip-remove" aria-label="移除 BGM" onClick={() => { setBgm("", ""); onToast("BGM 已移除"); }}>×</button>}</div></Field>
+      <Field label="BGM">
+        <div className="bgm-state">{bgmMode === "default"
+          ? (defaultBgmCount === 0 ? "默认曲库是空的，把音乐放进 assets/bgm/default/" : `默认曲库 · 每条成片随机一首${defaultBgmCount === null ? "" : `（共 ${defaultBgmCount} 首）`}`)
+          : bgmMode === "custom" ? `自己传的：${bgmName || "未命名文件"}` : "不要音乐"}</div>
+        <div className="upload-row"><input className="input" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setBgm(file.name, ""); uploadDraftFile(draftId, file, "audio").then(result => { setBgm(file.name, result.url); onToast(`BGM 已上传：${file.name}`); }).catch(() => { setBgm(file.name, ""); onToast("BGM 上传失败"); }); }} /><span>换成自己的音乐</span></div>
+        <div className="bgm-actions">
+          {bgmMode !== "default" && <button type="button" className="btn" onClick={() => { useDefaultBgm(); onToast("这条成片改用默认曲库"); }}>用默认曲库</button>}
+          {bgmMode !== "none" && <button type="button" className="btn" onClick={() => { clearBgm(); onToast("这条成片不加音乐"); }}>不要音乐</button>}
+        </div>
+      </Field>
     </>}
   </>;
 }

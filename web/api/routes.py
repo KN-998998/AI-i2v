@@ -209,6 +209,26 @@ def list_canvas_clips() -> list[dict[str, Any]]:
     return sorted((item for item in items if item is not None), key=lambda item: (item["dish"], item["filename"]))
 
 
+@router.get("/api/canvas/bgm/default")
+def list_default_bgm_route() -> list[dict[str, str]]:
+    from web.services.default_bgm import list_default_bgm
+
+    return list_default_bgm()
+
+
+@router.get("/api/canvas/bgm/default/{filename}")
+def serve_default_bgm(filename: str) -> FileResponse:
+    """只送曲库目录里的文件：filename 必须就是个文件名，不能带路径。"""
+    from web.services.default_bgm import DEFAULT_BGM_DIR
+
+    if Path(filename).name != filename:
+        raise _json_error("音乐文件不存在", 404)
+    path = Path(DEFAULT_BGM_DIR) / filename
+    if not path.is_file():
+        raise _json_error("音乐文件不存在", 404)
+    return FileResponse(str(path))
+
+
 @router.get("/api/canvas/clips/library/{filename}")
 def serve_canvas_library_clip(filename: str) -> FileResponse:
     clip_path = CANVAS_CLIP_ROOT / Path(filename).name

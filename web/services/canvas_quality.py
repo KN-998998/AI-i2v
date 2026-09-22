@@ -552,9 +552,18 @@ def preflight_draft(
         if end > total + 0.05:
             warnings.append({"code": "VOICE_OUT_OF_RANGE", "message": f"人声轨道 {index} 超出当前成片时长，TTS 会被截断"})
 
-    bgm_url = sound.get("bgmUrl")
-    if bgm_url and _uploaded_path(draft_id, str(bgm_url)) is None:
+    # BGM 分三种：自己传的（文件得在）、默认曲库（曲库得有曲子）、不要音乐（不提）。
+    # 默认曲库空了和「本地音频文件不存在」是两回事，混在一起报会让人去翻自己没传过的文件。
+    from web.services.default_bgm import bgm_mode, list_default_bgm
+
+    mode = bgm_mode(sound)
+    if mode == "custom" and _uploaded_path(draft_id, str(sound.get("bgmUrl") or "")) is None:
         warnings.append({"code": "MISSING_BGM", "message": "草稿记录了 BGM，但本地音频文件不存在"})
+    elif mode == "default" and not list_default_bgm():
+        warnings.append({
+            "code": "DEFAULT_BGM_EMPTY",
+            "message": "默认曲库是空的，成片会没有音乐：把音乐文件放进 assets/bgm/default/，或在第 6 步上传一首",
+        })
 
     # 机器上没有中文字体时 ffmpeg 不报错，它会默默换一个字体，中文全变成方框。
     # 与其让人渲染完才发现，不如在这里说清楚。

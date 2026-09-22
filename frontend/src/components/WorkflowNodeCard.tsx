@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { normalizeDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
+import { bgmLabel, normalizeDishCategory, nodeCatalog, type Panel, type WorkflowNode } from "../model";
 import { ACTION_VERB_OPTIONS, assemblePrompt, ELEMENT_OPTIONS, promptConfigFromData, SHOT_SIZE_OPTIONS } from "../promptAssembler";
 import { useWorkflowStore } from "../workflowStore";
 import { canAssemblePromptNode, promptAssemblyBlockReason } from "../promptAssemblyReadiness";
@@ -98,7 +98,7 @@ export function WorkflowNodeCard({ id, data, selected }: NodeProps<WorkflowNode>
       <Footer><ActionButton primary onClick={() => { setSelection(id); navigate("/workflow/compose"); }}>进入合成</ActionButton></Footer>
     </>,
     sound: <>
-      <Row label="BGM" value={soundConfig?.bgmName ?? legacyBgmName ?? "未上传"} />
+      <Row label="BGM" value={bgmLabel(soundConfig ?? { bgmName: legacyBgmName })} />
       <Row label="人声 / 文字" value={`${formatNodeValue(soundConfig?.voiceName ?? data.voiceName, "无")} / ${formatNodeValue(soundConfig?.overlayMain ?? data.overlayMain, "未设置")}`} />
       <Footer><ActionButton onClick={() => action("voice")}>编辑声音</ActionButton><ActionButton onClick={() => action("overlay")}>编辑文字</ActionButton></Footer>
     </>,

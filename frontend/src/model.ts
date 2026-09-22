@@ -60,6 +60,9 @@ export type VoiceItem = {
   volume?: number;
 };
 
+/** 成片用哪种音乐：默认曲库随机一首 / 自己传的那一首 / 不要音乐。 */
+export type BgmMode = "default" | "custom" | "none";
+
 export type SoundConfig = {
   /** Original copy used to generate the current caption and voice segments. */
   captionSourceText?: string;
@@ -75,6 +78,7 @@ export type SoundConfig = {
   overlayItems?: OverlayItem[];
   bgmName: string;
   bgmUrl: string;
+  bgmMode?: BgmMode;
   bgmVolume?: string;
 };
 
@@ -195,12 +199,30 @@ export type WorkflowData = {
   bgmVolume?: string;
 };
 
+/**
+ * 这条成片用哪种音乐。规则要和后端 default_bgm.bgm_mode 逐条一致，否则界面上写的
+ * 和真渲出来的不是一回事。老草稿里那个只有名字、背后没文件的「默认 BGM」算默认曲库。
+ */
+export function bgmModeFor({ bgmMode, bgmName, bgmUrl }: { bgmMode?: BgmMode; bgmName?: string; bgmUrl?: string }): BgmMode {
+  if (bgmMode === "default" || bgmMode === "custom" || bgmMode === "none") return bgmMode;
+  if ((bgmUrl ?? "").trim()) return "custom";
+  return ["默认 BGM", "默认曲库"].includes((bgmName ?? "").trim()) ? "default" : "none";
+}
+
+/** 界面上那几处「BGM：xxx」显示什么。别再出现「默认 BGM」或「未上传」这种骗人的说法。 */
+export function bgmLabel(config: { bgmMode?: BgmMode; bgmName?: string; bgmUrl?: string } | undefined): string {
+  const mode = bgmModeFor(config ?? {});
+  if (mode === "default") return "默认曲库（随机一首）";
+  if (mode === "custom") return (config?.bgmName ?? "").trim() || "自己传的音乐";
+  return "不要音乐";
+}
+
 export function soundConfigFromData(
   data: Pick<WorkflowData, "captionSourceText" | "voiceText" | "voiceName" | "voiceVolume" | "voiceItems" | "overlayMain" | "overlayCta" | "overlayPosition" | "overlayStart" | "overlayEnd" | "overlayItems" | "bgmVolume">,
   bgmName = "",
   bgmUrl = "",
 ): SoundConfig {
-  const config: SoundConfig = { bgmName, bgmUrl };
+  const config: SoundConfig = { bgmName, bgmUrl, bgmMode: bgmModeFor({ bgmName, bgmUrl }) };
   if (data.captionSourceText !== undefined) config.captionSourceText = data.captionSourceText;
   if (data.voiceText !== undefined) config.voiceText = data.voiceText;
   if (data.voiceName !== undefined) config.voiceName = data.voiceName;

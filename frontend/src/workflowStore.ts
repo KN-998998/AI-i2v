@@ -86,6 +86,7 @@ type WorkflowState = {
   setBgmName: (name: string) => void;
   setBgm: (name: string, url: string) => void;
   clearBgm: () => void;
+  useDefaultBgm: () => void;
   updateWorkspaceSoundConfig: (workspaceId: string, patch: Partial<SoundConfig>) => void;
   setComposeJob: (job: ComposeJob | null) => void;
   setComposeBatchCount: (count: number) => void;
@@ -1056,12 +1057,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       : workspace);
     return { bgmName, composeWorkspaces, revision: state.revision + 1 };
   }),
+  // BGM 三态都写显式的 bgmMode：光看名字和 url 猜不出「不要音乐」和「还没选」的区别。
   setBgm: (bgmName, bgmUrl) => set(state => {
     const workspaceId = state.activeComposeWorkspaceId;
     const soundNode = state.nodes.find(node => node.data.kind === "sound");
     const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
     const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
-      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName, bgmUrl }, finalJob: null }
+      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName, bgmUrl, bgmMode: "custom" as const }, finalJob: null }
       : workspace);
     return { bgmName, bgmUrl, composeWorkspaces, revision: state.revision + 1 };
   }),
@@ -1070,9 +1072,18 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const soundNode = state.nodes.find(node => node.data.kind === "sound");
     const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
     const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
-      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName: "", bgmUrl: "" }, finalJob: null }
+      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName: "", bgmUrl: "", bgmMode: "none" as const }, finalJob: null }
       : workspace);
     return { bgmName: "", bgmUrl: "", composeWorkspaces, revision: state.revision + 1 };
+  }),
+  useDefaultBgm: () => set(state => {
+    const workspaceId = state.activeComposeWorkspaceId;
+    const soundNode = state.nodes.find(node => node.data.kind === "sound");
+    const fallback = soundNode ? soundConfigFromData(soundNode.data, state.bgmName, state.bgmUrl) : soundConfigFromData({}, state.bgmName, state.bgmUrl);
+    const composeWorkspaces = state.composeWorkspaces.map(workspace => workspace.id === workspaceId
+      ? { ...workspace, soundConfig: { ...fallback, ...(workspace.soundConfig ?? {}), bgmName: "默认曲库", bgmUrl: "", bgmMode: "default" as const }, finalJob: null }
+      : workspace);
+    return { bgmName: "默认曲库", bgmUrl: "", composeWorkspaces, revision: state.revision + 1 };
   }),
   updateWorkspaceSoundConfig: (workspaceId, patch) => set(state => {
     const soundNode = state.nodes.find(node => node.data.kind === "sound");

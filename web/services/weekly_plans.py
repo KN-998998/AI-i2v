@@ -415,6 +415,32 @@ def _base_node(template: dict[str, Any], kind: str, fallback_id: str) -> dict[st
     return copied
 
 
+def _batch_sound_config(template: dict[str, Any]) -> dict[str, Any]:
+    """批量生产的每条成片用什么音乐：照样板来，但只保留「用哪种」，不搬具体那一首。
+
+    原来批量草稿的 soundConfig 只抄样板顶层的 bgmName / bgmUrl，而样板里那个「默认 BGM」
+    背后没有文件，批量出的片子于是全无声。现在归一成三种模式：默认曲库的按任务号各挑一首，
+    自己传的照旧用那一首，选了不要音乐的就真不要。
+    """
+    from web.services.default_bgm import bgm_mode
+
+    workspaces = template.get("composeWorkspaces")
+    source: dict[str, Any] = {}
+    if isinstance(workspaces, list):
+        for workspace in workspaces:
+            if isinstance(workspace, dict) and isinstance(workspace.get("soundConfig"), dict):
+                source = workspace["soundConfig"]
+                break
+    if not source:
+        source = {"bgmName": template.get("bgmName", ""), "bgmUrl": template.get("bgmUrl", "")}
+    mode = bgm_mode(source)
+    if mode == "default":
+        return {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": ""}
+    if mode == "custom":
+        return {"bgmMode": "custom", "bgmName": str(source.get("bgmName") or ""), "bgmUrl": str(source.get("bgmUrl") or "")}
+    return {"bgmMode": "none", "bgmName": "", "bgmUrl": ""}
+
+
 def _batch_prompt_node(template: dict[str, Any], fallback_id: str) -> dict[str, Any]:
     """批量生产的提示词节点：永远按冷热规则给每道菜配效果。
 
@@ -479,10 +505,11 @@ def _create_daily_draft(connection: sqlite3.Connection, daily: sqlite3.Row, plan
         pending.append({"id": f"{generator_node['id']}_clip", "assetId": asset_id, "dish": dish, "label": "生成任务", "tone": "#355e62", "timelineDuration": 2.5, "sourceDurationSeconds": 3, "sourceStartSeconds": 0.5, "sourceEndSeconds": 3, "trimConfirmed": False, "dishCategory": category, "foodType": food_type, "status": "pending", "generatorNodeId": generator_node["id"], "isSelected": True})
         generator_ids.append(str(generator_node["id"]))
     workspace_count = int(daily["video_count"])
+    batch_sound = _batch_sound_config(template)
     payload = {
         "nodes": nodes, "edges": edges, "timeline": pending, "candidateClips": pending,
         "composeBatchCount": workspace_count, "composeClipCount": int(daily["clips_per_video"]),
-        "composeWorkspaces": [{"id": f"compose_{index}", "title": f"成片 {index}", "clips": [], "job": None, "finalJob": None, "soundConfig": {"bgmName": template.get("bgmName", ""), "bgmUrl": template.get("bgmUrl", "")}} for index in range(1, workspace_count + 1)],
+        "composeWorkspaces": [{"id": f"compose_{index}", "title": f"成片 {index}", "clips": [], "job": None, "finalJob": None, "soundConfig": dict(batch_sound)} for index in range(1, workspace_count + 1)],
         "activeComposeWorkspaceId": "compose_1", "bgmName": template.get("bgmName", ""), "bgmUrl": template.get("bgmUrl", ""),
         "activePanel": "prompt", "nextNodeNumber": len(nodes) + 1,
     }

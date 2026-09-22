@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { overlayCoordinatesFromItem, overlayStyleFromItem, type OverlayItem, type TimelineClip, type VoiceItem } from "../model";
+import { bgmLabel, bgmModeFor, type BgmMode, overlayCoordinatesFromItem, overlayStyleFromItem, type OverlayItem, type TimelineClip, type VoiceItem } from "../model";
 
 type PositionedClip = { clip: TimelineClip; start: number; end: number };
 type RangeDrag = { track: "overlay" | "voice"; itemId: string; mode: "start" | "end" | "move"; originX: number; originStart: number; originEnd: number };
@@ -19,10 +19,11 @@ type StoryboardTimelineProps = {
   onUpdateVoice?: (voiceId: string, patch: Partial<VoiceItem>) => void;
   onRemoveVoice?: (voiceId: string) => void;
   bgmName?: string;
+  bgmMode?: BgmMode;
   onRemoveBgm?: () => void;
 };
 
-export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOverlayFocus, onUpdateOverlay, onRemoveOverlay, onUpdateClip, voiceItems = [], voiceText, onVoiceFocus, onUpdateVoice, onRemoveVoice, bgmName, onRemoveBgm }: StoryboardTimelineProps) {
+export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOverlayFocus, onUpdateOverlay, onRemoveOverlay, onUpdateClip, voiceItems = [], voiceText, onVoiceFocus, onUpdateVoice, onRemoveVoice, bgmName, bgmMode, onRemoveBgm }: StoryboardTimelineProps) {
   const showSoundTracks = mode === "sound";
   const resolvedVoiceItems = voiceItems.length > 0 ? voiceItems : voiceText?.trim() ? [{ id: "voice_main", text: voiceText, startSeconds: 0, endSeconds: 4, volume: 85 }] : [];
   const total = clips.reduce((sum, clip) => sum + Math.max(0.1, clip.timelineDuration), 0);
@@ -195,7 +196,7 @@ export function StoryboardTimeline({ clips, mode = "sound", overlayItems, onOver
       {selectedClip && onUpdateClip && <StoryboardTrack label="裁剪"><ClipTrimEditor item={selectedClip} onUpdateClip={onUpdateClip} onPreviewSource={sourceTime => previewSourceFrame(selectedClip, sourceTime)} /></StoryboardTrack>}
       {showSoundTracks && <StoryboardTrack label="文字" style={{ minHeight: rangeTrackHeight(overlayLanes.length) }}><div className="storyboard-range-lane-stack">{overlayLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"overlay-lane-" + laneIndex}>{lane.map(renderOverlayItem)}</div>)}</div></StoryboardTrack>}
       {showSoundTracks && <StoryboardTrack label="人声" style={{ minHeight: rangeTrackHeight(voiceLanes.length) }}><div className="storyboard-range-lane-stack">{voiceLanes.length > 0 ? voiceLanes.map((lane, laneIndex) => <div className="storyboard-range-lane" key={"voice-lane-" + laneIndex}>{lane.map(renderVoiceItem)}</div>) : <span className="storyboard-audio-empty">未配置人声</span>}</div></StoryboardTrack>}
-      {showSoundTracks && <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={bgmName?.trim() ? `BGM · ${bgmName}` : "未上传 BGM"} tone="bgm" total={total} onRemove={bgmName?.trim() ? onRemoveBgm : undefined} /></StoryboardTrack>}
+      {showSoundTracks && <StoryboardTrack label="BGM"><AudioTrackBlock className="bgm-track-block" label={`BGM · ${bgmLabel({ bgmMode, bgmName })}`} tone="bgm" total={total} onRemove={bgmModeFor({ bgmMode, bgmName }) === "none" ? undefined : onRemoveBgm} /></StoryboardTrack>}
       <div className="storyboard-playhead" style={{ left: playheadLeft }} aria-hidden="true" />
     </div></div>
     <label className="storyboard-scrubber"><span>播放指针</span><input aria-label="时间线播放指针" type="range" min="0" max={Math.max(total, 0)} step="0.05" value={playhead} onChange={event => movePlayhead(Number(event.target.value))} /><output>{formatSeconds(playhead)}</output></label>

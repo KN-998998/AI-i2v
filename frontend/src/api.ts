@@ -91,6 +91,11 @@ export async function fetchBackgroundTemplates(): Promise<BackgroundTemplate[]> 
   return parseResponse<BackgroundTemplate[]>(response);
 }
 
+export async function fetchDefaultBgm(): Promise<Array<{ name: string; url: string }>> {
+  const response = await fetch(`${API_BASE_URL}/api/canvas/bgm/default`, { cache: "no-store" });
+  return parseResponse<Array<{ name: string; url: string }>>(response);
+}
+
 export async function uploadBackgroundTemplate(file: File): Promise<BackgroundTemplate> {
   const body = new FormData();
   body.append("file", file);

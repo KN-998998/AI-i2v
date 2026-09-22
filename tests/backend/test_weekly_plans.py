@@ -152,3 +152,13 @@ def test_batch_runs_always_use_the_template_effect_rules():
     assert node["data"]["effectRules"] == {"cold": "push_in"}
     node["data"]["effectRules"]["cold"] = "orbit"
     assert template["nodes"][2]["data"]["effectRules"]["cold"] == "push_in", "批量草稿改动不能回写到样板"
+
+
+# ---------------------------------------------------------------------------
+# 第十四批：批量生产的每条成片带上样板的音乐设置（默认曲库 / 自己传的 / 不要）
+# ---------------------------------------------------------------------------
+def test_batch_sound_config_carries_the_template_bgm_mode():
+    assert weekly_plans._batch_sound_config({"bgmName": "默认 BGM", "bgmUrl": ""}) == {"bgmMode": "default", "bgmName": "默认曲库", "bgmUrl": ""}
+    custom = weekly_plans._batch_sound_config({"bgmName": "own.mp3", "bgmUrl": "/api/canvas/drafts/t/files/own.mp3"})
+    assert custom["bgmMode"] == "custom" and custom["bgmUrl"].endswith("own.mp3")
+    assert weekly_plans._batch_sound_config({"composeWorkspaces": [{"id": "compose_1", "soundConfig": {"bgmMode": "none", "bgmName": "", "bgmUrl": ""}}]})["bgmMode"] == "none", "样板第一个成片方案里的设置优先"
