@@ -1,5 +1,7 @@
 import random
+import sys
 import time
+from types import SimpleNamespace
 from pathlib import Path
 
 from PIL import Image
@@ -7,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from web.app import create_app
 from web.services import oss_jobs
+from web.services import oss_asset_provider as oss_asset_provider_module
 from web.services.oss_asset_provider import OssAssetProvider
 
 
@@ -56,6 +59,31 @@ def test_oss_provider_selects_different_dish_folders(monkeypatch):
     assert len(selected) == 3
     assert len({item["dish_name"] for item in selected}) == 3
     assert all(item["object_key"].startswith("图片素材库/寿司/") for item in selected)
+
+
+def test_oss_provider_uses_ecs_ram_role_metadata_endpoint(monkeypatch):
+    captured = {}
+
+    class _Credentials:
+        def __init__(self, auth_host):
+            captured["auth_host"] = auth_host
+
+    fake_oss2 = SimpleNamespace(
+        credentials=SimpleNamespace(EcsRamRoleCredentialsProvider=_Credentials),
+        ProviderAuth=lambda credentials: credentials,
+        Bucket=lambda auth, endpoint, bucket_name: (auth, endpoint, bucket_name),
+    )
+    monkeypatch.setitem(sys.modules, "oss2", fake_oss2)
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_BUCKET", "patrick0619")
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_ENDPOINT", "https://oss-cn-shenzhen.aliyuncs.com")
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_RAM_ROLE_NAME", "EcsOssAssetReadOnly")
+
+    OssAssetProvider().bucket
+
+    assert captured["auth_host"] == (
+        "http://100.100.100.200/latest/meta-data/ram/security-credentials/"
+        "EcsOssAssetReadOnly"
+    )
 
 
 class _FakeJobProvider:

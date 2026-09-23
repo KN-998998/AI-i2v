@@ -18,11 +18,13 @@ from web.core.settings import (
     OSS_BUCKET,
     OSS_ENDPOINT,
     OSS_MAX_IMAGE_BYTES,
+    OSS_RAM_ROLE_NAME,
 )
 
 IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 _KEY_PART_RE = re.compile(r"^[^\\/]+$")
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
+_ECS_RAM_ROLE_CREDENTIALS_URL = "http://100.100.100.200/latest/meta-data/ram/security-credentials"
 
 
 class OssProviderError(RuntimeError):
@@ -74,7 +76,10 @@ class OssAssetProvider:
                 raise OssNotConfiguredError("未安装 aliyun-oss-python-sdk，请先安装 requirements.txt") from exc
 
             try:
-                credentials = oss2.credentials.EcsRamRoleCredentialsProvider()
+                if not OSS_RAM_ROLE_NAME:
+                    raise OssNotConfiguredError("OSS_RAM_ROLE_NAME 尚未配置")
+                auth_host = f"{_ECS_RAM_ROLE_CREDENTIALS_URL}/{OSS_RAM_ROLE_NAME}"
+                credentials = oss2.credentials.EcsRamRoleCredentialsProvider(auth_host)
                 auth = oss2.ProviderAuth(credentials)
                 self._bucket = oss2.Bucket(auth, OSS_ENDPOINT, OSS_BUCKET)
             except Exception as exc:  # pragma: no cover - SDK/metadata-service dependent
