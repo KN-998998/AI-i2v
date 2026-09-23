@@ -16,6 +16,12 @@ services:
       APP_HOST: 0.0.0.0
       APP_PORT: 8015
       APP_RELOAD: "false"
+      # OSS uses the ECS RAM role for temporary credentials; these are only
+      # non-sensitive bucket/layout settings and intentionally contain no AK/SK.
+      OSS_BUCKET: patrick0619
+      OSS_ENDPOINT: https://oss-cn-shenzhen.aliyuncs.com
+      OSS_REGION: cn-shenzhen
+      OSS_ASSET_PREFIX: 图片素材库
     # Set APP_UID/APP_GID to the Linux deploy user's numeric IDs before start.
     user: "${APP_UID:-1001}:${APP_GID:-1001}"
     ports:
