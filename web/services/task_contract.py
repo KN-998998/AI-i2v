@@ -11,21 +11,25 @@ from typing import Any, Literal
 
 TaskStatus = Literal[
     "queued", "running", "polling", "downloading", "analyzing",
-    "retrying", "done", "error",
+    "retrying", "selecting_materials", "preprocessing", "awaiting_review",
+    "completed", "cancelled", "done", "error",
 ]
 
 TASK_STATUSES: frozenset[str] = frozenset({
     "queued", "running", "polling", "downloading", "analyzing",
-    "retrying", "done", "error",
+    "retrying", "selecting_materials", "preprocessing", "awaiting_review",
+    "completed", "cancelled", "done", "error",
 })
 RECOVERABLE_TASK_STATUSES: frozenset[str] = frozenset({
     "queued", "running", "polling", "downloading", "analyzing", "retrying",
+    "selecting_materials", "preprocessing",
 })
 _MAX_EVENTS = 40
 _DEFAULT_MAX_RETRIES = {
     "kling_generation": 2,
     "image_processing": 1,
     "video_composition": 1,
+    "oss_asset_ingestion": 1,
 }
 
 
@@ -115,5 +119,8 @@ def _phase_for(status: str) -> str:
     return {
         "queued": "queued", "running": "processing", "polling": "polling",
         "downloading": "downloading", "analyzing": "analyzing",
-        "retrying": "retrying", "done": "completed", "error": "failed",
+        "retrying": "retrying", "selecting_materials": "processing",
+        "preprocessing": "processing", "awaiting_review": "review",
+        "completed": "completed", "cancelled": "cancelled",
+        "done": "completed", "error": "failed",
     }.get(status, "unknown")

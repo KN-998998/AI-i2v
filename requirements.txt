@@ -15,3 +15,4 @@ requests==2.33.0          # HTTP 调用（Kling / LLM 等 API）
 cos-python-sdk-v5==1.9.39 # 腾讯云 COS / 数据万象 GoodsMatting
 urllib3==2.7.0            # requests 底层（代码中有直接 import）
 PyJWT==2.10.1             # 可灵 AK/SK JWT 鉴权
+oss2==2.19.1              # 阿里云 OSS：ECS RAM 角色只读访问

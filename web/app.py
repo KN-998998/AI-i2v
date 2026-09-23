@@ -21,6 +21,7 @@ from web.core.settings import APP_HOST, APP_PORT, APP_RELOAD, STATIC_DIR
 from web.services.canvas_compose import recover_compose_jobs
 from web.services.canvas_generation import recover_generation_jobs
 from web.services.canvas_image_processing import recover_image_processing_jobs
+from web.services.oss_jobs import cleanup_expired_oss_jobs, recover_oss_jobs
 from web.services.weekly_plans import initialize as initialize_weekly_plans, start_scheduler as start_weekly_scheduler, stop_scheduler as stop_weekly_scheduler
 
 configure_logging()
@@ -32,17 +33,22 @@ def create_app() -> FastAPI:
     async def lifespan(_app: FastAPI):
         initialize_weekly_plans()
         start_weekly_scheduler()
+        cleaned_oss = cleanup_expired_oss_jobs()
         recovered_generation = recover_generation_jobs()
         recovered_image = recover_image_processing_jobs()
         recovered_compose = recover_compose_jobs()
-        recovered = recovered_generation + recovered_image + recovered_compose
+        recovered_oss = recover_oss_jobs()
+        recovered = recovered_generation + recovered_image + recovered_compose + recovered_oss
         if recovered:
             logger.info(
-                "Recovered unfinished jobs: kling=%s image=%s compose=%s",
+                "Recovered unfinished jobs: kling=%s image=%s compose=%s oss=%s",
                 recovered_generation,
                 recovered_image,
                 recovered_compose,
+                recovered_oss,
             )
+        if cleaned_oss:
+            logger.info("Cleaned expired OSS jobs: %s", cleaned_oss)
         try:
             yield
         finally:

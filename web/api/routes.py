@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from pipeline.audio import qwen_tts_options
@@ -41,6 +41,9 @@ from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, recompose_image, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
 from web.services.canvas_state import background_file, list_background_files, load_draft, save_asset_library_folder_upload, save_background_upload, save_draft, save_upload, uploaded_file
+from web.services.oss_asset_provider import OssAssetProvider
+from web.services.oss_jobs import allow_submission, asset_file as oss_asset_file, approve_oss_job, cancel_oss_job, create_oss_job, get_oss_job, mark_oss_asset_for_regeneration
+from web.core.settings import OSS_BUCKET, OSS_ENDPOINT
 
 router = APIRouter()
 CANVAS_CLIP_PREVIEW_ROOT = CANVAS_CLIP_ROOT / ".previews"
@@ -484,6 +487,99 @@ def get_canvas_background(stored_name: str) -> FileResponse:
     return FileResponse(str(path))
 
 
+@router.get("/api/oss/categories")
+def list_oss_categories() -> dict[str, Any]:
+    """List categories allowed by the server-side OSS asset provider."""
+    try:
+        categories = OssAssetProvider().list_categories()
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise _json_error(str(exc), 503) from exc
+    return {"categories": categories}
+
+
+@router.get("/api/oss/diagnostics")
+def diagnose_oss_layout() -> dict[str, Any]:
+    """Read-only deployment check; never returns credentials or object URLs."""
+    try:
+        return OssAssetProvider().diagnose_layout()
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise _json_error(str(exc), 503) from exc
+
+
+def _oss_job_response(job: dict[str, Any]) -> dict[str, Any]:
+    response = dict(job)
+    # Never expose local absolute paths or object-storage credentials.
+    response.pop("job_directory", None)
+    assets: list[dict[str, Any]] = []
+    for raw_asset in response.get("assets", []):
+        if not isinstance(raw_asset, dict):
+            continue
+        asset = dict(raw_asset)
+        asset.pop("source_path", None)
+        asset.pop("normalized_path", None)
+        asset_id = str(asset.get("asset_id") or "")
+        if asset_id:
+            asset["source_url"] = f"/api/jobs/{response['job_id']}/assets/{asset_id}/source"
+            asset["normalized_url"] = f"/api/jobs/{response['job_id']}/assets/{asset_id}/normalized"
+        assets.append(asset)
+    response["assets"] = assets
+    return response
+
+
+@router.post("/api/jobs")
+def create_oss_asset_job(http_request: Request, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    client_key = http_request.client.host if http_request.client else "unknown"
+    if not allow_submission(client_key):
+        raise _json_error("任务提交过于频繁，请稍后再试", 429)
+    request = payload or {}
+    try:
+        return _oss_job_response(create_oss_job(request.get("selections"), request.get("seed")))
+    except ValueError as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/jobs/{job_id}")
+def get_oss_asset_job(job_id: str) -> dict[str, Any]:
+    job = get_oss_job(job_id)
+    if job is None:
+        raise _json_error("素材任务不存在", 404)
+    return _oss_job_response(job)
+
+
+@router.post("/api/jobs/{job_id}/approve")
+def approve_oss_asset_job(job_id: str) -> dict[str, Any]:
+    try:
+        return _oss_job_response(approve_oss_job(job_id))
+    except ValueError as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/jobs/{job_id}/cancel")
+def cancel_oss_asset_job(job_id: str) -> dict[str, Any]:
+    try:
+        return _oss_job_response(cancel_oss_job(job_id))
+    except ValueError as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.post("/api/jobs/{job_id}/regenerate")
+def regenerate_oss_asset(job_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        asset_id = str((payload or {}).get("asset_id") or "")
+        return _oss_job_response(mark_oss_asset_for_regeneration(job_id, asset_id))
+    except ValueError as exc:
+        raise _json_error(str(exc), 400) from exc
+
+
+@router.get("/api/jobs/{job_id}/assets/{asset_id}/{kind}")
+def get_oss_asset_file(job_id: str, asset_id: str, kind: str) -> FileResponse:
+    path = oss_asset_file(job_id, asset_id, kind)
+    if path is None:
+        raise _json_error("素材文件不存在", 404)
+    media_type = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(str(path), media_type=media_type)
+
+
 @router.post("/api/canvas/drafts/{draft_id}/image-processing")
 def start_canvas_image_processing(draft_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
@@ -636,6 +732,7 @@ def get_config() -> dict[str, Any]:
         "kling_model": KLING_MODEL,
         "video_spec": {"duration_seconds": VIDEO_DURATION, "resolution": VIDEO_RESOLUTION, "aspect_ratio": VIDEO_ASPECT, "silent": VIDEO_SILENT, "supports_last_frame": True},
         "image_processing": {"provider": BACKGROUND_REMOVAL_PROVIDER or None, "model": TENCENT_COS_MODEL, "region": TENCENTCLOUD_REGION, "bucket_configured": bool(TENCENT_COS_BUCKET), "configured": tencent_matting_configured()},
+        "oss": {"configured": bool(OSS_BUCKET and OSS_ENDPOINT), "read_only": True},
     }
 
 
