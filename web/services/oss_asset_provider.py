@@ -11,6 +11,8 @@ import posixpath
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
+from urllib.request import urlopen
 
 from web.core.settings import (
     OSS_ALLOWED_CATEGORIES,
@@ -25,6 +27,19 @@ IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 _KEY_PART_RE = re.compile(r"^[^\\/]+$")
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 _ECS_RAM_ROLE_CREDENTIALS_URL = "http://100.100.100.200/latest/meta-data/ram/security-credentials"
+
+
+def _ecs_ram_role_auth_host() -> str:
+    role_name = OSS_RAM_ROLE_NAME
+    if not role_name:
+        try:
+            with urlopen(f"{_ECS_RAM_ROLE_CREDENTIALS_URL}/", timeout=5) as response:
+                role_name = response.read().decode("utf-8").strip().splitlines()[0]
+        except (IndexError, OSError, UnicodeError) as exc:
+            raise OssProviderError(f"无法从 ECS 元数据服务发现 RAM 角色: {exc}") from exc
+    if not role_name or "/" in role_name or "\\" in role_name:
+        raise OssProviderError("ECS RAM 角色名无效")
+    return f"{_ECS_RAM_ROLE_CREDENTIALS_URL}/{quote(role_name, safe='')}"
 
 
 class OssProviderError(RuntimeError):
@@ -76,10 +91,7 @@ class OssAssetProvider:
                 raise OssNotConfiguredError("未安装 aliyun-oss-python-sdk，请先安装 requirements.txt") from exc
 
             try:
-                if not OSS_RAM_ROLE_NAME:
-                    raise OssNotConfiguredError("OSS_RAM_ROLE_NAME 尚未配置")
-                auth_host = f"{_ECS_RAM_ROLE_CREDENTIALS_URL}/{OSS_RAM_ROLE_NAME}"
-                credentials = oss2.credentials.EcsRamRoleCredentialsProvider(auth_host)
+                credentials = oss2.credentials.EcsRamRoleCredentialsProvider(_ecs_ram_role_auth_host())
                 auth = oss2.ProviderAuth(credentials)
                 self._bucket = oss2.Bucket(auth, OSS_ENDPOINT, OSS_BUCKET)
             except Exception as exc:  # pragma: no cover - SDK/metadata-service dependent

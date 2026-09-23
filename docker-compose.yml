@@ -22,7 +22,6 @@ services:
       OSS_ENDPOINT: https://oss-cn-shenzhen.aliyuncs.com
       OSS_REGION: cn-shenzhen
       OSS_ASSET_PREFIX: 图片素材库
-      OSS_RAM_ROLE_NAME: EcsOssAssetReadOnly
     # Set APP_UID/APP_GID to the Linux deploy user's numeric IDs before start.
     user: "${APP_UID:-1001}:${APP_GID:-1001}"
     ports:

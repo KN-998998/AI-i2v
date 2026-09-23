@@ -86,6 +86,39 @@ def test_oss_provider_uses_ecs_ram_role_metadata_endpoint(monkeypatch):
     )
 
 
+def test_oss_provider_discovers_ecs_ram_role_name(monkeypatch):
+    captured = {}
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b"ActualAttachedRole\n"
+
+    class _Credentials:
+        def __init__(self, auth_host):
+            captured["auth_host"] = auth_host
+
+    fake_oss2 = SimpleNamespace(
+        credentials=SimpleNamespace(EcsRamRoleCredentialsProvider=_Credentials),
+        ProviderAuth=lambda credentials: credentials,
+        Bucket=lambda auth, endpoint, bucket_name: (auth, endpoint, bucket_name),
+    )
+    monkeypatch.setitem(sys.modules, "oss2", fake_oss2)
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_BUCKET", "patrick0619")
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_ENDPOINT", "https://oss-cn-shenzhen.aliyuncs.com")
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_RAM_ROLE_NAME", "")
+    monkeypatch.setattr(oss_asset_provider_module, "urlopen", lambda *_args, **_kwargs: _Response())
+
+    OssAssetProvider().bucket
+
+    assert captured["auth_host"].endswith("/ActualAttachedRole")
+
+
 class _FakeJobProvider:
     def list_categories(self):
         return ["寿司", "主菜"]

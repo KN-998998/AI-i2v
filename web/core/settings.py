@@ -19,7 +19,7 @@ OSS_BUCKET = os.environ.get("OSS_BUCKET", "").strip()
 OSS_ENDPOINT = os.environ.get("OSS_ENDPOINT", "").strip()
 OSS_ASSET_PREFIX = os.environ.get("OSS_ASSET_PREFIX", "").strip().strip("/")
 OSS_REGION = os.environ.get("OSS_REGION", "").strip()
-OSS_RAM_ROLE_NAME = os.environ.get("OSS_RAM_ROLE_NAME", "EcsOssAssetReadOnly").strip()
+OSS_RAM_ROLE_NAME = os.environ.get("OSS_RAM_ROLE_NAME", "").strip()
 OSS_ALLOWED_CATEGORIES = tuple(
     item.strip() for item in os.environ.get("OSS_ALLOWED_CATEGORIES", "").split(",") if item.strip()
 )
