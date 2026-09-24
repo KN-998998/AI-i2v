@@ -115,11 +115,16 @@ $stderrLog = Join-Path $logsRoot "fastapi-$stamp.err.log"
 $launcherScript = Join-Path $ProjectRoot "scripts\run_fastapi_windows.ps1"
 $taskAction = New-ScheduledTaskAction `
     -Execute (Get-Command powershell.exe -ErrorAction Stop).Source `
-    -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$launcherScript`" -ProjectRoot `"$ProjectRoot`" -OutputLog `"$stdoutLog`"" `
+    -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$launcherScript`" -ProjectRoot `"$ProjectRoot`" -OutputLog `"$stdoutLog`" -ErrorLog `"$stderrLog`"" `
     -WorkingDirectory $ProjectRoot
 $taskTrigger = New-ScheduledTaskTrigger -AtStartup
 $taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Force | Out-Null
+$taskSettings = New-ScheduledTaskSettingsSet `
+    -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -RestartCount 999 `
+    -RestartInterval (New-TimeSpan -Minutes 1) `
+    -StartWhenAvailable
+Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 
 $ready = $false
@@ -148,10 +153,15 @@ if (-not $ready) {
     if ($null -ne $taskInfo) {
         Write-Host "Scheduled task state=$($taskInfo.State), lastResult=$($taskInfo.LastTaskResult), lastRun=$($taskInfo.LastRunTime)"
     }
+    $registeredTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($null -ne $registeredTask) {
+        $registeredTask.Actions | Format-List Execute,Arguments,WorkingDirectory
+    }
     Get-ChildItem -LiteralPath $logsRoot -Filter "fastapi-*.log" -ErrorAction SilentlyContinue | Select-Object Name,Length,LastWriteTime | Format-Table -AutoSize
     if (Test-Path -LiteralPath $stdoutLog) {
         Get-Content -LiteralPath $stdoutLog -Tail 80
-    } elseif (Test-Path -LiteralPath $stderrLog) {
+    }
+    if (Test-Path -LiteralPath $stderrLog) {
         Get-Content -LiteralPath $stderrLog -Tail 80
     }
     throw "FastAPI did not become ready within 30 seconds."
