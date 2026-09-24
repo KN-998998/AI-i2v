@@ -26,7 +26,23 @@ $outputRoot = Join-Path $ProjectRoot "output"
 New-Item -ItemType Directory -Force -Path $logsRoot, $outputRoot | Out-Null
 
 $git = (Get-Command git.exe -ErrorAction Stop).Source
-Invoke-Checked $git @("-c", "http.connectTimeout=20", "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=300", "pull", "--ff-only", "origin", "main")
+$gitPullCompleted = $false
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    try {
+        Invoke-Checked $git @("-c", "http.connectTimeout=20", "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=300", "pull", "--ff-only", "origin", "main")
+        $gitPullCompleted = $true
+        break
+    } catch {
+        if ($attempt -eq 3) {
+            throw
+        }
+        Start-Sleep -Seconds (5 * $attempt)
+    }
+}
+
+if (-not $gitPullCompleted) {
+    throw "Git pull did not complete."
+}
 
 $pythonLauncher = Get-Command py.exe -ErrorAction SilentlyContinue
 $pythonOnPath = Get-Command python.exe -ErrorAction SilentlyContinue
@@ -71,6 +87,21 @@ if (Test-Path -LiteralPath $pidFile) {
 $env:APP_HOST = "0.0.0.0"
 $env:APP_PORT = "8015"
 $env:APP_RELOAD = "false"
+
+$portOwners = @(Get-NetTCPConnection -LocalPort ([int]$env:APP_PORT) -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
+foreach ($portOwner in $portOwners) {
+    $oldProcess = Get-Process -Id $portOwner -ErrorAction SilentlyContinue
+    if ($null -ne $oldProcess) {
+        $ownerInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$portOwner" -ErrorAction SilentlyContinue
+        $ownerCommand = [string]$ownerInfo.CommandLine
+        if ([string]::IsNullOrWhiteSpace($ownerCommand) -or ($ownerCommand -notlike "*web.run_server*" -and $ownerCommand -notlike "*$ProjectRoot*")) {
+            throw "Port $($env:APP_PORT) is occupied by an unexpected process (PID $portOwner)."
+        }
+        Stop-Process -Id $portOwner -Force
+        $oldProcess.WaitForExit(10000)
+    }
+}
+
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $stdoutLog = Join-Path $logsRoot "fastapi-$stamp.out.log"
 $stderrLog = Join-Path $logsRoot "fastapi-$stamp.err.log"
@@ -88,8 +119,14 @@ $ready = $false
 for ($attempt = 1; $attempt -le 30; $attempt++) {
     Start-Sleep -Seconds 1
     try {
+        if (-not (Get-Process -Id $server.Id -ErrorAction SilentlyContinue)) {
+            break
+        }
         $response = Invoke-WebRequest -Uri "http://127.0.0.1:8015/api/config" -UseBasicParsing -TimeoutSec 3
-        if ($response.StatusCode -eq 200) {
+        $openApiResponse = Invoke-WebRequest -Uri "http://127.0.0.1:8015/openapi.json" -UseBasicParsing -TimeoutSec 3
+        $openApi = $openApiResponse.Content | ConvertFrom-Json
+        $hasOssRoute = $null -ne $openApi.paths.PSObject.Properties["/api/oss/categories"]
+        if ($response.StatusCode -eq 200 -and $openApiResponse.StatusCode -eq 200 -and $hasOssRoute) {
             $ready = $true
             break
         }
