@@ -1,0 +1,47 @@
+name: Windows ECS SSH Connectivity
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  connectivity:
+    name: Test SSH connectivity only
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prepare SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -eu
+          test -n "$DEPLOY_SSH_KEY"
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$HOME/.ssh/windows-ecs-connectivity"
+          chmod 600 "$HOME/.ssh/windows-ecs-connectivity"
+          ssh-keygen -y -f "$HOME/.ssh/windows-ecs-connectivity" >/dev/null
+      - name: Connect and run read-only checks
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -Eeuo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
+          REMOTE_COMMAND="powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"& { \$ErrorActionPreference = 'Stop'; Write-Output ('SSH_OK user=' + [Environment]::UserName); if (-not (Test-Path -LiteralPath '$DEPLOY_PATH')) { throw 'DEPLOY_PATH_NOT_FOUND' }; if ((Get-Service -Name sshd).Status -ne 'Running') { throw 'SSHD_NOT_RUNNING' }; Write-Output 'SSH_CONNECTIVITY_OK' }\""
+          ssh -i "$HOME/.ssh/windows-ecs-connectivity" -p "$DEPLOY_PORT" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o PreferredAuthentications=publickey \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "$REMOTE_COMMAND"
