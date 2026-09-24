@@ -103,10 +103,7 @@ $env:APP_RELOAD = "false"
 
 # 固定 OSS 素材库的非敏感配置。只补写 ECS 本地 .env 中缺少的字段，
 # 不覆盖服务器已有值；临时 RAM 凭证仍由 ECS 实例角色自动获取。
-$dotenvPath = [IO.Path]::Combine([string]$ProjectRoot, ".env")
-if ([string]::IsNullOrWhiteSpace($dotenvPath)) {
-    throw "Environment file path could not be derived from ProjectRoot '$ProjectRoot'."
-}
+$dotenvPath = "$ProjectRoot\.env"
 $ossAssetPrefix = [string]::Concat([char]0x56FE, [char]0x7247, [char]0x7D20, [char]0x6750, [char]0x5E93)
 $ossDefaults = @(
     "OSS_BUCKET=patrick0619",
