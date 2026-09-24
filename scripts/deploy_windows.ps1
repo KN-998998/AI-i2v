@@ -89,12 +89,13 @@ $env:APP_PORT = "8015"
 $env:APP_RELOAD = "false"
 
 # 公网访问依赖 Windows 入站放行；规则按固定名称幂等更新，避免每次部署重复创建。
-$firewallRuleName = "AI-i2v FastAPI $($env:APP_PORT)"
-$firewallRule = Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue
+$firewallRuleName = "AI-i2v-FastAPI-8015"
+$firewallRuleDisplayName = "AI-i2v FastAPI 8015"
+$firewallRule = Get-NetFirewallRule -Name $firewallRuleName -ErrorAction SilentlyContinue
 if ($null -eq $firewallRule) {
-    New-NetFirewallRule -DisplayName $firewallRuleName -Direction Inbound -Protocol TCP -LocalPort ([int]$env:APP_PORT) -Action Allow -Profile Any | Out-Null
+    New-NetFirewallRule -Name $firewallRuleName -DisplayName $firewallRuleDisplayName -Direction Inbound -Protocol TCP -LocalPort ([int]$env:APP_PORT) -Action Allow -Profile Any | Out-Null
 } else {
-    Set-NetFirewallRule -DisplayName $firewallRuleName -Enabled True -Action Allow -Profile Any | Out-Null
+    Set-NetFirewallRule -Name $firewallRuleName -DisplayName $firewallRuleDisplayName -Enabled True -Action Allow -Profile Any | Out-Null
 }
 
 $portOwners = @(Get-NetTCPConnection -LocalPort ([int]$env:APP_PORT) -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
