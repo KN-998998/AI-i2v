@@ -4,6 +4,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    throw "ProjectRoot was empty. Pass the ECS checkout path with -ProjectRoot."
+}
 $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 Set-Location -LiteralPath $ProjectRoot
 $env:PYTHONUTF8 = "1"
@@ -23,13 +26,17 @@ function Invoke-Checked {
 
 $logsRoot = Join-Path $ProjectRoot "logs"
 $outputRoot = Join-Path $ProjectRoot "output"
+if ([string]::IsNullOrWhiteSpace($logsRoot) -or [string]::IsNullOrWhiteSpace($outputRoot)) {
+    throw "Deployment paths could not be derived from ProjectRoot '$ProjectRoot'."
+}
 New-Item -ItemType Directory -Force -Path $logsRoot, $outputRoot | Out-Null
 
 $git = (Get-Command git.exe -ErrorAction Stop).Source
 $gitPullCompleted = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
     try {
-        Invoke-Checked $git @("-c", "http.connectTimeout=20", "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=300", "pull", "--ff-only", "origin", "main")
+        # ECS 上可能保留一次仅用于现场修复的本地提交；合并远程 main，避免部署因分叉而中断。
+        Invoke-Checked $git @("-c", "http.connectTimeout=20", "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=300", "pull", "--no-rebase", "--no-edit", "origin", "main")
         $gitPullCompleted = $true
         break
     } catch {
@@ -71,6 +78,9 @@ try {
 }
 
 $pidFile = Join-Path $logsRoot "fastapi.pid"
+if ([string]::IsNullOrWhiteSpace($pidFile)) {
+    throw "PID file path could not be derived from logs directory '$logsRoot'."
+}
 $taskName = "AI-i2v FastAPI"
 Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -94,6 +104,9 @@ $env:APP_RELOAD = "false"
 # 固定 OSS 素材库的非敏感配置。只补写 ECS 本地 .env 中缺少的字段，
 # 不覆盖服务器已有值；临时 RAM 凭证仍由 ECS 实例角色自动获取。
 $envFile = Join-Path $ProjectRoot ".env"
+if ([string]::IsNullOrWhiteSpace($envFile)) {
+    throw "Environment file path could not be derived from ProjectRoot '$ProjectRoot'."
+}
 $ossAssetPrefix = [string]::Concat([char]0x56FE, [char]0x7247, [char]0x7D20, [char]0x6750, [char]0x5E93)
 $ossDefaults = @(
     "OSS_BUCKET=patrick0619",
@@ -140,8 +153,13 @@ foreach ($portOwner in $portOwners) {
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $stdoutLog = Join-Path $logsRoot "fastapi-$stamp.out.log"
 $stderrLog = Join-Path $logsRoot "fastapi-$stamp.err.log"
-
 $launcherScript = Join-Path $ProjectRoot "scripts\run_fastapi_windows.ps1"
+foreach ($requiredPath in @($stdoutLog, $stderrLog, $launcherScript)) {
+    if ([string]::IsNullOrWhiteSpace($requiredPath)) {
+        throw "A required deployment path was empty."
+    }
+}
+
 $taskAction = New-ScheduledTaskAction `
     -Execute (Get-Command powershell.exe -ErrorAction Stop).Source `
     -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$launcherScript`" -ProjectRoot `"$ProjectRoot`" -OutputLog `"$stdoutLog`" -ErrorLog `"$stderrLog`"" `
