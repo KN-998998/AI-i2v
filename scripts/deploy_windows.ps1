@@ -4,6 +4,11 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+trap {
+    $location = $_.InvocationInfo.PositionMessage
+    Write-Host "Deployment failed at: $location"
+    throw
+}
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
     throw "ProjectRoot was empty. Pass the ECS checkout path with -ProjectRoot."
 }
