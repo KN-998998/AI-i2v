@@ -108,7 +108,7 @@ $env:APP_RELOAD = "false"
 
 # 固定 OSS 素材库的非敏感配置。只补写 ECS 本地 .env 中缺少的字段，
 # 不覆盖服务器已有值；临时 RAM 凭证仍由 ECS 实例角色自动获取。
-$dotenvPath = "$ProjectRoot\.env"
+$ossConfigPath = [string]$ProjectRoot + "\.env"
 $ossAssetPrefix = [string]::Concat([char]0x56FE, [char]0x7247, [char]0x7D20, [char]0x6750, [char]0x5E93)
 $ossDefaults = @(
     "OSS_BUCKET=patrick0619",
@@ -118,8 +118,8 @@ $ossDefaults = @(
     "OSS_RAM_ROLE_NAME=EcsOssAssetReadOnly"
 )
 $existingEnvKeys = @{}
-if (Test-Path -LiteralPath $dotenvPath) {
-    foreach ($line in (Get-Content -LiteralPath $dotenvPath -Encoding UTF8)) {
+if (Test-Path -LiteralPath $ossConfigPath) {
+    foreach ($line in (Get-Content -LiteralPath $ossConfigPath -Encoding UTF8)) {
         if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') {
             $existingEnvKeys[$matches[1]] = $true
         }
@@ -130,9 +130,9 @@ $missingOssDefaults = @($ossDefaults | Where-Object {
     -not $existingEnvKeys.ContainsKey($key)
 })
 if ($missingOssDefaults.Count -gt 0) {
-    $existingContent = if (Test-Path -LiteralPath $dotenvPath) { [IO.File]::ReadAllText($dotenvPath, [Text.Encoding]::UTF8).TrimEnd() } else { "" }
+    $existingContent = if (Test-Path -LiteralPath $ossConfigPath) { [IO.File]::ReadAllText($ossConfigPath, [Text.Encoding]::UTF8).TrimEnd() } else { "" }
     $newContent = @($existingContent, "# Fixed OSS asset library (deployment defaults)", $missingOssDefaults) -join [Environment]::NewLine
-    [IO.File]::WriteAllText($dotenvPath, $newContent + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($ossConfigPath, $newContent + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
 }
 
 # 公网访问依赖 Windows 入站放行；规则按固定名称幂等更新，避免每次部署重复创建。
