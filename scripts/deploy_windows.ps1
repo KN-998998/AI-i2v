@@ -144,6 +144,11 @@ if (-not $ready) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
     Write-Host "FastAPI failed to start. Recent error log:"
+    $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($null -ne $taskInfo) {
+        Write-Host "Scheduled task state=$($taskInfo.State), lastResult=$($taskInfo.LastTaskResult), lastRun=$($taskInfo.LastRunTime)"
+    }
+    Get-ChildItem -LiteralPath $logsRoot -Filter "fastapi-*.log" -ErrorAction SilentlyContinue | Select-Object Name,Length,LastWriteTime | Format-Table -AutoSize
     if (Test-Path -LiteralPath $stdoutLog) {
         Get-Content -LiteralPath $stdoutLog -Tail 80
     } elseif (Test-Path -LiteralPath $stderrLog) {
