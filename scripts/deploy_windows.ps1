@@ -91,6 +91,34 @@ $env:APP_HOST = "0.0.0.0"
 $env:APP_PORT = "8015"
 $env:APP_RELOAD = "false"
 
+# 固定 OSS 素材库的非敏感配置。只补写 ECS 本地 .env 中缺少的字段，
+# 不覆盖服务器已有值；临时 RAM 凭证仍由 ECS 实例角色自动获取。
+$envFile = Join-Path $ProjectRoot ".env"
+$ossDefaults = @(
+    "OSS_BUCKET=patrick0619",
+    "OSS_ENDPOINT=https://oss-cn-shenzhen.aliyuncs.com",
+    "OSS_ASSET_PREFIX=图片素材库",
+    "OSS_REGION=cn-shenzhen",
+    "OSS_RAM_ROLE_NAME=EcsOssAssetReadOnly"
+)
+$existingEnvKeys = @{}
+if (Test-Path -LiteralPath $envFile) {
+    foreach ($line in (Get-Content -LiteralPath $envFile -Encoding UTF8)) {
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') {
+            $existingEnvKeys[$matches[1]] = $true
+        }
+    }
+}
+$missingOssDefaults = @($ossDefaults | Where-Object {
+    $key = $_.Split('=', 2)[0]
+    -not $existingEnvKeys.ContainsKey($key)
+})
+if ($missingOssDefaults.Count -gt 0) {
+    $existingContent = if (Test-Path -LiteralPath $envFile) { [IO.File]::ReadAllText($envFile, [Text.Encoding]::UTF8).TrimEnd() } else { "" }
+    $newContent = @($existingContent, "# Fixed OSS asset library (deployment defaults)", $missingOssDefaults) -join [Environment]::NewLine
+    [IO.File]::WriteAllText($envFile, $newContent + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
+}
+
 # 公网访问依赖 Windows 入站放行；规则按固定名称幂等更新，避免每次部署重复创建。
 New-NetFirewallRule -Name "AI-i2v-FastAPI-8015" -DisplayName "AI-i2v FastAPI 8015" -Direction Inbound -Protocol TCP -LocalPort 8015 -Action Allow -Profile Any -ErrorAction SilentlyContinue | Out-Null
 
