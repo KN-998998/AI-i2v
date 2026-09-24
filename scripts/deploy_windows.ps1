@@ -15,7 +15,7 @@ function Invoke-Checked {
 
     & $FilePath @ArgumentList
     if ($LASTEXITCODE -ne 0) {
-        throw "命令执行失败（$LASTEXITCODE）：$FilePath $($ArgumentList -join ' ')"
+        throw "Command failed ($LASTEXITCODE): $FilePath $($ArgumentList -join ' ')"
     }
 }
 
@@ -37,7 +37,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
     } elseif ($null -ne $pythonOnPath) {
         Invoke-Checked $pythonOnPath.Source @("-m", "venv", $venvRoot)
     } else {
-        throw "未找到 Python。请先安装 Python 3.11，并勾选 Add Python to PATH。"
+        throw "Python 3.11 was not found. Install it and enable Add Python to PATH."
     }
 }
 
@@ -105,13 +105,13 @@ if (-not $ready) {
         Stop-Process -Id $server.Id -Force
     }
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
-    Write-Host "FastAPI 启动失败，最近的错误日志："
+    Write-Host "FastAPI failed to start. Recent error log:"
     if (Test-Path -LiteralPath $stderrLog) {
         Get-Content -LiteralPath $stderrLog -Tail 80
     }
-    throw "FastAPI 未能在 30 秒内就绪。"
+    throw "FastAPI did not become ready within 30 seconds."
 }
 
-Write-Host "Windows 原生部署成功。PID=$($server.Id)，健康检查 http://127.0.0.1:8015/api/config"
-Write-Host "标准输出：$stdoutLog"
-Write-Host "错误输出：$stderrLog"
+Write-Host "Native Windows deployment succeeded. PID=$($server.Id), health check http://127.0.0.1:8015/api/config"
+Write-Host "Stdout: $stdoutLog"
+Write-Host "Stderr: $stderrLog"
