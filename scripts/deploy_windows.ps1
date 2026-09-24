@@ -116,22 +116,33 @@ $ossDefaults = @(
     "OSS_REGION=cn-shenzhen",
     "OSS_RAM_ROLE_NAME=EcsOssAssetReadOnly"
 )
-$existingEnvKeys = @{}
-if (Test-Path -LiteralPath ((Get-Location).Path + "\.env")) {
-    foreach ($line in (Get-Content -LiteralPath ((Get-Location).Path + "\.env") -Encoding UTF8)) {
-        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') {
-            $existingEnvKeys[$matches[1]] = $true
+$envPath = (Get-Location).Path + "\.env"
+$envLines = if (Test-Path -LiteralPath $envPath) { @(Get-Content -LiteralPath $envPath -Encoding UTF8) } else { @() }
+$defaultMap = @{}
+foreach ($default in $ossDefaults) {
+    $parts = $default.Split('=', 2)
+    $defaultMap[$parts[0]] = $default
+}
+$changedEnv = $false
+if ($envLines.Count -gt 0) {
+foreach ($index in 0..($envLines.Count - 1)) {
+    if ($envLines[$index] -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
+        $key = $matches[1]
+        if ($defaultMap.ContainsKey($key) -and [string]::IsNullOrWhiteSpace($matches[2])) {
+            $envLines[$index] = $defaultMap[$key]
+            $changedEnv = $true
         }
+        $defaultMap.Remove($key)
     }
 }
-$missingOssDefaults = @($ossDefaults | Where-Object {
-    $key = $_.Split('=', 2)[0]
-    -not $existingEnvKeys.ContainsKey($key)
-})
-if ($missingOssDefaults.Count -gt 0) {
-    $existingContent = if (Test-Path -LiteralPath ((Get-Location).Path + "\.env")) { [IO.File]::ReadAllText(((Get-Location).Path + "\.env"), [Text.Encoding]::UTF8).TrimEnd() } else { "" }
-    $newContent = @($existingContent, "# Fixed OSS asset library (deployment defaults)", $missingOssDefaults) -join [Environment]::NewLine
-    [IO.File]::WriteAllText(((Get-Location).Path + "\.env"), $newContent + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
+}
+if ($defaultMap.Count -gt 0) {
+    $envLines += "# Fixed OSS asset library (deployment defaults)"
+    $envLines += @($defaultMap.Values)
+    $changedEnv = $true
+}
+if ($changedEnv) {
+    [IO.File]::WriteAllLines($envPath, $envLines, (New-Object Text.UTF8Encoding($false)))
 }
 
 # 公网访问依赖 Windows 入站放行；规则按固定名称幂等更新，避免每次部署重复创建。
