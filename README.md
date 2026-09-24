@@ -264,7 +264,7 @@ pytest
 
 ## 部署
 
-生产环境采用 Docker Compose，Nginx 反向代理应用的 `127.0.0.1:8015` 服务。
+生产环境运行在阿里云 Windows ECS 上，使用 Python 原生 FastAPI 进程监听 `0.0.0.0:8015`，由 PowerShell 脚本负责依赖安装、前端构建、重启和健康检查，不使用 Docker。
 
 - 常规发布：推送 `main`，由 GitHub Actions 执行 CI/CD（需要配置仓库 Secrets）
 - 人工兜底：运行 `deploy_cloud.bat`

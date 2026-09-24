@@ -4,62 +4,26 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 chcp 65001 >nul
 
-set "DEPLOY_HOST=47.84.26.217"
-set "DEPLOY_PORT=22"
-set "DEPLOY_USER=deploy"
-set "DEPLOY_PATH=/opt/apps/short-video"
-set "DEPLOY_KEY=%USERPROFILE%\.ssh\short-video-github-actions"
-
-where git >nul 2>nul
-if errorlevel 1 (
-    echo [ERROR] Git was not found in PATH.
-    pause
+if not defined DEPLOY_HOST (
+    echo [ERROR] Set DEPLOY_HOST to the Windows ECS public IP or domain first.
     exit /b 1
 )
+if not defined DEPLOY_PORT set "DEPLOY_PORT=22"
+if not defined DEPLOY_USER set "DEPLOY_USER=Administrator"
+if not defined DEPLOY_PATH set "DEPLOY_PATH=C:\短视频生产提效"
+if not defined DEPLOY_KEY set "DEPLOY_KEY=%USERPROFILE%\.ssh\short-video-windows"
 
-where ssh >nul 2>nul
-if errorlevel 1 (
-    echo [ERROR] Windows OpenSSH Client was not found in PATH.
-    pause
-    exit /b 1
-)
-
+where git >nul 2>nul || (echo [ERROR] Git was not found in PATH. & exit /b 1)
+where ssh >nul 2>nul || (echo [ERROR] OpenSSH Client was not found in PATH. & exit /b 1)
 if not exist "%DEPLOY_KEY%" (
-    echo [ERROR] Deployment SSH key was not found:
-    echo %DEPLOY_KEY%
-    pause
+    echo [ERROR] Deployment SSH key was not found: %DEPLOY_KEY%
     exit /b 1
 )
 
-for /f "delims=" %%S in ('git status --porcelain') do (
-    echo [WARN] Local uncommitted changes exist. Only committed code will be deployed.
-    goto :push
-)
+echo [1/2] Pushing committed code to GitHub...
+git push origin main || exit /b 1
 
-:push
-set "AHEAD_COUNT="
-for /f "delims=" %%C in ('git rev-list --count origin/main..HEAD 2^>nul') do set "AHEAD_COUNT=%%C"
-if "%AHEAD_COUNT%"=="" (
-    echo [1/2] Remote tracking branch is unavailable. Pushing committed main branch to GitHub...
-    git push origin main
-    if errorlevel 1 (
-        echo [ERROR] Git push failed. Check the network or remote configuration before deploying.
-        pause
-        exit /b 1
-    )
-) else if "%AHEAD_COUNT%"=="0" (
-    echo [1/2] Local main is already on GitHub. Skipping redundant push.
-) else (
-    echo [1/2] Pushing %AHEAD_COUNT% committed local change^(s^) to GitHub...
-    git push origin main
-    if errorlevel 1 (
-        echo [ERROR] Git push failed. Check the network or remote configuration before deploying.
-        pause
-        exit /b 1
-    )
-)
-
-echo [2/2] Deploying to ECS and waiting for the health check...
+echo [2/2] Deploying to Windows ECS...
 ssh -i "%DEPLOY_KEY%" -p %DEPLOY_PORT% ^
     -o IdentitiesOnly=yes ^
     -o BatchMode=yes ^
@@ -71,13 +35,10 @@ ssh -i "%DEPLOY_KEY%" -p %DEPLOY_PORT% ^
     -o ServerAliveCountMax=20 ^
     -o StrictHostKeyChecking=accept-new ^
     "%DEPLOY_USER%@%DEPLOY_HOST%" ^
-    "cd '%DEPLOY_PATH%' && for attempt in 1 2 3; do git -c http.connectTimeout=20 -c http.lowSpeedLimit=1 -c http.lowSpeedTime=300 pull --ff-only origin main && break; test $attempt -eq 3 && exit 1; sleep 10; done && bash scripts/deploy_server.sh"
+    "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { Set-Location -LiteralPath '%DEPLOY_PATH%'; & (Join-Path '%DEPLOY_PATH%' 'scripts\\deploy_windows.ps1') -ProjectRoot '%DEPLOY_PATH%' }\""
 if errorlevel 1 (
-    echo [ERROR] ECS deployment failed. The server output above contains the cause.
-    pause
+    echo [ERROR] Windows ECS deployment failed.
     exit /b 1
 )
 
-echo [OK] ECS deployment completed. Refresh the browser to load the new version.
-pause
-exit /b 0
+echo [OK] Windows ECS deployment completed.

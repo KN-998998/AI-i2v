@@ -8,6 +8,29 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 WEB_ROOT = PROJECT_ROOT / "web"
 STATIC_DIR = WEB_ROOT / "static"
 LOG_DIR = PROJECT_ROOT / "logs"
+
+
+def _load_dotenv(env_path: Path) -> None:
+    """让原生 Windows 进程也能读取服务器本地 .env，且不覆盖系统环境变量。"""
+    if not env_path.is_file():
+        return
+    try:
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv(PROJECT_ROOT / ".env")
+
 CANVAS_DRAFT_ROOT = PROJECT_ROOT / "output" / "canvas_drafts"
 CANVAS_BACKGROUND_ROOT = PROJECT_ROOT / "output" / "background_templates"
 WEEKLY_PLAN_DB = PROJECT_ROOT / "output" / "weekly_plans.sqlite3"

@@ -41,7 +41,7 @@ jobs:
       - name: Backend test
         run: mkdir -p .tmp && python -m pytest
   deploy:
-    name: Deploy to ECS
+    name: Deploy to Windows ECS
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -56,7 +56,7 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$HOME/.ssh/short-video-deploy"
           chmod 600 "$HOME/.ssh/short-video-deploy"
           ssh-keygen -y -f "$HOME/.ssh/short-video-deploy" >/dev/null
-      - name: Deploy
+      - name: Deploy to Windows ECS
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
@@ -68,6 +68,7 @@ jobs:
           test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_PATH"
+          REMOTE_COMMAND="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"$DEPLOY_PATH\\scripts\\deploy_windows.ps1\" -ProjectRoot \"$DEPLOY_PATH\""
           ssh -i "$HOME/.ssh/short-video-deploy" -p "$DEPLOY_PORT" \
             -o IdentitiesOnly=yes \
             -o BatchMode=yes \
@@ -79,4 +80,4 @@ jobs:
             -o ServerAliveCountMax=20 \
             -o StrictHostKeyChecking=accept-new \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && for attempt in 1 2 3; do git -c http.connectTimeout=20 -c http.lowSpeedLimit=1 -c http.lowSpeedTime=300 pull --ff-only origin main && break; test \$attempt -eq 3 && exit 1; sleep 10; done && bash scripts/deploy_server.sh"
+            "$REMOTE_COMMAND"

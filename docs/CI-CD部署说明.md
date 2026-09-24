@@ -23,8 +23,8 @@ flowchart LR
   D --> E[pytest]
   E --> F[SSH 到 ECS]
   F --> G[git pull --ff-only]
-  G --> H[deploy_server.sh]
-  H --> I[容器健康检查]
+  G --> H[PowerShell 原生部署]
+  H --> I[FastAPI 健康检查]
 ```
 
 ### Verify 作业
@@ -45,7 +45,7 @@ flowchart LR
 1. 从 GitHub Secrets 临时写入 SSH 私钥并校验格式。
 2. 使用密钥认证连接目标主机。
 3. 在目标目录执行 `git pull --ff-only origin main`，网络失败时最多重试 3 次。
-4. 运行 `bash scripts/deploy_server.sh` 构建镜像、重启服务并检查健康接口。
+4. 在 Windows ECS 上执行 `scripts\deploy_windows.ps1`，更新 Python 依赖、构建前端、重启 FastAPI 并检查健康接口。
 
 ## GitHub Secrets
 
@@ -53,10 +53,10 @@ flowchart LR
 
 | Secret | 说明 |
 | --- | --- |
-| `DEPLOY_HOST` | ECS 主机地址或域名 |
+| `DEPLOY_HOST` | Windows ECS 主机地址或域名 |
 | `DEPLOY_PORT` | SSH 端口；未设置时默认为 `22` |
 | `DEPLOY_USER` | 部署用户 |
-| `DEPLOY_PATH` | 服务器上的项目绝对路径 |
+| `DEPLOY_PATH` | Windows 项目绝对路径，例如 `C:\短视频生产提效` |
 | `DEPLOY_SSH_KEY` | Actions 专用私钥完整内容 |
 
 私钥只可存于 GitHub Secret，不可提交到仓库、写入 README 或粘贴到工单。
@@ -64,17 +64,19 @@ flowchart LR
 ## 服务器前置条件
 
 - 项目目录已经存在，且远程仓库可由部署用户拉取。
-- 已安装 Docker 与 Docker Compose。
-- 部署用户具备运行 Docker 的权限。
+- 已安装 Python 3.11、Node.js 22、Git 和 Windows OpenSSH Server。
+- 部署用户具备运行 PowerShell、Python 和 npm 的权限。
 - 服务端保留自己的 `.env`、`output/` 与 `logs/`；部署不应覆盖这些运行数据。
-- Nginx 代理到 `127.0.0.1:8015`，容器健康检查使用 `/api/config`。
+- `scripts\deploy_windows.ps1` 会把 FastAPI 绑定到 `0.0.0.0:8015`，并以 PID 文件管理进程。
+- `.env` 至少配置 `OSS_BUCKET`、`OSS_ENDPOINT`、`OSS_REGION` 和 `OSS_ASSET_PREFIX=图片素材库`；ECS RAM 角色名留空时由元数据服务自动发现。
 
 建议在首次部署前由服务器管理员确认：
 
-```bash
-docker ps
-docker compose version
-curl --fail http://127.0.0.1:8015/api/config
+```powershell
+python --version
+node --version
+Get-Process -Id (Get-Content .\logs\fastapi.pid)
+Invoke-WebRequest http://127.0.0.1:8015/api/config
 ```
 
 ## 日常发布步骤
@@ -95,7 +97,7 @@ git push origin main
 | Verify 失败 | Actions 日志中的具体测试或构建步骤 |
 | SSH 失败 | `DEPLOY_*` Secrets、主机网络、部署用户和公钥授权 |
 | `git pull --ff-only` 失败 | 服务器工作树是否被人工修改；不要直接在服务器提交业务代码 |
-| 容器未健康 | `docker compose ps`、`docker compose logs --tail=100`、`/api/config` |
+| 服务未启动 | 查看 `logs\fastapi-*.err.log`、PID 文件和 `/api/config` |
 | 构建被系统杀死 | 主机内存与磁盘空间；避免在低配环境并发构建多个镜像 |
 
 ## 回滚原则
