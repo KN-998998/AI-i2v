@@ -71,6 +71,9 @@ try {
 }
 
 $pidFile = Join-Path $logsRoot "fastapi.pid"
+$taskName = "AI-i2v FastAPI"
+Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $pidFile) {
     $oldPidText = (Get-Content -LiteralPath $pidFile -Raw).Trim()
     $oldPid = 0
@@ -109,41 +112,36 @@ $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $stdoutLog = Join-Path $logsRoot "fastapi-$stamp.out.log"
 $stderrLog = Join-Path $logsRoot "fastapi-$stamp.err.log"
 
-$server = Start-Process -FilePath $venvPython `
-    -ArgumentList @("-X", "utf8", "-m", "web.run_server") `
-    -WorkingDirectory $ProjectRoot `
-    -RedirectStandardOutput $stdoutLog `
-    -RedirectStandardError $stderrLog `
-    -WindowStyle Hidden `
-    -PassThru
-$server.Id | Set-Content -LiteralPath $pidFile -Encoding ascii
+$launcherScript = Join-Path $ProjectRoot "scripts\run_fastapi_windows.ps1"
+$taskAction = New-ScheduledTaskAction `
+    -Execute (Get-Command powershell.exe -ErrorAction Stop).Source `
+    -Argument "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$launcherScript`" -ProjectRoot `"$ProjectRoot`" -OutputLog `"$stdoutLog`"" `
+    -WorkingDirectory $ProjectRoot
+$taskTrigger = New-ScheduledTaskTrigger -AtStartup
+$taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Force | Out-Null
+Start-ScheduledTask -TaskName $taskName
 
 $ready = $false
+$serverPid = 0
 for ($attempt = 1; $attempt -le 30; $attempt++) {
     Start-Sleep -Seconds 1
     try {
-        if (-not (Get-Process -Id $server.Id -ErrorAction SilentlyContinue)) {
-            break
-        }
         $response = Invoke-WebRequest -Uri "http://127.0.0.1:8015/api/config" -UseBasicParsing -TimeoutSec 3
         $openApiResponse = Invoke-WebRequest -Uri "http://127.0.0.1:8015/openapi.json" -UseBasicParsing -TimeoutSec 3
         $openApi = $openApiResponse.Content | ConvertFrom-Json
         $hasOssRoute = $null -ne $openApi.paths.PSObject.Properties["/api/oss/categories"]
         if ($response.StatusCode -eq 200 -and $openApiResponse.StatusCode -eq 200 -and $hasOssRoute) {
+            $serverPid = (Get-NetTCPConnection -LocalPort 8015 -State Listen -ErrorAction Stop | Select-Object -First 1).OwningProcess
             $ready = $true
             break
         }
     } catch {
-        if (-not (Get-Process -Id $server.Id -ErrorAction SilentlyContinue)) {
-            break
-        }
     }
 }
 
 if (-not $ready) {
-    if (Get-Process -Id $server.Id -ErrorAction SilentlyContinue) {
-        Stop-Process -Id $server.Id -Force
-    }
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
     Write-Host "FastAPI failed to start. Recent error log:"
     if (Test-Path -LiteralPath $stderrLog) {
@@ -152,6 +150,7 @@ if (-not $ready) {
     throw "FastAPI did not become ready within 30 seconds."
 }
 
-Write-Host "Native Windows deployment succeeded. PID=$($server.Id), health check http://127.0.0.1:8015/api/config"
+$serverPid | Set-Content -LiteralPath $pidFile -Encoding ascii
+Write-Host "Native Windows deployment succeeded. PID=$serverPid, health check http://127.0.0.1:8015/api/config"
 Write-Host "Stdout: $stdoutLog"
 Write-Host "Stderr: $stderrLog"
