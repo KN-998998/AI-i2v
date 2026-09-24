@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 Set-Location -LiteralPath $ProjectRoot
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
 
 function Invoke-Checked {
     param(
@@ -41,7 +43,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
     }
 }
 
-Invoke-Checked $venvPython @("-m", "pip", "install", "--disable-pip-version-check", "-r", "requirements.txt")
+Invoke-Checked $venvPython @("-X", "utf8", "-m", "pip", "install", "--disable-pip-version-check", "-r", "requirements.txt")
 
 $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
 Push-Location (Join-Path $ProjectRoot "frontend")
@@ -66,8 +68,6 @@ if (Test-Path -LiteralPath $pidFile) {
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
 }
 
-$env:PYTHONUTF8 = "1"
-$env:PYTHONIOENCODING = "utf-8"
 $env:APP_HOST = "0.0.0.0"
 $env:APP_PORT = "8015"
 $env:APP_RELOAD = "false"
