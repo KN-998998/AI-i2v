@@ -22,6 +22,7 @@ from web.services.canvas_compose import recover_compose_jobs
 from web.services.canvas_generation import recover_generation_jobs
 from web.services.canvas_image_processing import recover_image_processing_jobs
 from web.services.oss_jobs import cleanup_expired_oss_jobs, recover_oss_jobs
+from web.services.oss_inventory import start_scheduler as start_oss_inventory_scheduler, stop_scheduler as stop_oss_inventory_scheduler
 from web.services.weekly_plans import initialize as initialize_weekly_plans, start_scheduler as start_weekly_scheduler, stop_scheduler as stop_weekly_scheduler
 
 configure_logging()
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     async def lifespan(_app: FastAPI):
         initialize_weekly_plans()
         start_weekly_scheduler()
+        start_oss_inventory_scheduler()
         cleaned_oss = cleanup_expired_oss_jobs()
         recovered_generation = recover_generation_jobs()
         recovered_image = recover_image_processing_jobs()
@@ -53,6 +55,7 @@ def create_app() -> FastAPI:
             yield
         finally:
             stop_weekly_scheduler()
+            stop_oss_inventory_scheduler()
 
     app = FastAPI(title="引流视频生产平台", version="0.2.0", lifespan=lifespan)
     app.include_router(router)

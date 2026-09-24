@@ -43,6 +43,7 @@ from web.services.canvas_quality import analyze_image, analyze_video, preflight_
 from web.services.canvas_state import background_file, list_background_files, load_draft, save_asset_library_folder_upload, save_background_upload, save_draft, save_upload, uploaded_file
 from web.services.oss_asset_provider import OssAssetProvider
 from web.services.oss_jobs import allow_submission, asset_file as oss_asset_file, approve_oss_job, cancel_oss_job, create_oss_job, get_oss_job, mark_oss_asset_for_regeneration
+from web.services.oss_inventory import get_inventory as get_oss_inventory
 from web.core.settings import OSS_BUCKET, OSS_ENDPOINT
 
 router = APIRouter()
@@ -504,6 +505,12 @@ def diagnose_oss_layout() -> dict[str, Any]:
         return OssAssetProvider().diagnose_layout()
     except (OSError, ValueError, RuntimeError) as exc:
         raise _json_error(str(exc), 503) from exc
+
+
+@router.get("/api/oss/inventory")
+def get_oss_inventory_snapshot() -> dict[str, Any]:
+    """Return the last safe weekly OSS inventory and trigger a stale refresh."""
+    return get_oss_inventory()
 
 
 def _oss_job_response(job: dict[str, Any]) -> dict[str, Any]:

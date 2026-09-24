@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from web.app import create_app
 from web.services import oss_jobs
 from web.services import oss_asset_provider as oss_asset_provider_module
+from web.services import oss_inventory
 from web.services.oss_asset_provider import OssAssetProvider
 
 
@@ -190,3 +191,27 @@ def test_oss_job_request_limits_are_rejected():
     )
 
     assert response.status_code == 400
+
+
+def test_oss_inventory_persists_category_counts(monkeypatch, tmp_path):
+    class _InventoryProvider:
+        def diagnose_layout(self):
+            return {
+                "layout_ready": True,
+                "categories": [
+                    {"category": "水果", "dish_folder_count": 2, "image_count": 5},
+                    {"category": "主菜", "dish_folder_count": 7, "image_count": 12},
+                ],
+            }
+
+    monkeypatch.setattr(oss_inventory, "OSS_INVENTORY_PATH", tmp_path / "oss-inventory.json")
+    monkeypatch.setattr(oss_inventory, "OssAssetProvider", _InventoryProvider)
+    snapshot = oss_inventory.refresh_inventory(force=True)
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["total_dish_count"] == 9
+    assert snapshot["categories"] == [
+        {"category": "水果", "dish_count": 2, "image_count": 5},
+        {"category": "主菜", "dish_count": 7, "image_count": 12},
+    ]
+    assert oss_inventory.get_inventory()["scanned_at"] == snapshot["scanned_at"]

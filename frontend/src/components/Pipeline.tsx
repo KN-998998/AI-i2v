@@ -20,7 +20,7 @@ export function Pipeline({ path, collapsed, onToggle }: { path: WorkflowRoute; c
     <button type="button" className="pipeline-tutorial-button" onClick={() => requestTutorial(path)}><span aria-hidden="true">?</span><span><strong>使用教程</strong><small>查看当前页面或步骤教学</small></span></button>
     <button type="button" className={`canvas-link ${path === "/canvas-mvp" ? "active" : ""}`} onClick={() => navigate("/canvas-mvp")} title="流程画布总览"><span className="canvas-link-icon">⌘</span><span><strong>流程画布总览</strong><small>节点与连接关系</small></span></button>
     <TaskCenterLink path={path} />
-    <button type="button" className={`task-center-link ${path === "/workflow/weekly-plan" ? "active" : ""}`} onClick={() => navigate("/workflow/weekly-plan")} title="周计划生产"><span className="task-center-link-icon">周</span><span><strong>周计划生产</strong><small>配置自动选材与生成计划</small></span></button>
+    <button type="button" className={`task-center-link ${path === "/workflow/weekly-plan" ? "active" : ""}`} onClick={() => navigate("/workflow/weekly-plan")} title="周计划生产"><span className="task-center-link-icon">周</span><span><strong>周计划生产</strong><small>按固定云端素材库自动生产</small></span></button>
     <div className="pipeline-group-label"><span>01—07</span><span>制作流程</span></div>
     <ol className="step-line">{steps.map(({ item, index, progress: stepProgress }) => <StepLineItem key={item.path} item={item} active={path === item.path} progress={stepProgress} stepIndex={index} />)}</ol>
     <div className="pipeline-footer"><span className="footer-dot" />草稿自动保存<div>每 30 秒同步片段库</div></div>

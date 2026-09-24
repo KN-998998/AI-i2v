@@ -53,7 +53,6 @@ export function HomePage() {
     <div className="home-links">
       <button type="button" className="link-button" onClick={() => navigate("/canvas-mvp")}>查看完整流程图</button>
       <button type="button" className="link-button" onClick={() => navigate("/workflow/tasks")}>任务中心</button>
-      <button type="button" className="link-button" onClick={() => navigate("/workflow/asset-library-review")}>整理素材库</button>
     </div>
   </main>;
 }

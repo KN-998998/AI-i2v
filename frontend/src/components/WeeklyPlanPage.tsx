@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { createWeeklyPlan, fetchWeeklyPlanReadiness, fetchWeeklyPlans, updateWeeklyPlanDay, updateWeeklyPlanStatus, uploadAssetLibraryFolder, type WeeklyDailyPlan, type WeeklyPlan, type WeeklyPlanReadiness } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import { createWeeklyPlan, fetchWeeklyPlanReadiness, fetchWeeklyPlans, updateWeeklyPlanDay, updateWeeklyPlanStatus, type WeeklyDailyPlan, type WeeklyPlan, type WeeklyPlanReadiness } from "../api";
 import { batchPlanReadiness, missingTemplateKinds } from "../batchPlanReadiness";
 import { DRAFT_ID_STORAGE_KEY } from "../draftIdentity";
 import { bgmLabel, DISH_CATEGORY_OPTIONS } from "../model";
@@ -48,22 +48,15 @@ export function WeeklyPlanPage({ onToast }: Props) {
   const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [startDate, setStartDate] = useState(currentDate);
   const [durationDays, setDurationDays] = useState(7);
-  const [assetRoot, setAssetRoot] = useState("");
-  const [backgroundRoot, setBackgroundRoot] = useState("");
   const [runAt, setRunAt] = useState("09:00");
   const [form, setForm] = useState<DailyForm>(defaultForm);
   const [manualCounts, setManualCounts] = useState(false);
   const [manualCandidates, setManualCandidates] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [customRoots, setCustomRoots] = useState(false);
   const [readiness, setReadiness] = useState<WeeklyPlanReadiness | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
-  const [folderUploadSummary, setFolderUploadSummary] = useState<{ asset?: string; background?: string }>({});
-  const assetFolderInputRef = useRef<HTMLInputElement>(null);
-  const backgroundFolderInputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<DailyForm>(defaultForm);
 
@@ -81,8 +74,8 @@ export function WeeklyPlanPage({ onToast }: Props) {
   const missingKinds = useMemo(() => missingTemplateKinds(nodes), [nodes]);
   const ready = batchPlanReadiness({
     loading: readinessLoading,
-    library: customRoots || !readiness ? null : readiness,
-    customRoots: customRoots ? { asset: assetRoot, background: backgroundRoot } : null,
+    library: readiness,
+    customRoots: null,
     missingKinds,
     candidateCount,
     clipsPerVideo: form.clips_per_video,
@@ -104,39 +97,10 @@ export function WeeklyPlanPage({ onToast }: Props) {
   }, [onToast]);
   // 已经有计划在跑时，先让人看到今天的进度，创建表单收起来。
   useEffect(() => { setShowCreate(plans.length === 0); }, [plans.length]);
-  useEffect(() => {
-    for (const input of [assetFolderInputRef.current, backgroundFolderInputRef.current]) {
-      input?.setAttribute("webkitdirectory", "");
-      input?.setAttribute("directory", "");
-    }
-  }, [customRoots]);
-
-  const uploadFolder = async (kind: "asset" | "background", event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    setFolderBusy(kind);
-    try {
-      const result = await uploadAssetLibraryFolder(draftId, kind === "asset" ? "assets" : "backgrounds", files);
-      if (kind === "asset") setAssetRoot(result.root);
-      else setBackgroundRoot(result.root);
-      const size = result.totalSize >= 1024 * 1024
-        ? `${(result.totalSize / (1024 * 1024)).toFixed(1)} MB`
-        : `${Math.max(1, Math.ceil(result.totalSize / 1024))} KB`;
-      const summary = `已上传 ${result.fileCount} 个文件（${size}）`;
-      setFolderUploadSummary(current => ({ ...current, [kind]: summary }));
-      onToast(`${kind === "asset" ? "菜品" : "背景"}素材库${summary}`);
-    } catch (error) {
-      onToast(error instanceof Error ? error.message : "文件夹上传失败");
-    } finally {
-      setFolderBusy(null);
-    }
-  };
-
   const create = async () => {
     if (!ready.ok) return onToast(ready.blocker);
-    const sourceAsset = customRoots ? assetRoot.trim() : readiness?.assetRoot ?? "";
-    const sourceBackground = customRoots ? backgroundRoot.trim() : readiness?.backgroundRoot ?? "";
+    const sourceAsset = readiness?.assetRoot ?? "";
+    const sourceBackground = readiness?.backgroundRoot ?? "";
     if (!sourceAsset || !sourceBackground) return onToast("没有可用的素材库文件夹");
     if (manualCounts && total !== candidateCount) return onToast(`手动分类数量合计必须等于每天要抽的 ${candidateCount} 道菜`);
     setBusy(true);
@@ -187,19 +151,16 @@ export function WeeklyPlanPage({ onToast }: Props) {
   };
 
   const goFix = () => {
-    if (ready.action === "library") return navigate("/workflow/asset-library-review");
     if (ready.action === "background") return navigate("/workflow/image-processing");
     if (ready.action === "template") return navigate("/workflow/assets");
   };
-  const fixLabel = ready.action === "library" ? "去整理素材库" : ready.action === "background" ? "去传背景图" : ready.action === "template" ? "去调样板" : "";
+  const fixLabel = ready.action === "background" ? "去传背景图" : ready.action === "template" ? "去调样板" : "";
 
   const libraryLine = readinessLoading
     ? "正在读取素材库…"
-    : customRoots
-      ? "用自定义文件夹"
-      : readiness
-        ? `整理好的素材库 · ${readiness.dishCount} 道菜可用 · 背景图 ${readiness.backgroundCount} 张`
-        : "没读到素材库情况";
+    : readiness
+      ? `固定云端素材库 · ${readiness.dishCount} 道菜可用 · 背景图 ${readiness.backgroundCount} 张`
+      : "没读到素材库情况";
 
   const entry = <>
     <section className="batch-start">
@@ -209,17 +170,9 @@ export function WeeklyPlanPage({ onToast }: Props) {
           <div className="batch-row-body">
             <h2>用哪个素材库</h2>
             <p className="batch-row-value">{libraryLine}</p>
-            {!customRoots && readiness && readiness.pendingCount > 0 && <p className="batch-row-hint">还有 {readiness.pendingCount} 道菜没确认分类，抽不到它们。<button type="button" className="link-button" onClick={() => navigate("/workflow/asset-library-review")}>去确认</button></p>}
+            {readiness && readiness.pendingCount > 0 && <p className="batch-row-hint">还有 {readiness.pendingCount} 道菜正在等待库存扫描更新。</p>}
           </div>
-          <button type="button" className="link-button batch-row-switch" onClick={() => setCustomRoots(value => !value)}>{customRoots ? "改回整理好的素材库" : "改用其他文件夹"}</button>
         </li>
-        {customRoots && <li className="batch-row batch-row-expand">
-          <span className="batch-row-index" aria-hidden="true" />
-          <div className="batch-row-body batch-custom-roots">
-            <label className="field"><span>菜品文件夹</span><div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="上传后自动填写" /><button type="button" className="btn" disabled={folderBusy !== null || busy} onClick={() => assetFolderInputRef.current?.click()}>{folderBusy === "asset" ? "上传中..." : "上传文件夹"}</button></div><input ref={assetFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("asset", event)} /><small className="muted">JPG、JPEG、PNG、WEBP、GIF · 单文件 ≤ 50 MB。{folderUploadSummary.asset ? ` ${folderUploadSummary.asset}` : ""}</small></label>
-            <label className="field"><span>背景文件夹</span><div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="上传后自动填写" /><button type="button" className="btn" disabled={folderBusy !== null || busy} onClick={() => backgroundFolderInputRef.current?.click()}>{folderBusy === "background" ? "上传中..." : "上传文件夹"}</button></div><input ref={backgroundFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("background", event)} /><small className="muted">JPG、JPEG、PNG、WEBP、GIF · 单文件 ≤ 50 MB。{folderUploadSummary.background ? ` ${folderUploadSummary.background}` : ""}</small></label>
-          </div>
-        </li>}
         <li className="batch-row">
           <span className="batch-row-index">2</span>
           <div className="batch-row-body">
@@ -230,7 +183,7 @@ export function WeeklyPlanPage({ onToast }: Props) {
               <button type="button" className="btn batch-step-button" disabled={form.video_count >= maxVideoCount} onClick={() => setForm(value => ({ ...value, video_count: Math.min(maxVideoCount, value.video_count + 1) }))} aria-label="多一条">+</button>
               <span className="batch-step-unit">条 / 天</span>
             </div>
-            <p className="batch-row-hint">每条拼 {form.clips_per_video} 段，所以每天抽 {candidateCount} 道菜；同一道菜 3 天内不会重复出现。{!customRoots && readiness && ready.maxVideosPerDay > 0 ? ` 按现在的库存，每天最多 ${ready.maxVideosPerDay} 条。` : ""}</p>
+            <p className="batch-row-hint">每条拼 {form.clips_per_video} 段，所以每天抽 {candidateCount} 道菜；同一道菜 3 天内不会重复出现。{readiness && ready.maxVideosPerDay > 0 ? ` 按现在的库存，每天最多 ${ready.maxVideosPerDay} 条。` : ""}</p>
           </div>
         </li>
         <li className="batch-row">

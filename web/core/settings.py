@@ -54,6 +54,8 @@ OSS_MAX_TOTAL_ASSETS = max(1, int(os.environ.get("OSS_MAX_TOTAL_ASSETS", "40")))
 OSS_MAX_IMAGE_BYTES = max(1, int(os.environ.get("OSS_MAX_IMAGE_BYTES", str(50 * 1024 * 1024))))
 OSS_MAX_REQUESTS_PER_MINUTE = max(1, int(os.environ.get("OSS_MAX_REQUESTS_PER_MINUTE", "30")))
 OSS_JOB_RETENTION_HOURS = max(1, int(os.environ.get("OSS_JOB_RETENTION_HOURS", "72")))
+OSS_INVENTORY_PATH = Path(os.environ.get("OSS_INVENTORY_PATH", PROJECT_ROOT / "output" / "oss_inventory.json"))
+OSS_INVENTORY_INTERVAL_SECONDS = max(3600, int(os.environ.get("OSS_INVENTORY_INTERVAL_SECONDS", str(7 * 24 * 60 * 60))))
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

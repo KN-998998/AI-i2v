@@ -92,6 +92,85 @@ export async function fetchBackgroundTemplates(): Promise<BackgroundTemplate[]> 
   return parseResponse<BackgroundTemplate[]>(response);
 }
 
+export type OssAsset = {
+  asset_id: string;
+  category: string;
+  dish_name: string;
+  filename: string;
+  status: string;
+  normalized_url?: string;
+  source_url?: string;
+  skip_reason?: string;
+  normalized_width?: number;
+  normalized_height?: number;
+};
+
+export type OssAssetJob = {
+  job_id: string;
+  status: "queued" | "selecting_materials" | "downloading" | "preprocessing" | "awaiting_review" | "completed" | "error" | "cancelled";
+  stage?: string;
+  selections: Array<{ category: string; count: number }>;
+  assets: OssAsset[];
+  skipped_assets?: OssAsset[];
+  error?: string;
+  asset_count?: number;
+  output_resolution?: { width: number; height: number };
+};
+
+export type OssInventory = {
+  status: "scanning" | "ready" | "stale" | "error";
+  scanned_at?: string;
+  next_scan_at?: string;
+  categories: Array<{ category: string; dish_count: number; image_count: number }>;
+  total_dish_count?: number;
+  error?: string | null;
+  refreshing?: boolean;
+};
+
+export async function fetchOssInventory(): Promise<OssInventory> {
+  const response = await fetch(`${API_BASE_URL}/api/oss/inventory`, { cache: "no-store" });
+  return parseResponse<OssInventory>(response);
+}
+
+export async function fetchOssCategories(): Promise<string[]> {
+  const response = await fetch(`${API_BASE_URL}/api/oss/categories`, { cache: "no-store" });
+  const payload = await parseResponse<{ categories: string[] }>(response);
+  return payload.categories;
+}
+
+export async function createOssAssetJob(selections: Array<{ category: string; count: number }>): Promise<OssAssetJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ selections }),
+  });
+  return parseResponse<OssAssetJob>(response);
+}
+
+export async function getOssAssetJob(jobId: string): Promise<OssAssetJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+  return parseResponse<OssAssetJob>(response);
+}
+
+export async function approveOssAssetJob(jobId: string): Promise<OssAssetJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}/approve`, { method: "POST" });
+  return parseResponse<OssAssetJob>(response);
+}
+
+export async function cancelOssAssetJob(jobId: string): Promise<OssAssetJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  return parseResponse<OssAssetJob>(response);
+}
+
+export async function flagOssAssetForRegeneration(jobId: string, assetId: string): Promise<OssAssetJob> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}/regenerate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ asset_id: assetId }),
+  });
+  return parseResponse<OssAssetJob>(response);
+}
+
 export async function fetchDefaultBgm(): Promise<Array<{ name: string; url: string }>> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/bgm/default`, { cache: "no-store" });
   return parseResponse<Array<{ name: string; url: string }>>(response);

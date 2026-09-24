@@ -9,7 +9,7 @@ import { requestTutorial } from "../tutorial";
 import { deriveWorkflowProgress, isWorkflowRouteUnlocked } from "../workflowProgress";
 import { generatorGenerationBlockReason } from "../generatorReadiness";
 import { StoryboardTimeline } from "./StoryboardTimeline";
-import { AssetLibraryBatchPanel } from "./AssetLibraryBatchPanel";
+import { OssAssetExtractionPanel } from "./OssAssetExtractionPanel";
 import { EffectStepPage } from "./EffectStepPage";
 
 type StepPageProps = { onToast: (message: string) => void };
@@ -42,7 +42,7 @@ export function StepPage({ route, onToast }: StepPageProps & { route: WorkflowRo
     </div>
   </StepFrame>;
   return <StepFrame route={route} title={title} onToast={onToast}>
-    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <AssetLibraryBatchPanel onToast={onToast} />}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div></div>
+    <div className="step-page-grid"><div className="step-page-main">{kind && <NodeManager kind={kind} onToast={onToast} />}{route === "/workflow/assets" && <OssAssetExtractionPanel onToast={onToast} />}<div className="step-context"><StepSummary route={route} nodeId={nodeId} /><StepNext route={route} /></div></div></div>
     <Inspector onToast={onToast} />
   </StepFrame>;
 }
