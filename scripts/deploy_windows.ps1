@@ -144,7 +144,9 @@ if (-not $ready) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
     Write-Host "FastAPI failed to start. Recent error log:"
-    if (Test-Path -LiteralPath $stderrLog) {
+    if (Test-Path -LiteralPath $stdoutLog) {
+        Get-Content -LiteralPath $stdoutLog -Tail 80
+    } elseif (Test-Path -LiteralPath $stderrLog) {
         Get-Content -LiteralPath $stderrLog -Tail 80
     }
     throw "FastAPI did not become ready within 30 seconds."
