@@ -81,3 +81,23 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "$REMOTE_COMMAND"
+          REMOTE_STATUS="powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"\$listener=Get-NetTCPConnection -LocalPort 8015 -State Listen -ErrorAction SilentlyContinue; if (\$null -eq \$listener) { throw 'TCP 8015 is not listening after SSH deploy' }; \$listener | Select-Object LocalAddress,LocalPort,OwningProcess | Format-Table -AutoSize\""
+          ssh -i "$HOME/.ssh/short-video-deploy" -p "$DEPLOY_PORT" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o PreferredAuthentications=publickey \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=accept-new \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "$REMOTE_STATUS"
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --max-time 10 "http://${DEPLOY_HOST}:8015/api/config" >/dev/null; then
+              echo "Public API health check passed."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Public API health check failed: http://${DEPLOY_HOST}:8015/api/config" >&2
+          exit 1
