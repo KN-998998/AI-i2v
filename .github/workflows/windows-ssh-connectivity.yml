@@ -21,8 +21,8 @@ jobs:
           mkdir -p "$HOME/.ssh"
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$HOME/.ssh/windows-ecs-connectivity"
           chmod 600 "$HOME/.ssh/windows-ecs-connectivity"
-          ssh-keygen -y -f "$HOME/.ssh/windows-ecs-connectivity" > "$HOME/.ssh/windows-ecs-connectivity.pub"
-          echo "DEPLOY_KEY_FINGERPRINT=$(ssh-keygen -lf \"$HOME/.ssh/windows-ecs-connectivity.pub\")"
+          DEPLOY_KEY_PUBLIC="$(ssh-keygen -y -f "$HOME/.ssh/windows-ecs-connectivity")"
+          echo "$DEPLOY_KEY_PUBLIC" | ssh-keygen -lf -
       - name: Connect and run read-only checks
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
