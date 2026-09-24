@@ -10,6 +10,7 @@ python-multipart==0.0.32  # FastAPI 文件上传表单解析
 httpx==0.28.1              # FastAPI TestClient 烟测依赖
 pytest==8.4.1              # Python 测试运行器
 colorama==0.4.6            # Windows 控制台彩色日志
+tzdata==2025.3             # Windows zoneinfo 时区数据库
 numpy==2.4.3              # 数值计算
 requests==2.33.0          # HTTP 调用（Kling / LLM 等 API）
 cos-python-sdk-v5==1.9.39 # 腾讯云 COS / 数据万象 GoodsMatting
