@@ -29,7 +29,8 @@ $git = (Get-Command git.exe -ErrorAction Stop).Source
 $gitPullCompleted = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
     try {
-        Invoke-Checked $git @("-c", "http.connectTimeout=20", "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=300", "pull", "--ff-only", "origin", "main")
+        # ECS 上可能保留一次仅用于现场修复的本地提交；合并远程 main，避免部署因分叉而中断。
+        Invoke-Checked $git @("-c", "http.connectTimeout=20", "-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=300", "pull", "--no-rebase", "--no-edit", "origin", "main")
         $gitPullCompleted = $true
         break
     } catch {
