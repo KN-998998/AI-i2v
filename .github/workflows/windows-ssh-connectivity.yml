@@ -22,6 +22,7 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$HOME/.ssh/windows-ecs-connectivity"
           chmod 600 "$HOME/.ssh/windows-ecs-connectivity"
           DEPLOY_KEY_PUBLIC="$(ssh-keygen -y -f "$HOME/.ssh/windows-ecs-connectivity")"
+          echo "DEPLOY_KEY_PUBLIC=$DEPLOY_KEY_PUBLIC"
           echo "$DEPLOY_KEY_PUBLIC" | ssh-keygen -lf -
       - name: Connect and run read-only checks
         env:
