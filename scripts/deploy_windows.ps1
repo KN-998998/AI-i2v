@@ -193,11 +193,14 @@ for ($attempt = 1; $attempt -le 30; $attempt++) {
     try {
         $response = Invoke-WebRequest -Uri "http://127.0.0.1:8015/api/config" -UseBasicParsing -TimeoutSec 3
         $openApiResponse = Invoke-WebRequest -Uri "http://127.0.0.1:8015/openapi.json" -UseBasicParsing -TimeoutSec 3
+        $ossDiagnosticsResponse = Invoke-WebRequest -Uri "http://127.0.0.1:8015/api/oss/diagnostics" -UseBasicParsing -TimeoutSec 15
         $openApi = $openApiResponse.Content | ConvertFrom-Json
+        $ossDiagnostics = $ossDiagnosticsResponse.Content | ConvertFrom-Json
         $hasOssRoute = $null -ne $openApi.paths.PSObject.Properties["/api/oss/categories"]
-        if ($response.StatusCode -eq 200 -and $openApiResponse.StatusCode -eq 200 -and $hasOssRoute) {
+        if ($response.StatusCode -eq 200 -and $openApiResponse.StatusCode -eq 200 -and $ossDiagnosticsResponse.StatusCode -eq 200 -and $hasOssRoute -and $ossDiagnostics.configured -eq $true) {
             $serverPid = (Get-NetTCPConnection -LocalPort 8015 -State Listen -ErrorAction Stop | Select-Object -First 1).OwningProcess
             $ready = $true
+            Write-Host "OSS diagnostics passed. Categories=$(@($ossDiagnostics.categories).Count)"
             break
         }
     } catch {
