@@ -108,7 +108,9 @@ def configure_logging(log_dir: Path = LOG_DIR, level: int = logging.INFO) -> Non
 
     formatter = logging.Formatter(LOG_FORMAT, DATE_FORMAT)
 
-    console = logging.StreamHandler()
+    # Windows PowerShell 5.1 会把计划任务中原生进程的 stderr 包装成 NativeCommandError；
+    # 常规服务日志统一写 stdout，避免第一条 Uvicorn INFO 日志误杀后台进程。
+    console = logging.StreamHandler(sys.stdout)
     console.setLevel(level)
     console.setFormatter(ConsoleFormatter())
 

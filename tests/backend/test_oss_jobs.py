@@ -11,6 +11,7 @@ from web.app import create_app
 from web.services import oss_jobs
 from web.services import oss_asset_provider as oss_asset_provider_module
 from web.services import oss_inventory
+from web.api import routes
 from web.services.oss_asset_provider import OssAssetProvider
 
 
@@ -215,3 +216,31 @@ def test_oss_inventory_persists_category_counts(monkeypatch, tmp_path):
         {"category": "主菜", "dish_count": 7, "image_count": 12},
     ]
     assert oss_inventory.get_inventory()["scanned_at"] == snapshot["scanned_at"]
+
+
+def test_oss_inventory_hides_provider_details(monkeypatch, tmp_path):
+    class _DeniedProvider:
+        def diagnose_layout(self):
+            raise RuntimeError("AccessDenied RequestId=secret-request HostId=private-host")
+
+    monkeypatch.setattr(oss_inventory, "OSS_INVENTORY_PATH", tmp_path / "oss-inventory.json")
+    monkeypatch.setattr(oss_inventory, "OssAssetProvider", _DeniedProvider)
+
+    snapshot = oss_inventory.refresh_inventory(force=True)
+
+    assert snapshot["status"] == "error"
+    assert snapshot["error"] == "素材库读取权限不足，请联系管理员"
+    assert "secret-request" not in snapshot["error"]
+
+
+def test_oss_diagnostics_hides_provider_details(monkeypatch):
+    class _DeniedProvider:
+        def diagnose_layout(self):
+            raise RuntimeError("AccessDenied RequestId=secret-request HostId=private-host")
+
+    monkeypatch.setattr(routes, "OssAssetProvider", _DeniedProvider)
+    response = TestClient(create_app()).get("/api/oss/diagnostics")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "素材库读取权限不足，请联系管理员"
+    assert "secret-request" not in response.text

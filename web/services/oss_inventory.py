@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from web.core.settings import OSS_INVENTORY_INTERVAL_SECONDS, OSS_INVENTORY_PATH
-from web.services.oss_asset_provider import OssAssetProvider
+from web.services.oss_asset_provider import OssAssetProvider, public_oss_error_message
+
+logger = logging.getLogger(__name__)
 
 _LOCK = threading.RLock()
 _REFRESHING = False
@@ -93,9 +96,10 @@ def refresh_inventory(force: bool = False) -> dict[str, Any]:
             _write(payload)
         return payload
     except Exception as exc:
+        logger.exception("OSS inventory refresh failed")
         with _LOCK:
             current = _read() or {"categories": []}
-            current.update({"status": "stale" if current.get("scanned_at") else "error", "error": str(exc), "last_attempt_at": _iso(_now())})
+            current.update({"status": "stale" if current.get("scanned_at") else "error", "error": public_oss_error_message(exc), "last_attempt_at": _iso(_now())})
             _write(current)
             return current
     finally:

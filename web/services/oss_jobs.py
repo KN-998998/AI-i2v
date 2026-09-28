@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
 import shutil
@@ -30,6 +31,7 @@ from web.services.oss_asset_provider import (
     InsufficientAssetsError,
     OssProviderError,
     asset_filename,
+    public_oss_error_message,
 )
 from web.services.task_contract import is_recoverable, task_metadata, update_task
 
@@ -39,6 +41,7 @@ _JOB_LOCK = threading.RLock()
 _JOB_SEMAPHORE = threading.BoundedSemaphore(OSS_MAX_CONCURRENT_JOBS)
 _RATE_LIMIT_LOCK = threading.Lock()
 _SUBMISSIONS: dict[str, deque[float]] = {}
+logger = logging.getLogger(__name__)
 
 
 def _now() -> str:
@@ -196,8 +199,9 @@ def _normalized_filename(index: int, dish_name: str) -> str:
     return f"{index:03d}_{safe_name}.jpg"
 
 
-def _mark_failed(job: dict[str, Any], error: Exception) -> None:
-    _update_job(job, status="error", stage="素材任务失败", error=str(error), error_type=type(error).__name__)
+def _mark_failed(job: dict[str, Any], error: Exception, public_message: str) -> None:
+    logger.error("OSS material job failed", exc_info=(type(error), error, error.__traceback__))
+    _update_job(job, status="error", stage="素材任务失败", error=public_message, error_type=type(error).__name__)
     shutil.rmtree(job_directory(str(job["job_id"])), ignore_errors=True)
     _update_job(job, cleanup="temporary_files_removed")
 
@@ -235,8 +239,8 @@ def _run_job(job_id: str) -> None:
                     asset["status"] = "downloaded"
                 except Exception as exc:
                     asset["status"] = "skipped"
-                    asset["skip_reason"] = str(exc)
-                    job.setdefault("skipped_assets", []).append({**asset, "skip_reason": str(exc)})
+                    asset["skip_reason"] = public_oss_error_message(exc)
+                    job.setdefault("skipped_assets", []).append({**asset, "skip_reason": asset["skip_reason"]})
                 _update_job(job, completed=index)
 
             _update_job(job, status="preprocessing", stage="修正 EXIF 并转换为 9:16", completed=0)
@@ -254,7 +258,8 @@ def _run_job(job_id: str) -> None:
                     asset["status"] = "ready_for_review"
                 except Exception as exc:
                     asset["status"] = "skipped"
-                    asset["skip_reason"] = f"图片无法处理: {exc}"
+                    logger.error("OSS image normalization failed", exc_info=(type(exc), exc, exc.__traceback__))
+                    asset["skip_reason"] = "图片无法处理，请检查素材文件"
                     job.setdefault("skipped_assets", []).append({**asset, "skip_reason": asset["skip_reason"]})
                 _update_job(job, completed=index)
 
@@ -276,10 +281,16 @@ def _run_job(job_id: str) -> None:
                 asset_count=sum(available.values()),
                 output_resolution={"width": FINAL_RESOLUTION[0], "height": FINAL_RESOLUTION[1]},
             )
-        except (InsufficientAssetsError, OssProviderError, OSError, ValueError) as exc:
-            _mark_failed(job, exc)
-        except Exception as exc:  # keep unexpected failures persisted without leaking credentials
-            _mark_failed(job, RuntimeError(f"OSS 任务内部错误: {exc}"))
+        except InsufficientAssetsError as exc:
+            _mark_failed(job, exc, str(exc))
+        except OssProviderError as exc:
+            _mark_failed(job, exc, public_oss_error_message(exc))
+        except ValueError as exc:
+            _mark_failed(job, exc, str(exc))
+        except OSError as exc:
+            _mark_failed(job, exc, "素材文件处理失败，请联系管理员")
+        except Exception as exc:  # unexpected SDK failures keep their details only in server logs
+            _mark_failed(job, exc, public_oss_error_message(exc))
 
 
 def approve_oss_job(job_id: str) -> dict[str, Any]:

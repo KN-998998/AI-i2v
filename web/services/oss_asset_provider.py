@@ -60,6 +60,18 @@ class InsufficientAssetsError(OssProviderError):
         super().__init__(f"分类“{category}”可用菜品仅 {available} 个，无法满足 {requested} 个")
 
 
+def public_oss_error_message(error: Exception) -> str:
+    """Convert provider/SDK failures to messages that are safe for public APIs."""
+    if isinstance(error, InsufficientAssetsError):
+        return str(error)
+    if isinstance(error, OssNotConfiguredError):
+        return "素材库尚未配置，请联系管理员"
+    normalized = f"{type(error).__name__}: {error}".lower()
+    if any(marker in normalized for marker in ("accessdenied", "access denied", "forbidden", "status: 403", "status=403")):
+        return "素材库读取权限不足，请联系管理员"
+    return "素材库读取失败，请联系管理员"
+
+
 def _join_key(*parts: str) -> str:
     values = [str(part or "").replace("\\", "/").strip("/") for part in parts]
     return "/".join(value for value in values if value)

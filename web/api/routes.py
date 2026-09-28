@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 import subprocess
@@ -41,12 +42,13 @@ from web.services.canvas_generation import get_generation_job, start_generation
 from web.services.canvas_image_processing import get_image_processing_job, recompose_image, start_image_processing, tencent_matting_configured
 from web.services.canvas_quality import analyze_image, analyze_video, preflight_draft
 from web.services.canvas_state import background_file, list_background_files, load_draft, save_asset_library_folder_upload, save_background_upload, save_draft, save_upload, uploaded_file
-from web.services.oss_asset_provider import OssAssetProvider
+from web.services.oss_asset_provider import OssAssetProvider, public_oss_error_message
 from web.services.oss_jobs import allow_submission, asset_file as oss_asset_file, approve_oss_job, cancel_oss_job, create_oss_job, get_oss_job, mark_oss_asset_for_regeneration
 from web.services.oss_inventory import get_inventory as get_oss_inventory
 from web.core.settings import OSS_BUCKET, OSS_ENDPOINT
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 CANVAS_CLIP_PREVIEW_ROOT = CANVAS_CLIP_ROOT / ".previews"
 CANVAS_CLIP_THUMBNAIL_ROOT = CANVAS_CLIP_ROOT / ".thumbnails"
 
@@ -493,8 +495,9 @@ def list_oss_categories() -> dict[str, Any]:
     """List categories allowed by the server-side OSS asset provider."""
     try:
         categories = OssAssetProvider().list_categories()
-    except (OSError, ValueError, RuntimeError) as exc:
-        raise _json_error(str(exc), 503) from exc
+    except Exception as exc:
+        logger.exception("OSS category listing failed")
+        raise _json_error(public_oss_error_message(exc), 503) from exc
     return {"categories": categories}
 
 
@@ -503,8 +506,9 @@ def diagnose_oss_layout() -> dict[str, Any]:
     """Read-only deployment check; never returns credentials or object URLs."""
     try:
         return OssAssetProvider().diagnose_layout()
-    except (OSError, ValueError, RuntimeError) as exc:
-        raise _json_error(str(exc), 503) from exc
+    except Exception as exc:
+        logger.exception("OSS diagnostics failed")
+        raise _json_error(public_oss_error_message(exc), 503) from exc
 
 
 @router.get("/api/oss/inventory")
