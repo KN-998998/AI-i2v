@@ -255,8 +255,9 @@ def test_caption_font_prefers_the_explicit_environment_override(monkeypatch, tmp
 def test_caption_font_falls_back_to_a_font_that_actually_exists(monkeypatch, tmp_path):
     installed = tmp_path / "NotoSansCJK-Regular.ttc"
     installed.write_bytes(b"font")
+    missing_preferred = tmp_path / "missing-preferred-font.ttc"
     monkeypatch.delenv("CAPTION_FONT_FILE", raising=False)
-    monkeypatch.setattr(video_render, "_WINDOWS_FONTS", {("Microsoft YaHei", "normal"): "C:/Windows/Fonts/msyh.ttc"})
+    monkeypatch.setattr(video_render, "_WINDOWS_FONTS", {("Microsoft YaHei", "normal"): str(missing_preferred)})
     monkeypatch.setattr(video_render, "_FALLBACK_FONTS", (str(installed),))
     video_render.resolve_caption_font.cache_clear()
 
