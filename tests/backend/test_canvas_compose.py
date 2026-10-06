@@ -415,8 +415,7 @@ def test_a_rendered_video_never_burns_captions_over_the_end_card(monkeypatch, tm
 
 # ---------------------------------------------------------------------------
 # 第十四批：ffmpeg 会不会画字，要在预检里查，不能等合成到片尾卡才炸
-# 9/21 Patrick 的 Homebrew ffmpeg 9.0.2 没编 freetype，点「合成此条」才报
-# "No such filter: 'drawtext'"，还是一屏 ffmpeg 原文。
+# 合成需要 FFmpeg 提供 drawtext 与 freetype；错误提示应直接给出 Windows 处理方向。
 # ---------------------------------------------------------------------------
 class _Completed:
     def __init__(self, returncode: int, stdout: bytes = b"", stderr: bytes = b""):
@@ -467,7 +466,7 @@ def test_a_missing_drawtext_filter_is_explained_in_plain_words(monkeypatch, tmp_
 
     message = str(failure.value)
     assert "画字" in message or "drawtext" in message
-    assert "brew install" in message, "报错里直接给修法，别让人去查 ffmpeg 原文"
+    assert "Windows FFmpeg" in message and "PATH" in message
     assert "AVFilterGraph" not in message, "一屏 ffmpeg 原文对运营没有意义"
 
 
@@ -487,7 +486,7 @@ def test_preflight_blocks_when_the_end_card_needs_drawtext_the_machine_lacks(mon
     codes = [item["code"] for item in report["errors"]]
     assert "MISSING_DRAWTEXT" in codes
     message = next(item["message"] for item in report["errors"] if item["code"] == "MISSING_DRAWTEXT")
-    assert "brew install" in message
+    assert "Windows FFmpeg" in message and "PATH" in message
     assert report["ok"] is False
 
 

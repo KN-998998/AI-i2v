@@ -22,18 +22,18 @@ flowchart LR
   C --> D[Python compile]
   D --> E[pytest]
   E --> F[SSH 到 ECS]
-  F --> G[git pull --ff-only]
+  F --> G[git pull origin main]
   G --> H[PowerShell 原生部署]
   H --> I[FastAPI 健康检查]
 ```
 
 ### Verify 作业
 
-运行环境为 Ubuntu，超时 20 分钟，执行：
+运行环境为 `windows-latest`，超时 30 分钟，执行：
 
-1. Node.js 22 + `npm ci`
-2. `frontend/npm test`
-3. `frontend/npm run build`
+1. Node.js 22 + `npm.cmd ci`
+2. `npm.cmd test`
+3. `npm.cmd run build`
 4. Python 3.11 + `pip install -r requirements.txt`
 5. `python -m compileall -q web pipeline`
 6. `python -m pytest`
@@ -44,8 +44,8 @@ flowchart LR
 
 1. 从 GitHub Secrets 临时写入 SSH 私钥并校验格式。
 2. 使用密钥认证连接目标主机。
-3. 在目标目录执行 `git pull --ff-only origin main`，网络失败时最多重试 3 次。
-4. 在 Windows ECS 上执行 `scripts\deploy_windows.ps1`，更新 Python 依赖、构建前端、重启 FastAPI 并检查健康接口。
+3. 在 Windows ECS 项目目录执行 `git pull --no-rebase --no-edit origin main`，网络失败时最多重试 3 次。
+4. 执行 `scripts\deploy_windows.ps1`，更新 Python 依赖、构建前端、重启 FastAPI 并检查健康接口。
 
 ## GitHub Secrets
 
@@ -64,7 +64,7 @@ flowchart LR
 ## 服务器前置条件
 
 - 项目目录已经存在，且远程仓库可由部署用户拉取。
-- 已安装 Python 3.11、Node.js 22、Git 和 Windows OpenSSH Server。
+- 已安装 Python 3.11、Node.js 22、Git 和 Windows OpenSSH Server；生产目标系统为 Windows 11。
 - 部署用户具备运行 PowerShell、Python 和 npm 的权限。
 - 服务端保留自己的 `.env`、`output/` 与 `logs/`；部署不应覆盖这些运行数据。
 - `scripts\deploy_windows.ps1` 会把 FastAPI 绑定到 `0.0.0.0:8015`，并以 PID 文件管理进程。
@@ -81,7 +81,7 @@ Invoke-WebRequest http://127.0.0.1:8015/api/config
 
 ## 日常发布步骤
 
-```bash
+```powershell
 scripts\verify.bat
 git add <changed-files>
 git commit -m "type: concise change summary"
@@ -96,9 +96,9 @@ git push origin main
 | --- | --- |
 | Verify 失败 | Actions 日志中的具体测试或构建步骤 |
 | SSH 失败 | `DEPLOY_*` Secrets、主机网络、部署用户和公钥授权 |
-| `git pull --ff-only` 失败 | 服务器工作树是否被人工修改；不要直接在服务器提交业务代码 |
+| ECS 更新失败 | 检查服务器 Git 工作树、远端连接和部署用户权限；不要直接在服务器提交业务代码 |
 | 服务未启动 | 查看 `logs\fastapi-*.err.log`、PID 文件和 `/api/config` |
-| 构建被系统杀死 | 主机内存与磁盘空间；避免在低配环境并发构建多个镜像 |
+| 构建失败 | 检查 Windows ECS 磁盘空间、内存及 Python/npm 错误日志 |
 
 ## 回滚原则
 
@@ -106,7 +106,7 @@ git push origin main
 2. 用新提交或经过审查的发布操作使 `main` 指向目标版本。
 3. 通过 CI/CD 发布并验证健康检查。
 
-不要在服务器直接修改或提交业务源码来“回滚”；这会破坏 `git pull --ff-only` 和后续可追溯性。
+不要在服务器直接修改或提交业务源码来“回滚”；这会使后续自动更新产生合并或冲突风险。
 
 ## 相关文档
 

@@ -57,6 +57,14 @@ OSS_JOB_RETENTION_HOURS = max(1, int(os.environ.get("OSS_JOB_RETENTION_HOURS", "
 OSS_INVENTORY_PATH = Path(os.environ.get("OSS_INVENTORY_PATH", PROJECT_ROOT / "output" / "oss_inventory.json"))
 OSS_INVENTORY_INTERVAL_SECONDS = max(3600, int(os.environ.get("OSS_INVENTORY_INTERVAL_SECONDS", str(7 * 24 * 60 * 60))))
 
+# Optional server-side allowlist for asset-library scans. Each entry should be
+# a directory visible to the backend process; Windows paths use ';' separators.
+ASSET_LIBRARY_ALLOWED_ROOTS = tuple(
+    Path(value).expanduser().resolve()
+    for value in os.environ.get("ASSET_LIBRARY_ALLOWED_ROOTS", "").split(os.pathsep)
+    if value.strip()
+)
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

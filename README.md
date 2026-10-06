@@ -66,6 +66,10 @@ flowchart LR
 
 每个步骤均由实际产物驱动：例如第 2 步需要处理后的图片，第 4 步需要选定的真实 MP4。第 3 步的“实时装配”也必须在素材上传和图片处理完成后才能执行。未满足前置条件的后续步骤会保持锁定。
 
+左侧导航用一条七步进度线呈现整条流程：已完成的步骤是带勾的实心点，当前步骤是唯一高亮的卡片，已解锁的其他步骤也可点击进入；尚未解锁的只有空心点和浅灰名字，点击不会跳转。新同事一眼能看到走到哪一步、还剩几步，不会卡在只显示一个入口的空列表上。
+
+直接输入尚未解锁的页面地址（例如书签）也会被自动带回当前该做的步骤，避免在缺少前置产物的页面上空转。流程画布、任务中心和周计划生产不受此限制。
+
 流程画布、任务中心和周计划生产是辅助工作台，始终可访问；它们不会绕过上述制作步骤的产物校验。
 
 ### 周计划自动线
@@ -83,12 +87,12 @@ flowchart LR
 
 ### 环境要求
 
-- Windows 10 或更高版本，或 macOS / Linux
+- Windows 10 或更高版本；ECS 部署目标为 Windows 11
 - Python 3.11（推荐 Conda `PY3_11` 环境）
 - Node.js 20 或更高版本
-- `ffmpeg` 与 `ffprobe` 已加入 `PATH`（macOS：`brew install ffmpeg`）
+- `ffmpeg` 与 `ffprobe` 已加入 `PATH`
 
-> Windows 使用根目录的 `.bat` 脚本，macOS / Linux 使用同名 `.sh` 脚本，两者行为一致。
+> 本项目的启动、验证和部署辅助脚本均面向 Windows。
 
 ### 1. 安装依赖
 
@@ -101,25 +105,12 @@ npm.cmd install
 cd ..
 ```
 
-macOS / Linux：
-
-```bash
-python3 -m pip install -r requirements.txt
-cd frontend && npm install && cd ..
-```
-
-> `frontend/node_modules` 里的 `esbuild`、`rollup` 是按平台编译的原生包，不能跨系统拷贝。
-> 换机器或换系统后若 `npm run build` 报 `MODULE_NOT_FOUND`，删掉 `frontend/node_modules` 重装即可；
-> `start_dev.sh` 会自动检测并重装。
+`frontend/node_modules` 中包含平台相关的原生依赖，不要跨机器复制；新环境请重新安装。
 
 ### 2. 配置外部能力（按需）
 
 ```bat
 copy .env.example .env        :: Windows
-```
-
-```bash
-cp .env.example .env          # macOS / Linux
 ```
 
 在 `.env` 中填写实际需要的服务配置。不要提交 `.env`、密钥、素材或生成结果。
@@ -131,12 +122,13 @@ cp .env.example .env          # macOS / Linux
 | Qwen TTS / LLM | `TTS_PROVIDER=qwen`、`QWEN_API_KEY` 或 `DASHSCOPE_API_KEY` |
 | BGM | 无需密钥，在“声音与文字”页面上传 |
 | 周计划时区 | `WEEKLY_PLAN_TIMEZONE`，默认 `Asia/Shanghai` |
+| 服务器素材路径 | `ASSET_LIBRARY_ALLOWED_ROOTS`，填写后端可访问的共享目录白名单 |
 
 完整字段请以 [.env.example](.env.example) 为准。
 
 ### 3. 启动
 
-Windows 双击根目录的 `start_dev.bat`；macOS / Linux 执行 `./start_dev.sh`。脚本会构建前端并启动 FastAPI。
+Windows 本地开发时双击根目录的 `start_dev.bat`。脚本会构建前端并启动 FastAPI；它是开发入口，不用于生产环境的服务托管。
 
 | 地址 | 用途 |
 | --- | --- |
@@ -147,14 +139,7 @@ Windows 双击根目录的 `start_dev.bat`；macOS / Linux 执行 `./start_dev.s
 | `http://127.0.0.1:8015/workflow/weekly-plan` | 周计划生产 |
 | `http://127.0.0.1:8015/docs` | FastAPI OpenAPI 文档 |
 
-> **改前端时用热更新模式**：`./start_dev.sh --watch` 会同时起 FastAPI 和 Vite 开发
-> 服务器（127.0.0.1:5174），改 `frontend/` 下的文件存盘即刷新，不用重新构建；改 `.py`
-> 后端也会自动重启。挂着不用管，Ctrl+C 一起停掉。
->
-> 不加 `--watch` 时走生产构建：Windows 运行 `scripts\build_frontend.bat`，
-> macOS / Linux 在 `frontend/` 下运行 `npm run build`，或重新执行启动脚本。
-> 只改了后端 Python 时，可用 `./start_dev.sh --skip-build` 跳过前端构建；
-> 用 `--no-open` 可禁止启动后自动打开浏览器。
+> 修改 `frontend/` 后运行 `scripts\build_frontend.bat` 重新构建。需要单独调试后端时，可在项目 Python 环境中运行 `python -m web.run_server`。
 
 ## 日常使用
 
@@ -166,7 +151,7 @@ Windows 双击根目录的 `start_dev.bat`；macOS / Linux 执行 `./start_dev.s
 6. 在“声音与文字”添加 BGM、TTS 和文字轨道，生成有声成片。
 7. 在“成片结果”预览、审核和下载。
 
-页面右上角的“使用教程”可在任意步骤打开对应教学，首次访问会自动弹出。
+顶部工具栏和左侧导航都提供“使用教程”入口，当前步骤旁还有一个 `?` 可直达该步教学。首次访问会被自动打开一次教程；关掉后不再打扰，随时可从入口重新打开。
 
 ### 图片处理预览台
 
@@ -192,7 +177,7 @@ Windows 双击根目录的 `start_dev.bat`；macOS / Linux 执行 `./start_dev.s
 
 ### 素材库批量建稿
 
-“素材库批量建稿”会按菜品文件夹扫描素材，生成待确认流程。云端访问时请使用“上传本机文件夹”；只有 ECS 已挂载共享盘时，才填写服务器路径。批量流程仍需要人工确认分类和素材质量。
+“素材库批量建稿”会按菜品文件夹扫描素材，生成待确认流程。页面要求填写 Windows ECS 后端进程可访问的绝对路径，并在 `ASSET_LIBRARY_ALLOWED_ROOTS` 中配置白名单。批量流程仍需要人工确认分类和素材质量。
 
 ### 周计划生产与片段审核
 
@@ -242,41 +227,40 @@ output/                   本地草稿、上传素材、片段与成片（不提
 ### 全量验证
 
 ```bat
-scripts\verify.bat            :: Windows
-```
-
-```bash
-./scripts/verify.sh           # macOS / Linux
+scripts\verify.bat
 ```
 
 ### 分项验证
 
-```bash
+```bat
 cd frontend
-npm run typecheck             # Windows 用 npm.cmd
-npm run test
-npm run build
+npm.cmd run typecheck
+npm.cmd run test
+npm.cmd run build
 cd ..
-pytest
+python -m pytest
 ```
 
 `npm.cmd run build` 会同时进行 TypeScript 检查并构建前端。涉及外部 API 的真实生成、抠图或 TTS 成功与否，取决于有效的服务配置和账户权限，不能由本地静态测试替代。
 
 ## 部署
 
-生产环境运行在阿里云 Windows ECS 上，使用 Python 原生 FastAPI 进程监听 `0.0.0.0:8015`，由 PowerShell 脚本负责依赖安装、前端构建、重启和健康检查，不使用 Docker。
+生产环境部署在阿里云 ECS Windows 11。GitHub Actions 在 Windows Runner 上验证后，通过 SSH 调用 PowerShell 部署脚本更新服务。
 
-- 常规发布：推送 `main`，由 GitHub Actions 执行 CI/CD（需要配置仓库 Secrets）
-- 人工兜底：运行 `deploy_cloud.bat`
-- 详细说明：[CI/CD 部署说明](docs/CI-CD部署说明.md) · [手动部署说明](docs/手动部署说明.md)
+- 本地验证：运行 `scripts\verify.bat`
+- 常规发布：推送 `main`，GitHub Actions 验证成功后自动部署到 ECS。
+- 人工重试：仅在没有 Actions 部署正在运行时运行 `deploy_cloud.bat`；不要用它发布尚未推送的提交。
+- ECS 发布说明：[Windows ECS 部署说明](docs/手动部署说明.md)
+- CI 说明：[Windows CI 验证说明](docs/CI-CD部署说明.md)
 
 部署前请确认 `.env`、`output/` 和 `logs/` 位于服务器本地，不应写入 Git。
 
-> `output/weekly_plans.sqlite3` 属于运行数据。周计划会在服务器上按本地时区定时触发，容器重建不会清除它，但也不会自动备份。
+> `output/weekly_plans.sqlite3` 属于运行数据。周计划会在服务器上按设定时区定时触发；部署或重启不会替代独立备份。
 
 ## 安全与运行边界
 
 - 当前工具面向内部受控环境；未配置账号认证、权限管理或 HTTPS 时，不应上传敏感、受监管或不适合内部共享的素材。
+- 配置 `ASSET_LIBRARY_ALLOWED_ROOTS` 后，素材库路径扫描只允许访问白名单目录及其子目录；生产环境不要留空，也不要把共享盘根目录以外的路径暴露给后端。
 - 单个上传文件限制为 50 MB。大规模素材库应分批导入，不建议使用一次性请求上传超大目录。
 - ECS 上的 `output/` 是运行数据，不是备份策略。生产素材请备份到独立存储后再按保留策略清理。
 - 周计划会按设定时间自动消耗 Kling、抠图和 TTS 额度；试运行前请先确认账户额度与并发上限。
@@ -288,8 +272,8 @@ pytest
 
 1. 前端交互改动放在 `frontend/src/`；业务服务放在 `web/services/` 或 `pipeline/`。
 2. API 路由只处理 HTTP 职责，耗时任务和文件处理不直接堆放在路由层。
-3. 不提交 `.env`、密钥、绝对素材路径、生成媒体、草稿或日志。
-4. 为行为变更加上适当的测试，并运行 `scripts\verify.bat`（macOS / Linux：`./scripts/verify.sh`）。
+3. 不提交 `.env`、密钥、绝对素材路径、生成媒体、草稿或日志。UX 走查、UI 前后对比图、参考视频和交接分析等本地工作资料已在 `.gitignore` 中排除，仓库是公开的，不要强行加入。
+4. 为行为变更加上适当的测试，并运行 `scripts\verify.bat`。
 5. UI 改动应在 `http://127.0.0.1:8015` 的实际页面验证。
 
 ## 相关文档

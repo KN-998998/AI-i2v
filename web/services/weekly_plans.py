@@ -145,9 +145,7 @@ def _dish_key(value: str) -> str:
 
 
 def _library_candidates(asset_root: str) -> list[dict[str, Any]]:
-    root = Path(asset_root).expanduser().resolve()
-    if not root.is_dir():
-        raise ValueError("菜品素材库路径不存在或不是文件夹")
+    root = asset_library.resolve_asset_library_root(asset_root, "菜品素材库")
     groups = asset_library._merge_duplicate_dish_directories(asset_library._dish_directories(root))
     classifications, _mode, _warning = asset_library._classify_library_dish_groups(root, groups)
     result: list[dict[str, Any]] = []
@@ -271,8 +269,7 @@ def create_plan(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("请提供菜品素材库、背景素材库和画布模板")
     if load_draft(template_draft_id) is None:
         raise ValueError("画布模板不存在；请先保存当前画布后再创建周计划")
-    if not Path(background_root).expanduser().is_dir():
-        raise ValueError("背景素材库路径不存在或不是文件夹")
+    asset_library.resolve_asset_library_root(background_root, "背景素材库")
     run_at = _parse_run_at(payload.get("run_at"))
     defaults = payload.get("defaults") if isinstance(payload.get("defaults"), Mapping) else {}
     days_raw = payload.get("days") if isinstance(payload.get("days"), list) else []

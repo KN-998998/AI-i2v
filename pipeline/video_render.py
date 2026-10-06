@@ -15,15 +15,9 @@ FADE_IN_SECONDS = 0.3
 END_CARD_SECONDS = 1.0
 
 # 片尾卡和字幕都靠 drawtext 这个滤镜，而它要 ffmpeg 编进 libfreetype 才有。
-# 2026-09-21 实测：Homebrew 的 ffmpeg 9.0.2 就没编，点「合成此条」才报一屏
-# "No such filter: 'drawtext'"。这句话要能直接照着做，别让运营去查 ffmpeg 原文。
-#
-# 写 ffmpeg@7 而不是 @8：2026-09-22 在本机逐个量过，@7（7.1.5）有 drawtext、编了
-# libfreetype，@8（8.1.2）和默认的 9.0.2 都没有。指到 @8 等于让人白装一次。
 DRAWTEXT_HELP = (
     "这台机器的 ffmpeg 没有画字功能（drawtext 滤镜），片尾卡和字幕都渲染不了。"
-    "macOS：brew install ffmpeg@7，再把 /opt/homebrew/opt/ffmpeg@7/bin 放到 PATH 最前面；"
-    "Linux：apt install ffmpeg。"
+    "请安装包含 libfreetype 与 drawtext 的 Windows FFmpeg，并确认 ffmpeg.exe 已加入 PATH。"
 )
 _DRAWTEXT_MISSING_MARK = "No such filter: 'drawtext'"
 
@@ -141,10 +135,8 @@ def _typewriter_prefixes(text: str) -> list[str]:
     return ["".join(characters[:index]) for index in range(1, len(characters) + 1)]
 
 
-# drawtext 必须拿到一个真实存在的字体文件。这里原来写死的是 Windows 路径，而线上
-# 跑的是 Debian 容器，那些文件根本不存在——ffmpeg 不报错，它会默默换一个不含中文
-# 的字体，于是所有中文字幕都渲染成方框，人还以为是字幕没写对。
-# 所以改成运行时按平台找一个真的能写中文的字体；想指定具体字体就设 CAPTION_FONT_FILE。
+# drawtext 必须拿到一个真实存在的 Windows 字体文件，否则中文可能被渲染成方框。
+# 想指定具体字体文件时可设置 CAPTION_FONT_FILE。
 _FONT_ENV_KEY = "CAPTION_FONT_FILE"
 _WINDOWS_FONTS = {
     ("Microsoft YaHei", "normal"): "C:/Windows/Fonts/msyh.ttc",
@@ -162,18 +154,10 @@ _WINDOWS_FONTS = {
     ("Arial Black", "normal"): "C:/Windows/Fonts/ariblk.ttf",
     ("Arial Black", "bold"): "C:/Windows/Fonts/ariblk.ttf",
 }
-# 按 macOS → Linux 的顺序找，都是自带或 fonts-noto-cjk 装出来的路径。
 _FALLBACK_FONTS = (
-    "/System/Library/Fonts/PingFang.ttc",
-    "/System/Library/Fonts/STHeiti Medium.ttc",
-    "/System/Library/Fonts/Hiragino Sans GB.ttc",
-    "/Library/Fonts/Arial Unicode.ttf",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-    "/usr/share/fonts/truetype/arphic/uming.ttc",
+    "C:/Windows/Fonts/msyh.ttc",
+    "C:/Windows/Fonts/simsun.ttc",
+    "C:/Windows/Fonts/simhei.ttf",
 )
 
 

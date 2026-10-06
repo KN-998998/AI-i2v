@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// 热更新模式（./start_dev.sh --watch）用的开发服务器端口，以及要转发到的 FastAPI 地址。
+// Vite 开发服务器端口，以及要转发到的 FastAPI 地址。
 // 这两个值写死是有意的：tsconfig.node.json 里没有 @types/node，读不到 process.env，
 // 为了一个端口号去加一个类型依赖不划算。如果改过 .env 里的 APP_PORT，把下面一行一起改。
 const DEV_PORT = 5174;

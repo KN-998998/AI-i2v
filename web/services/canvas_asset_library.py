@@ -17,6 +17,7 @@ from typing import Any, Mapping
 from PIL import Image, ImageOps
 
 from pipeline.config import QWEN_API_KEY, QWEN_LLM_BASE_URL, QWEN_LLM_ENABLED, QWEN_LLM_MODEL
+from web.core.settings import ASSET_LIBRARY_ALLOWED_ROOTS
 from web.services.canvas_state import CANVAS_BACKGROUND_ROOT, draft_directory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -30,6 +31,26 @@ _RULES_PATH = CANVAS_BACKGROUND_ROOT.parent / "canvas_asset_category_rules.json"
 _MANUAL_REVIEW_ROOT = CANVAS_BACKGROUND_ROOT.parent / "asset_library_manual_review"
 _MANAGED_LIBRARY_ROOT = CANVAS_BACKGROUND_ROOT.parent / "standardized_asset_library"
 _RULES_LOCK = threading.RLock()
+
+
+def resolve_asset_library_root(value: str, label: str) -> Path:
+    """Resolve a server-visible asset path and enforce the optional allowlist."""
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{label}路径不能为空")
+    candidate = Path(text).expanduser()
+    if not candidate.is_absolute():
+        raise ValueError(f"{label}必须使用服务器绝对路径")
+    root = candidate.resolve()
+    if not root.is_dir():
+        raise ValueError(f"{label}路径不存在或不是文件夹")
+    if ASSET_LIBRARY_ALLOWED_ROOTS and not any(
+        root == allowed or allowed in root.parents
+        for allowed in ASSET_LIBRARY_ALLOWED_ROOTS
+    ):
+        raise ValueError(f"{label}路径不在服务端允许的素材目录内")
+    return root
+
 
 _CATEGORY_KEYWORDS = {
     "寿司": ("寿司", "卷寿司", "手卷", "握寿司", "军舰", "卷物", "巻き寿司", "握り", "にぎり", "軍艦", "手巻き", "ちらし寿司", "押し寿司", "稲荷寿司", "すし", "sushi"),
@@ -476,9 +497,7 @@ def _classify_library_dish_groups(
 
 def scan_asset_classifications(asset_root: str) -> dict[str, Any]:
     """Scan and classify all deduplicated dish folders without copying files."""
-    root = Path(asset_root).expanduser().resolve()
-    if not root.is_dir():
-        raise ValueError("菜品素材库路径不存在或不是文件夹")
+    root = resolve_asset_library_root(asset_root, "菜品素材库")
     dish_groups = _merge_duplicate_dish_directories(_dish_directories(root))
     classifications, classification_mode, classification_warning = _classify_library_dish_groups(root, dish_groups)
     results = _classification_results(dish_groups, classifications)
@@ -576,9 +595,7 @@ def managed_asset_library_root() -> Path:
 
 
 def _manual_review_groups(asset_root: str) -> list[dict[str, Any]]:
-    root = Path(asset_root).expanduser().resolve()
-    if not root.is_dir():
-        raise ValueError("菜品素材库路径不存在或不是文件夹")
+    root = resolve_asset_library_root(asset_root, "菜品素材库")
     groups = _merge_duplicate_dish_directories(_dish_directories(root))
     return [
         {
@@ -863,12 +880,8 @@ def build_asset_plan(
     rng: random.Random | None = None,
 ) -> dict[str, Any]:
     """Select images and backgrounds, copying selected files into project storage."""
-    root = Path(asset_root).expanduser().resolve()
-    background_path = Path(background_root).expanduser().resolve()
-    if not root.is_dir():
-        raise ValueError("菜品素材库路径不存在或不是文件夹")
-    if not background_path.is_dir():
-        raise ValueError("背景素材库路径不存在或不是文件夹")
+    root = resolve_asset_library_root(asset_root, "菜品素材库")
+    background_path = resolve_asset_library_root(background_root, "背景素材库")
     counts = _normalize_category_counts(category_counts)
     generator = rng or random.Random()
     grouped: dict[str, list[dict[str, Any]]] = {category: [] for category in ASSET_CATEGORIES}

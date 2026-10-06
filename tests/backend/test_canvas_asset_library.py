@@ -373,6 +373,28 @@ def test_asset_library_merges_simplified_and_traditional_duplicate_folders(monke
     assert any("主菜 只找到 1 个不同菜品" in warning for warning in plan["warnings"])
 
 
+def test_asset_library_path_requires_server_absolute_path(tmp_path):
+    with pytest.raises(ValueError, match="必须使用服务器绝对路径"):
+        canvas_asset_library.resolve_asset_library_root("relative/assets", "菜品素材库")
+
+    with pytest.raises(ValueError, match="路径不存在或不是文件夹"):
+        canvas_asset_library.resolve_asset_library_root(str(tmp_path / "missing"), "菜品素材库")
+
+
+def test_asset_library_path_stays_inside_configured_allowlist(monkeypatch, tmp_path):
+    allowed = tmp_path / "mounted-assets"
+    allowed.mkdir()
+    inside = allowed / "dishes"
+    inside.mkdir()
+    outside = tmp_path / "other"
+    outside.mkdir()
+    monkeypatch.setattr(canvas_asset_library, "ASSET_LIBRARY_ALLOWED_ROOTS", (allowed.resolve(),))
+
+    assert canvas_asset_library.resolve_asset_library_root(str(inside), "菜品素材库") == inside.resolve()
+    with pytest.raises(ValueError, match="不在服务端允许的素材目录内"):
+        canvas_asset_library.resolve_asset_library_root(str(outside), "菜品素材库")
+
+
 def test_manual_asset_review_scans_without_classification_and_organizes_after_confirmation(monkeypatch, tmp_path):
     monkeypatch.setattr(canvas_asset_library, "_MANUAL_REVIEW_ROOT", tmp_path / "review-scans")
     asset_root = tmp_path / "raw"

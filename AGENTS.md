@@ -22,7 +22,7 @@
 7. **成片结果** — 查看、预览和下载任务结果。
 
 ## API Key 配置
-```bash
+```bat
 set KLING_API_KEY=xxxx                # Kling 视频生成
 ```
 
@@ -34,11 +34,6 @@ set KLING_API_KEY=xxxx                # Kling 视频生成
 ```bat
 start_dev.bat                 :: Windows
 ```
-```bash
-./start_dev.sh                # macOS / Linux：生产构建后启动
-./start_dev.sh --watch        # 改前端时用这个：Vite 热更新，存盘即刷新
-```
-
 ## 协作分工（2026-09-18 起）
 
 这个项目的改动由两个 AI 分工完成，各自的职责不要越界：
@@ -46,14 +41,14 @@ start_dev.bat                 :: Windows
 - **方案与验收**（Cowork 里的 Claude）：确认要改什么、为什么改、改到什么程度算完成；
   产出一份任务书 `.tmp/batchN-任务.md`，UI 改动另附效果图，并**预先写好测试用例**。
   改完之后由它读 diff 做验收。
-- **执行**（Claude Code，本仓库里）：按任务书实现，把 `./scripts/verify.sh` 跑到全绿，
+- **执行**（Claude Code，本仓库里）：按任务书实现，把 `scripts\verify.bat` 跑到全绿，
   按任务书给的拆分提交。
 
 ### 执行方必须守住的几条
 
 1. **测试就是验收标准，不许为了让它变绿去改测试。** 如果某条用例的期望本身不合理，
    停下来在对话里说清楚，让人去改任务书，不要自己动手把断言改松。
-2. **提交前必须跑 `./scripts/verify.sh`，三项全绿才提交。** 没绿就不要提交。
+2. **提交前必须跑 `scripts\verify.bat`，三项全绿才提交。** 没绿就不要提交。
 3. **不擅自加依赖。** `requirements.txt` / `package.json` 要动，先问。
 4. **注释写中文，讲"为什么"，不讲"做了什么"。** 尤其是阈值、魔数、绕开某个坑的写法，
    要写清楚出处（在什么样本上标定的、踩过什么坑），别人半年后才看得懂。

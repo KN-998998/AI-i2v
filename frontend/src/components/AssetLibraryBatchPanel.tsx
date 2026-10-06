@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { createAssetLibraryPlan, saveAssetLibraryRule, uploadAssetLibraryFolder } from "../api";
+import { useEffect, useState } from "react";
+import { createAssetLibraryPlan, pickAssetLibraryFolder, saveAssetLibraryRule } from "../api";
 import { VISUAL_SUBJECT_TYPE_OPTIONS, type AssetLibraryClassificationItem, type AssetLibraryPlan, type AssetLibraryReviewItem, type VisualSubjectType } from "../model";
 import { type BatchGenerationProgress, type BatchGenerationSummary, useWorkflowStore } from "../workflowStore";
 import { navigate } from "../router";
@@ -8,6 +8,11 @@ const CATEGORIES = ["寿司", "刺身", "前菜/小菜", "炸物", "主菜", "�
 const FOOD_TYPES = ["冷食", "热食", "混合/多温"] as const;
 const ASSET_ROOT_STORAGE_KEY = "restaurant-video.asset-library.asset-root";
 const BACKGROUND_ROOT_STORAGE_KEY = "restaurant-video.asset-library.background-root";
+
+function canChooseServerFolder(): boolean {
+  if (typeof window === "undefined") return false;
+  return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
+}
 
 function rememberedPath(key: string): string {
   try {
@@ -24,10 +29,6 @@ function rememberPath(key: string, value: string): void {
   } catch {
     // Private browsing or browser policy may disable local storage.
   }
-}
-
-function isUploadedFolderRoot(value: string): boolean {
-  return value.includes("/asset_library_uploads/") || value.includes("\\asset_library_uploads\\");
 }
 
 function defaultFoodType(category: string): "冷食" | "热食" | "混合/多温" | "" {
@@ -54,12 +55,9 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   const [backgroundRoot, setBackgroundRoot] = useState(() => rememberedPath(BACKGROUND_ROOT_STORAGE_KEY));
   const [counts, setCounts] = useState<Record<string, number>>(() => normalizeCategoryCounts(null));
   const [busy, setBusy] = useState(false);
+  const [folderPickerBusy, setFolderPickerBusy] = useState<"asset" | "background" | null>(null);
   const [batchProgress, setBatchProgress] = useState<BatchGenerationProgress | null>(null);
   const [batchSummary, setBatchSummary] = useState<BatchGenerationSummary | null>(null);
-  const [folderBusy, setFolderBusy] = useState<"asset" | "background" | null>(null);
-  const [folderUploadSummary, setFolderUploadSummary] = useState<{ asset?: string; background?: string }>({});
-  const assetFolderInputRef = useRef<HTMLInputElement>(null);
-  const backgroundFolderInputRef = useRef<HTMLInputElement>(null);
   const [reviewCategories, setReviewCategories] = useState<Record<string, string>>({});
   const [reviewFoodTypes, setReviewFoodTypes] = useState<Record<string, typeof FOOD_TYPES[number] | "">>({});
   const [reviewVisualSubjects, setReviewVisualSubjects] = useState<Record<string, VisualSubjectType>>({});
@@ -78,12 +76,6 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   useEffect(() => rememberPath(ASSET_ROOT_STORAGE_KEY, assetRoot), [assetRoot]);
   useEffect(() => rememberPath(BACKGROUND_ROOT_STORAGE_KEY, backgroundRoot), [backgroundRoot]);
   useEffect(() => {
-    for (const input of [assetFolderInputRef.current, backgroundFolderInputRef.current]) {
-      input?.setAttribute("webkitdirectory", "");
-      input?.setAttribute("directory", "");
-    }
-  }, []);
-  useEffect(() => {
     if (!plan) return;
     setCounts(current => Object.values(current).some(value => value > 0) ? normalizeCategoryCounts(current) : normalizeCategoryCounts(plan.categoryCounts));
     setReviewCategories(Object.fromEntries((plan.reviewItems ?? []).map(item => [item.dishName, item.suggestedCategory ?? item.sourceCategory])));
@@ -96,25 +88,21 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
 
   const updateCount = (category: string, value: number) => setCounts(current => ({ ...current, [category]: Math.max(0, Math.min(50, Number.isFinite(value) ? Math.round(value) : 0)) }));
 
-  const uploadFolder = async (kind: "asset" | "background", event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    setFolderBusy(kind);
+  const chooseServerFolder = async (kind: "asset" | "background") => {
+    setFolderPickerBusy(kind);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30_000);
     try {
-      const result = await uploadAssetLibraryFolder(draftId, kind === "asset" ? "assets" : "backgrounds", files);
-      if (kind === "asset") setAssetRoot(result.root);
-      else setBackgroundRoot(result.root);
-      const size = result.totalSize >= 1024 * 1024
-        ? `${(result.totalSize / (1024 * 1024)).toFixed(1)} MB`
-        : `${Math.max(1, Math.ceil(result.totalSize / 1024))} KB`;
-      const summary = `已上传 ${result.fileCount} 张图片（${size}）`;
-      setFolderUploadSummary(current => ({ ...current, [kind]: summary }));
-      onToast(`${kind === "asset" ? "菜品" : "背景"}素材库${summary}`);
+      const path = await pickAssetLibraryFolder(kind === "asset" ? "选择菜品素材库目录" : "选择背景素材库目录", controller.signal);
+      if (path) {
+        if (kind === "asset") setAssetRoot(path);
+        else setBackgroundRoot(path);
+      }
     } catch (error) {
-      onToast(error instanceof Error ? error.message : "文件夹上传失败");
+      onToast(error instanceof DOMException && error.name === "AbortError" ? "系统文件夹选择器未响应，请直接填写目录路径" : error instanceof Error ? error.message : "文件夹选择失败");
     } finally {
-      setFolderBusy(null);
+      window.clearTimeout(timeout);
+      setFolderPickerBusy(null);
     }
   };
 
@@ -263,20 +251,18 @@ export function AssetLibraryBatchPanel({ onToast }: { onToast: (message: string)
   };
 
   return <section className="step-panel asset-library-batch-panel">
-    <small className="muted">云端使用时请上传本机文件夹；系统会保留目录层级并扫描实际存放图片的最深层菜品文件夹。若 ECS 已挂载共享素材盘，也可直接填写服务器路径。</small>
+    <small className="muted">填写运行后端的服务器绝对路径；系统会扫描实际存放图片的最深层菜品文件夹。浏览器能访问共享目录，不代表后端服务器已经挂载该目录。</small>
     <div className="panel-section-head"><div><span className="panel-label">ASSET LIBRARY AUTOMATION</span><h2>素材库批量建稿</h2><p className="muted">按“菜品文件夹名”识别菜品，随机抽图和背景，先生成待确认流程，再决定是否调用抠图与 Kling。</p></div><button type="button" className="btn" onClick={() => navigate("/workflow/asset-library-review")}>打开人工整理工作台</button></div>
     <div className="field-grid asset-library-paths">
       <label className="field">
         <span>菜品素材库路径</span>
-        <div className="asset-path-control"><input className="input" readOnly={isUploadedFolderRoot(assetRoot)} value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="云端上传后自动填写；或填写 ECS 服务器路径" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => assetFolderInputRef.current?.click()}>{folderBusy === "asset" ? "上传中..." : "上传本机文件夹"}</button></div>
-        <input ref={assetFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("asset", event)} />
-        <small className="muted">支持 JPG、JPEG、PNG、WEBP、GIF；可同时上传根目录的 asset_metadata.json。单个文件不超过 50 MB。{folderUploadSummary.asset ? ` ${folderUploadSummary.asset}` : ""}</small>
+        <div className="asset-path-control"><input className="input" value={assetRoot} onChange={event => setAssetRoot(event.target.value)} placeholder="例如 /mnt/company-assets/dishes" />{canChooseServerFolder() && <button type="button" className="btn" disabled={busy || folderPickerBusy !== null} onClick={() => void chooseServerFolder("asset")}>{folderPickerBusy === "asset" ? "选择中..." : "选择服务器目录"}</button>}</div>
+        <small className="muted">填写后端服务器可访问的菜品素材目录；支持 JPG、JPEG、PNG、WEBP。可在目录根部放置 asset_metadata.json。按钮仅适用于本地测试或桌面部署。</small>
       </label>
       <label className="field">
         <span>背景素材库路径</span>
-        <div className="asset-path-control"><input className="input" readOnly={isUploadedFolderRoot(backgroundRoot)} value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="云端上传后自动填写；或填写 ECS 服务器路径" /><button type="button" className="btn" disabled={folderBusy !== null} onClick={() => backgroundFolderInputRef.current?.click()}>{folderBusy === "background" ? "上传中..." : "上传本机文件夹"}</button></div>
-        <input ref={backgroundFolderInputRef} className="visually-hidden" type="file" multiple onChange={event => void uploadFolder("background", event)} />
-        <small className="muted">支持 JPG、JPEG、PNG、WEBP、GIF。单个文件不超过 50 MB。{folderUploadSummary.background ? ` ${folderUploadSummary.background}` : ""}</small>
+        <div className="asset-path-control"><input className="input" value={backgroundRoot} onChange={event => setBackgroundRoot(event.target.value)} placeholder="例如 /mnt/company-assets/backgrounds" />{canChooseServerFolder() && <button type="button" className="btn" disabled={busy || folderPickerBusy !== null} onClick={() => void chooseServerFolder("background")}>{folderPickerBusy === "background" ? "选择中..." : "选择服务器目录"}</button>}</div>
+        <small className="muted">填写后端服务器可访问的背景素材目录；支持 JPG、JPEG、PNG、WEBP。按钮仅适用于本地测试或桌面部署。</small>
       </label>
     </div>
     <div className="asset-category-grid">{CATEGORIES.map(category => <label className="field" key={category}><span>{category}数量</span><input className="input" type="number" min="0" max="50" value={counts[category]} onChange={event => updateCount(category, Number(event.target.value))} /></label>)}</div>
