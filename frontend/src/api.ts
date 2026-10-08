@@ -167,15 +167,6 @@ export async function cancelOssAssetJob(jobId: string): Promise<OssAssetJob> {
   return parseResponse<OssAssetJob>(response);
 }
 
-export async function flagOssAssetForRegeneration(jobId: string, assetId: string): Promise<OssAssetJob> {
-  const response = await fetch(`${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}/regenerate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ asset_id: assetId }),
-  });
-  return parseResponse<OssAssetJob>(response);
-}
-
 export async function fetchDefaultBgm(): Promise<Array<{ name: string; url: string }>> {
   const response = await fetch(`${API_BASE_URL}/api/canvas/bgm/default`, { cache: "no-store" });
   return parseResponse<Array<{ name: string; url: string }>>(response);

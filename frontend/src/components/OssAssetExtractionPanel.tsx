@@ -5,7 +5,6 @@ import {
   cancelOssAssetJob,
   createOssAssetJob,
   fetchOssInventory,
-  flagOssAssetForRegeneration,
   getOssAssetJob,
   requestOssInventoryRefresh,
   type OssAssetJob,
@@ -150,19 +149,6 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
     }
   };
 
-  const regenerate = async (assetId: string) => {
-    if (!job) return;
-    setBusy(true);
-    try {
-      setJob(await flagOssAssetForRegeneration(job.job_id, assetId));
-      onToast("已标记该素材，后续可重新生成对应片段");
-    } catch (error) {
-      onToast(error instanceof Error ? error.message : "标记重新生成失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return <section className="step-panel asset-library-batch-panel">
     <div className="panel-section-head">
       <div>
@@ -209,7 +195,6 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
           return <article className="asset-plan-item" key={asset.asset_id}>
             {preview ? <img src={preview} alt={asset.dish_name} /> : <div className="asset-plan-placeholder">处理中</div>}
             <span><strong>{asset.dish_name}</strong><small>{asset.category} · {asset.status === "ready_for_review" ? "待审查" : asset.status}{asset.normalized_width && asset.normalized_height ? ` · ${asset.normalized_width}×${asset.normalized_height}` : ""}</small>{asset.skip_reason && <small className="source-pending">{asset.skip_reason}</small>}</span>
-            {(job.status === "awaiting_review" || job.status === "completed") && <button type="button" className="btn" disabled={busy} onClick={() => void regenerate(asset.asset_id)}>重新生成</button>}
           </article>;
         })}
       </div>
