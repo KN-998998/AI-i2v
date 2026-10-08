@@ -64,7 +64,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PATH: C:\短视频生产提效
         run: |
           if ([string]::IsNullOrWhiteSpace($env:DEPLOY_HOST)) { throw "DEPLOY_HOST is required." }
           if ([string]::IsNullOrWhiteSpace($env:DEPLOY_USER)) { throw "DEPLOY_USER is required." }
