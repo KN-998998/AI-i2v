@@ -37,14 +37,6 @@ if ([string]::IsNullOrWhiteSpace($logsRoot) -or [string]::IsNullOrWhiteSpace($ou
 }
 New-Item -ItemType Directory -Force -Path $logsRoot, $outputRoot | Out-Null
 
-# 先确认完整媒体链路可用，再更新代码或停止旧服务；否则一次普通发布会把原本
-# 可访问的 API 换成无法合成成片的半成品环境。
-$env:PATH = "$ProjectRoot\.runtime\ffmpeg\bin;$($env:PATH)"
-$videoEncoder = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
-$mediaProbe = (Get-Command ffprobe.exe -ErrorAction Stop).Source
-Invoke-Checked $videoEncoder @("-version") | Out-Null
-Invoke-Checked $mediaProbe @("-version") | Out-Null
-
 $git = (Get-Command git.exe -ErrorAction Stop).Source
 $gitPullCompleted = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
@@ -64,6 +56,23 @@ for ($attempt = 1; $attempt -le 3; $attempt++) {
 if (-not $gitPullCompleted) {
     throw "Git pull did not complete."
 }
+
+# 先补齐并确认完整媒体链路，再更新依赖或停止旧服务。计划任务不会继承登录用户
+# 的 PATH，因此优先使用项目本地运行时；新实例缺失时由部署过程幂等安装。
+$env:PATH = "$ProjectRoot\.runtime\ffmpeg\bin;$($env:PATH)"
+$videoEncoder = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+$mediaProbe = Get-Command ffprobe.exe -ErrorAction SilentlyContinue
+if ($null -eq $videoEncoder -or $null -eq $mediaProbe) {
+    & (Join-Path $ProjectRoot "scripts\install_ffmpeg_windows.ps1") -ProjectRoot $ProjectRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "Project-local FFmpeg installation failed with exit code $LASTEXITCODE."
+    }
+    $env:PATH = "$ProjectRoot\.runtime\ffmpeg\bin;$($env:PATH)"
+    $videoEncoder = Get-Command ffmpeg.exe -ErrorAction Stop
+    $mediaProbe = Get-Command ffprobe.exe -ErrorAction Stop
+}
+Invoke-Checked $videoEncoder.Source @("-version") | Out-Null
+Invoke-Checked $mediaProbe.Source @("-version") | Out-Null
 
 $pythonLauncher = Get-Command py.exe -ErrorAction SilentlyContinue
 $pythonOnPath = Get-Command python.exe -ErrorAction SilentlyContinue
