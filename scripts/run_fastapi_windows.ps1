@@ -15,6 +15,10 @@ if ([string]::IsNullOrWhiteSpace($ErrorLog)) {
     $ErrorLog = $OutputLog -replace '\.out\.log$', '.err.log'
 }
 
+# 计划任务以 SYSTEM 启动时不会继承登录用户的 PATH。项目本地 FFmpeg 是生产链路
+# 的固定依赖，显式加入后，片段裁剪、字幕、音频和质量检查才不会随会话环境漂移。
+$env:PATH = "$ProjectRoot\.runtime\ffmpeg\bin;$($env:PATH)"
+
 # 计划任务以 SYSTEM 启动，不继承 SSH 会话环境；这里显式固定公网监听地址。
 $env:APP_HOST = "0.0.0.0"
 $env:APP_PORT = "8015"

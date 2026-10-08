@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.runtime/
 
 # 环境变量（含 API Key）
 .env

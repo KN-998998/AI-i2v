@@ -9,6 +9,12 @@ WEB_ROOT = PROJECT_ROOT / "web"
 STATIC_DIR = WEB_ROOT / "static"
 LOG_DIR = PROJECT_ROOT / "logs"
 
+# Windows 计划任务不会稳定继承交互式会话的 PATH。把项目本地媒体运行时加入
+# Python 进程环境，确保所有后台线程调用 ffmpeg/ffprobe 时使用同一套版本。
+_BUNDLED_MEDIA_BIN = PROJECT_ROOT / ".runtime" / "ffmpeg" / "bin"
+if (_BUNDLED_MEDIA_BIN / "ffmpeg.exe").is_file() and (_BUNDLED_MEDIA_BIN / "ffprobe.exe").is_file():
+    os.environ["PATH"] = f"{_BUNDLED_MEDIA_BIN}{os.pathsep}{os.environ.get('PATH', '')}"
+
 
 def _load_dotenv(env_path: Path) -> None:
     """让原生 Windows 进程也能读取服务器本地 .env，且不覆盖系统环境变量。"""
