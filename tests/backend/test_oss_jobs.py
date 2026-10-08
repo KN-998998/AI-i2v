@@ -53,14 +53,18 @@ class _FakeBucket:
 
 def test_oss_provider_selects_different_dish_folders(monkeypatch):
     monkeypatch.setattr("web.services.oss_asset_provider.OSS_ASSET_PREFIX", "图片素材库")
-    provider = OssAssetProvider(_FakeBucket())
+    OssAssetProvider.clear_dish_folder_cache()
+    bucket = _FakeBucket()
+    provider = OssAssetProvider(bucket)
 
     diagnostics = provider.diagnose_layout()
     assert diagnostics["layout_ready"] is True
     assert diagnostics["categories"][0]["dish_folder_count"] == 3
+    calls_after_inventory_scan = len(bucket.list_calls)
 
     selected = provider.select_unique_assets([{"category": "寿司", "count": 3}], random.Random(7))
 
+    assert len(bucket.list_calls) == calls_after_inventory_scan
     assert len(selected) == 3
     assert len({item["dish_name"] for item in selected}) == 3
     assert all(item["object_key"].startswith("图片素材库/寿司/") for item in selected)

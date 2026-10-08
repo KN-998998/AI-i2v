@@ -166,7 +166,9 @@ class OssAssetProvider:
         categories = self.list_categories()
         summary: list[dict[str, Any]] = []
         for category in categories:
-            folders = self._scan_dish_folders(category)
+            # 库存扫描已经付出了整类枚举成本；复用同一索引，避免扫描完成后的首次抽取
+            # 在大素材库上再次等待相同的 OSS 分页请求。
+            folders = self.list_dish_folders(category)
             summary.append({
                 "category": category,
                 "dish_folder_count": len(folders),
