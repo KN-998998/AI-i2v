@@ -40,8 +40,10 @@ New-Item -ItemType Directory -Force -Path $logsRoot, $outputRoot | Out-Null
 # 先确认完整媒体链路可用，再更新代码或停止旧服务；否则一次普通发布会把原本
 # 可访问的 API 换成无法合成成片的半成品环境。
 $env:PATH = "$ProjectRoot\.runtime\ffmpeg\bin;$($env:PATH)"
-Invoke-Checked "$ProjectRoot\.runtime\ffmpeg\bin\ffmpeg.exe" @("-version") | Out-Null
-Invoke-Checked "$ProjectRoot\.runtime\ffmpeg\bin\ffprobe.exe" @("-version") | Out-Null
+$videoEncoder = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
+$mediaProbe = (Get-Command ffprobe.exe -ErrorAction Stop).Source
+Invoke-Checked $videoEncoder @("-version") | Out-Null
+Invoke-Checked $mediaProbe @("-version") | Out-Null
 
 $git = (Get-Command git.exe -ErrorAction Stop).Source
 $gitPullCompleted = $false
