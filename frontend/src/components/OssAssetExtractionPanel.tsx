@@ -7,6 +7,7 @@ import {
   fetchOssInventory,
   flagOssAssetForRegeneration,
   getOssAssetJob,
+  requestOssInventoryRefresh,
   type OssAssetJob,
   type OssInventory,
 } from "../api";
@@ -44,6 +45,7 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
   const [job, setJob] = useState<OssAssetJob | null>(null);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [refreshingLibrary, setRefreshingLibrary] = useState(false);
   const categories = inventory?.categories ?? [];
 
   useEffect(() => {
@@ -63,7 +65,12 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
 
   useEffect(() => {
     if (!inventory || (!inventory.refreshing && inventory.status !== "scanning")) return undefined;
-    const timer = window.setTimeout(() => { void fetchOssInventory().then(setInventory); }, 2000);
+    const timer = window.setTimeout(() => {
+      void fetchOssInventory().then(next => {
+        setInventory(next);
+        setCounts(current => Object.fromEntries(next.categories.map(item => [item.category, Math.min(current[item.category] ?? 0, item.dish_count)])));
+      });
+    }, 2000);
     return () => window.clearTimeout(timer);
   }, [inventory]);
 
@@ -77,7 +84,7 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
 
   const selectedCount = useMemo(() => Object.values(counts).reduce((total, count) => total + count, 0), [counts]);
   const isActive = Boolean(job && ACTIVE_STATUSES.has(job.status));
-  const canSubmit = selectedCount > 0 && !busy && !isActive && categories.length > 0 && inventory?.status !== "scanning";
+  const canSubmit = selectedCount > 0 && !busy && !isActive && !inventory?.refreshing && categories.length > 0 && inventory?.status !== "scanning";
 
   const updateCount = (category: string, value: string, maximum: number) => {
     setCounts(current => ({ ...current, [category]: Math.min(normalizeCount(value), maximum) }));
@@ -100,6 +107,20 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
       onToast(error instanceof Error ? error.message : "OSS 素材抽取失败");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const refreshLibrary = async () => {
+    setRefreshingLibrary(true);
+    try {
+      const next = await requestOssInventoryRefresh();
+      setInventory(next);
+      setCounts(current => Object.fromEntries(next.categories.map(item => [item.category, Math.min(current[item.category] ?? 0, item.dish_count)])));
+      onToast(next.refreshing ? "已开始刷新 OSS 素材库，完成后会更新分类数量" : "OSS 素材库已刷新");
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "刷新 OSS 素材库失败");
+    } finally {
+      setRefreshingLibrary(false);
     }
   };
 
@@ -149,17 +170,23 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
         <h2>从云端素材库抽取</h2>
         <p className="muted">素材库由服务器固定配置，系统会按分类数量随机抽取不同菜品文件夹中的一张图片。</p>
       </div>
-      {job && <span className={`node-status ${job.status === "error" ? "source-pending" : "source-ready"}`}>{STATUS_LABELS[job.status]}</span>}
+      <div className="panel-actions">
+        <button type="button" className="btn" disabled={loadingCategories || busy || isActive || refreshingLibrary || Boolean(inventory?.refreshing)} onClick={() => void refreshLibrary()}>
+          {refreshingLibrary || inventory?.refreshing ? "正在刷新..." : "刷新素材库"}
+        </button>
+        {job && <span className={`node-status ${job.status === "error" ? "source-pending" : "source-ready"}`}>{STATUS_LABELS[job.status]}</span>}
+      </div>
     </div>
 
     {loadingCategories && <small className="muted">正在读取固定素材库分类...</small>}
     {inventory?.status === "error" && <div className="source-pending">{inventory.error || "OSS 库存扫描失败"}</div>}
-    {inventory?.status === "stale" && <div className="source-pending">正在更新 OSS 库存数量，当前显示上次扫描结果；更新完成后会自动刷新。</div>}
+    {inventory?.status === "stale" && inventory.refreshing && <div className="source-pending">正在更新 OSS 库存数量，当前显示上次扫描结果；更新完成后会自动刷新。</div>}
+    {inventory?.status === "stale" && !inventory.refreshing && inventory.error && <div className="source-pending">{inventory.error}，当前仍显示上次扫描结果。</div>}
     {!loadingCategories && inventory?.status !== "error" && <>
       <div className="asset-category-grid oss-category-counts">
         {categories.map(item => <label className="field" key={item.category}>
           <span>{item.category}数量（可用 {item.dish_count}）</span>
-          <input className="input" type="number" min="0" max={item.dish_count} value={counts[item.category] ?? 0} onChange={event => updateCount(item.category, event.target.value, item.dish_count)} disabled={isActive || busy || inventory?.status === "scanning"} />
+          <input className="input" type="number" min="0" max={item.dish_count} value={counts[item.category] ?? 0} onChange={event => updateCount(item.category, event.target.value, item.dish_count)} disabled={isActive || busy || inventory?.refreshing || inventory?.status === "scanning"} />
         </label>)}
       </div>
       <div className="compose-actions">

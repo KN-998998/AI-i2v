@@ -9,8 +9,10 @@ from __future__ import annotations
 import mimetypes
 import posixpath
 import re
+import threading
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import quote
 from urllib.request import urlopen
 
@@ -21,12 +23,15 @@ from web.core.settings import (
     OSS_ENDPOINT,
     OSS_MAX_IMAGE_BYTES,
     OSS_RAM_ROLE_NAME,
+    OSS_INVENTORY_INTERVAL_SECONDS,
 )
 
 IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 _KEY_PART_RE = re.compile(r"^[^\\/]+$")
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 _ECS_RAM_ROLE_CREDENTIALS_URL = "http://100.100.100.200/latest/meta-data/ram/security-credentials"
+_DISH_FOLDER_CACHE_LOCK = threading.RLock()
+_DISH_FOLDER_CACHE: dict[tuple[str, str, str], tuple[float, list[dict[str, Any]]]] = {}
 
 
 def _ecs_ram_role_auth_host() -> str:
@@ -120,7 +125,10 @@ class OssAssetProvider:
 
     def _list_objects(self, prefix: str, *, delimiter: str | None = None) -> list[Any]:
         """List all pages without exposing SDK pagination to callers."""
-        result: list[Any] = []
+        return list(self._iter_objects(prefix, delimiter=delimiter))
+
+    def _iter_objects(self, prefix: str, *, delimiter: str | None = None) -> Iterator[Any]:
+        """逐页读取 OSS 清单，避免一次把整类对象重复装入临时列表。"""
         marker = ""
         while True:
             response = self.bucket.list_objects(
@@ -130,16 +138,16 @@ class OssAssetProvider:
                 max_keys=1000,
             )
             if delimiter:
-                result.extend(getattr(response, "prefix_list", []) or [])
+                page_items = getattr(response, "prefix_list", []) or []
             else:
-                result.extend(getattr(response, "object_list", []) or [])
+                page_items = getattr(response, "object_list", []) or []
+            yield from page_items
             if not getattr(response, "is_truncated", False):
                 break
             next_marker = str(getattr(response, "next_marker", "") or "")
             if not next_marker or next_marker == marker:
                 break
             marker = next_marker
-        return result
 
     def list_categories(self) -> list[str]:
         if OSS_ALLOWED_CATEGORIES:
@@ -158,7 +166,7 @@ class OssAssetProvider:
         categories = self.list_categories()
         summary: list[dict[str, Any]] = []
         for category in categories:
-            folders = self.list_dish_folders(category)
+            folders = self._scan_dish_folders(category)
             summary.append({
                 "category": category,
                 "dish_folder_count": len(folders),
@@ -174,20 +182,56 @@ class OssAssetProvider:
 
     def list_dish_folders(self, category: str) -> list[dict[str, Any]]:
         category = self._assert_category_allowed(category)
+        category_prefix = _join_key(OSS_ASSET_PREFIX, category)
+        cache_key = (OSS_ENDPOINT, OSS_BUCKET, category_prefix)
+        now = time.monotonic()
+        with _DISH_FOLDER_CACHE_LOCK:
+            cached = _DISH_FOLDER_CACHE.get(cache_key)
+            # 菜品索引与库存数量共用有效期；主动刷新库存时会一并清掉索引。
+            if cached and now - cached[0] < OSS_INVENTORY_INTERVAL_SECONDS:
+                return cached[1]
+            folders = self._scan_dish_folders(category)
+            _DISH_FOLDER_CACHE[cache_key] = (now, folders)
+            return folders
+
+    def _scan_dish_folders(self, category: str) -> list[dict[str, Any]]:
+        category = self._assert_category_allowed(category)
         category_prefix = _join_key(OSS_ASSET_PREFIX, category) + "/"
-        prefixes = self._list_objects(category_prefix, delimiter="/")
-        folders: list[dict[str, Any]] = []
-        for raw_prefix in prefixes:
-            prefix = str(raw_prefix)
-            if not prefix.startswith(category_prefix) or prefix == category_prefix:
+        folders_by_name: dict[str, dict[str, Any]] = {}
+        for item in self._iter_objects(category_prefix):
+            key = str(getattr(item, "key", "") or "")
+            if not key.startswith(category_prefix) or not _is_image_key(key):
                 continue
-            dish_name = prefix[len(category_prefix):].rstrip("/")
-            if not dish_name or "/" in dish_name:
+            relative_key = key[len(category_prefix):]
+            if "/" not in relative_key:
                 continue
-            images = self.list_images(prefix)
-            if images:
-                folders.append({"category": category, "dish_name": dish_name, "prefix": prefix, "images": images})
+            dish_name = relative_key.split("/", 1)[0]
+            if not dish_name or dish_name in {".", ".."}:
+                continue
+            suffix = Path(key).suffix.lower()
+            folder = folders_by_name.setdefault(dish_name, {
+                "category": category,
+                "dish_name": dish_name,
+                "prefix": f"{category_prefix}{dish_name}/",
+                "images": [],
+            })
+            folder["images"].append({
+                "object_key": key,
+                "filename": Path(key).name,
+                "suffix": suffix,
+                "size": int(getattr(item, "size", 0) or 0),
+                "content_type": str(getattr(item, "content_type", "") or mimetypes.guess_type(key)[0] or "application/octet-stream"),
+            })
+        folders = sorted(folders_by_name.values(), key=lambda item: item["dish_name"])
+        for folder in folders:
+            folder["images"].sort(key=lambda image: image["object_key"])
         return folders
+
+    @staticmethod
+    def clear_dish_folder_cache() -> None:
+        """库存刷新时清除对象索引，避免新上传的图片被旧清单漏掉。"""
+        with _DISH_FOLDER_CACHE_LOCK:
+            _DISH_FOLDER_CACHE.clear()
 
     def list_images(self, dish_prefix: str) -> list[dict[str, Any]]:
         images: list[dict[str, Any]] = []

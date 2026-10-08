@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -15,8 +16,15 @@ logger = logging.getLogger(__name__)
 
 _LOCK = threading.RLock()
 _REFRESHING = False
+_LAST_MANUAL_REFRESH_AT: float | None = None
 _STOP = threading.Event()
 _THREAD: threading.Thread | None = None
+# 公网页面可触发整库枚举，短冷却避免重复请求耗尽 OSS 列表配额。
+_MANUAL_REFRESH_COOLDOWN_SECONDS = 60
+
+
+class InventoryRefreshRateLimited(RuntimeError):
+    """手动整库扫描触发过于频繁。"""
 
 
 def _now() -> datetime:
@@ -80,17 +88,10 @@ def _scan() -> dict[str, Any]:
     }
 
 
-def refresh_inventory(force: bool = False) -> dict[str, Any]:
-    """Scan OSS once and persist only safe category counts."""
-    global _REFRESHING
-    with _LOCK:
-        current = _read()
-        if not force and not is_stale(current):
-            return current or {}
-        if _REFRESHING:
-            return current or {"status": "scanning", "categories": []}
-        _REFRESHING = True
+def _scan_and_save() -> dict[str, Any]:
     try:
+        # 上传后显式重建清单，避免抽取继续使用此前缓存的对象 key。
+        OssAssetProvider.clear_dish_folder_cache()
         payload = _scan()
         with _LOCK:
             _write(payload)
@@ -102,9 +103,65 @@ def refresh_inventory(force: bool = False) -> dict[str, Any]:
             current.update({"status": "stale" if current.get("scanned_at") else "error", "error": public_oss_error_message(exc), "last_attempt_at": _iso(_now())})
             _write(current)
             return current
+
+
+def refresh_inventory(force: bool = False) -> dict[str, Any]:
+    """Scan OSS once and persist only safe category counts."""
+    global _REFRESHING
+    with _LOCK:
+        current = _read()
+        if not force and not is_stale(current):
+            return current or {}
+        if _REFRESHING:
+            return current or {"status": "scanning", "categories": []}
+        _REFRESHING = True
+    try:
+        return _scan_and_save()
     finally:
         with _LOCK:
             _REFRESHING = False
+
+
+def _finish_manual_refresh() -> None:
+    global _LAST_MANUAL_REFRESH_AT, _REFRESHING
+    try:
+        _scan_and_save()
+    finally:
+        with _LOCK:
+            _LAST_MANUAL_REFRESH_AT = time.monotonic()
+            _REFRESHING = False
+
+
+def _pending_inventory(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if payload is None:
+        return {"status": "scanning", "categories": [], "error": None, "refreshing": True}
+    result = dict(payload)
+    if result.get("status") == "ready":
+        result["status"] = "stale"
+    result["refreshing"] = True
+    return result
+
+
+def request_manual_refresh() -> dict[str, Any]:
+    """上传完成后异步刷新库存，避免浏览器请求等待整库扫描结束。"""
+    global _LAST_MANUAL_REFRESH_AT, _REFRESHING
+    with _LOCK:
+        current = _read()
+        if _REFRESHING:
+            return _pending_inventory(current)
+        now = time.monotonic()
+        if _LAST_MANUAL_REFRESH_AT is not None and now - _LAST_MANUAL_REFRESH_AT < _MANUAL_REFRESH_COOLDOWN_SECONDS:
+            raise InventoryRefreshRateLimited("素材库刚刚刷新过，请稍后再试")
+        _REFRESHING = True
+        _LAST_MANUAL_REFRESH_AT = now
+        thread = threading.Thread(target=_finish_manual_refresh, name="oss-inventory-manual-refresh", daemon=True)
+        try:
+            thread.start()
+        except Exception:
+            _REFRESHING = False
+            _LAST_MANUAL_REFRESH_AT = None
+            raise
+        return _pending_inventory(current)
 
 
 def request_refresh_if_stale() -> None:

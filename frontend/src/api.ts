@@ -132,6 +132,11 @@ export async function fetchOssInventory(): Promise<OssInventory> {
   return parseResponse<OssInventory>(response);
 }
 
+export async function requestOssInventoryRefresh(): Promise<OssInventory> {
+  const response = await fetch(`${API_BASE_URL}/api/oss/inventory/refresh`, { method: "POST" });
+  return parseResponse<OssInventory>(response);
+}
+
 export async function fetchOssCategories(): Promise<string[]> {
   const response = await fetch(`${API_BASE_URL}/api/oss/categories`, { cache: "no-store" });
   const payload = await parseResponse<{ categories: string[] }>(response);

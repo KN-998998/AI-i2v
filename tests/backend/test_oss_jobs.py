@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from PIL import Image
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from web.app import create_app
@@ -33,6 +34,7 @@ class _Listing:
 
 class _FakeBucket:
     def __init__(self):
+        self.list_calls = []
         self.keys = [
             "图片素材库/寿司/三文鱼寿司/a.jpg",
             "图片素材库/寿司/三文鱼寿司/b.png",
@@ -41,6 +43,7 @@ class _FakeBucket:
         ]
 
     def list_objects(self, prefix="", delimiter=None, marker="", max_keys=1000):
+        self.list_calls.append((prefix, delimiter, marker))
         keys = [key for key in self.keys if key.startswith(prefix)]
         if delimiter:
             prefixes = sorted({key[: key.find(delimiter, len(prefix)) + 1] for key in keys if delimiter in key[len(prefix):]})
@@ -61,6 +64,35 @@ def test_oss_provider_selects_different_dish_folders(monkeypatch):
     assert len(selected) == 3
     assert len({item["dish_name"] for item in selected}) == 3
     assert all(item["object_key"].startswith("图片素材库/寿司/") for item in selected)
+
+
+def test_oss_provider_reuses_category_catalog_and_refreshes_after_invalidation(monkeypatch):
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_ASSET_PREFIX", "缓存测试素材库")
+    monkeypatch.setattr(oss_asset_provider_module, "OSS_ALLOWED_CATEGORIES", ())
+    bucket = _FakeBucket()
+    bucket.keys = [
+        "缓存测试素材库/寿司/三文鱼寿司/a.jpg",
+        "缓存测试素材库/寿司/三文鱼寿司/b.png",
+        "缓存测试素材库/寿司/金枪鱼寿司/a.jpg",
+        "缓存测试素材库/寿司/鳗鱼寿司/a.webp",
+    ]
+    provider = OssAssetProvider(bucket)
+
+    first = provider.select_unique_assets([{"category": "寿司", "count": 2}], random.Random(7))
+    calls_after_first_selection = len(bucket.list_calls)
+    second = provider.select_unique_assets([{"category": "寿司", "count": 2}], random.Random(8))
+
+    assert calls_after_first_selection == 1
+    assert len(bucket.list_calls) == calls_after_first_selection
+    assert len({item["dish_name"] for item in first}) == 2
+    assert len({item["dish_name"] for item in second}) == 2
+
+    bucket.keys.append("缓存测试素材库/寿司/虾寿司/a.jpg")
+    provider.clear_dish_folder_cache()
+    refreshed = provider.select_unique_assets([{"category": "寿司", "count": 4}], random.Random(9))
+
+    assert len(refreshed) == 4
+    assert len(bucket.list_calls) == calls_after_first_selection + 1
 
 
 def test_oss_provider_uses_ecs_ram_role_metadata_endpoint(monkeypatch):
@@ -196,6 +228,10 @@ def test_oss_job_request_limits_are_rejected():
 
 def test_oss_inventory_persists_category_counts(monkeypatch, tmp_path):
     class _InventoryProvider:
+        @staticmethod
+        def clear_dish_folder_cache():
+            pass
+
         def diagnose_layout(self):
             return {
                 "layout_ready": True,
@@ -218,8 +254,70 @@ def test_oss_inventory_persists_category_counts(monkeypatch, tmp_path):
     assert oss_inventory.get_inventory()["scanned_at"] == snapshot["scanned_at"]
 
 
+def test_manual_oss_inventory_refresh_rebuilds_counts_and_invalidates_asset_catalog(monkeypatch, tmp_path):
+    cleared = []
+
+    class _InventoryProvider:
+        @staticmethod
+        def clear_dish_folder_cache():
+            cleared.append(True)
+
+        def diagnose_layout(self):
+            return {
+                "layout_ready": True,
+                "categories": [
+                    {"category": "寿司", "dish_folder_count": 4, "image_count": 11},
+                    {"category": "甜品", "dish_folder_count": 2, "image_count": 3},
+                ],
+            }
+
+    monkeypatch.setattr(oss_inventory, "OSS_INVENTORY_PATH", tmp_path / "oss-inventory.json")
+    monkeypatch.setattr(oss_inventory, "OssAssetProvider", _InventoryProvider)
+    monkeypatch.setattr(oss_inventory, "_LAST_MANUAL_REFRESH_AT", 0)
+    monkeypatch.setattr(oss_inventory, "_REFRESHING", False)
+
+    queued = oss_inventory.request_manual_refresh()
+    assert queued["refreshing"] is True
+
+    for _ in range(100):
+        snapshot = oss_inventory.get_inventory()
+        if snapshot.get("status") == "ready" and not snapshot.get("refreshing"):
+            break
+        time.sleep(0.01)
+
+    assert snapshot["status"] == "ready"
+    assert snapshot["total_dish_count"] == 6
+    assert [item["category"] for item in snapshot["categories"]] == ["寿司", "甜品"]
+    assert cleared == [True]
+
+
+def test_manual_oss_inventory_refresh_route_returns_pending_inventory(monkeypatch):
+    pending = {"status": "scanning", "categories": [], "error": None, "refreshing": True}
+    monkeypatch.setattr(routes, "request_oss_inventory_refresh", lambda: pending)
+
+    assert routes.refresh_oss_inventory_snapshot() == pending
+
+
+def test_manual_oss_inventory_refresh_route_limits_repeated_full_scans(monkeypatch):
+    def _limited_refresh():
+        raise oss_inventory.InventoryRefreshRateLimited("素材库刚刚刷新过，请稍后再试")
+
+    monkeypatch.setattr(routes, "request_oss_inventory_refresh", _limited_refresh)
+
+    try:
+        routes.refresh_oss_inventory_snapshot()
+    except HTTPException as exc:
+        assert exc.status_code == 429
+    else:
+        raise AssertionError("repeated inventory refresh should be rate limited")
+
+
 def test_oss_inventory_hides_provider_details(monkeypatch, tmp_path):
     class _DeniedProvider:
+        @staticmethod
+        def clear_dish_folder_cache():
+            pass
+
         def diagnose_layout(self):
             raise RuntimeError("AccessDenied RequestId=secret-request HostId=private-host")
 
