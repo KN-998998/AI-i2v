@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   API_BASE_URL,
   approveOssAssetJob,
@@ -10,6 +10,8 @@ import {
   type OssAssetJob,
   type OssInventory,
 } from "../api";
+import { ossAssetsToPlanItems } from "../ossAssetWorkflow";
+import { useWorkflowStore } from "../workflowStore";
 
 const ACTIVE_STATUSES = new Set<OssAssetJob["status"]>([
   "queued",
@@ -39,13 +41,23 @@ function normalizeCount(value: string): number {
 }
 
 export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string) => void }) {
+  const savedJobId = useWorkflowStore(state => state.ossAssetJobId);
+  const setOssAssetJobId = useWorkflowStore(state => state.setOssAssetJobId);
+  const createBatchWorkflows = useWorkflowStore(state => state.createBatchWorkflows);
+  const saveDraft = useWorkflowStore(state => state.saveDraft);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [inventory, setInventory] = useState<OssInventory | null>(null);
   const [job, setJob] = useState<OssAssetJob | null>(null);
+  const [restoringJob, setRestoringJob] = useState(Boolean(savedJobId));
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [busy, setBusy] = useState(false);
   const [refreshingLibrary, setRefreshingLibrary] = useState(false);
   const categories = inventory?.categories ?? [];
+
+  const applyConfirmedJob = useCallback((nextJob: OssAssetJob): number => {
+    if (nextJob.status !== "completed") return 0;
+    return createBatchWorkflows(ossAssetsToPlanItems(nextJob.job_id, nextJob.assets)).length;
+  }, [createBatchWorkflows]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,9 +93,32 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
     return () => window.clearTimeout(timer);
   }, [job, onToast]);
 
+  useEffect(() => {
+    if (!savedJobId) {
+      setRestoringJob(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setRestoringJob(true);
+    void getOssAssetJob(savedJobId).then(restored => {
+      if (cancelled) return;
+      setJob(restored);
+      setCounts(current => ({ ...current, ...Object.fromEntries(restored.selections.map(item => [item.category, item.count])) }));
+      if (restored.status === "completed") {
+        const created = applyConfirmedJob(restored);
+        if (created > 0) void saveDraft().catch(() => onToast("已确认素材，但画布保存失败，请手动保存草稿"));
+      }
+    }).catch(error => {
+      if (!cancelled) onToast(error instanceof Error ? error.message : "已保存的素材任务读取失败");
+    }).finally(() => {
+      if (!cancelled) setRestoringJob(false);
+    });
+    return () => { cancelled = true; };
+  }, [applyConfirmedJob, onToast, saveDraft, savedJobId]);
+
   const selectedCount = useMemo(() => Object.values(counts).reduce((total, count) => total + count, 0), [counts]);
   const isActive = Boolean(job && ACTIVE_STATUSES.has(job.status));
-  const canSubmit = selectedCount > 0 && !busy && !isActive && !inventory?.refreshing && categories.length > 0 && inventory?.status !== "scanning";
+  const canSubmit = selectedCount > 0 && !busy && !restoringJob && !isActive && !inventory?.refreshing && categories.length > 0 && inventory?.status !== "scanning";
 
   const updateCount = (category: string, value: string, maximum: number) => {
     setCounts(current => ({ ...current, [category]: Math.min(normalizeCount(value), maximum) }));
@@ -101,6 +136,8 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
     try {
       const created = await createOssAssetJob(selections);
       setJob(created);
+      setOssAssetJobId(created.job_id);
+      await saveDraft();
       onToast("已提交 OSS 素材抽取任务");
     } catch (error) {
       onToast(error instanceof Error ? error.message : "OSS 素材抽取失败");
@@ -127,8 +164,12 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
     if (!job) return;
     setBusy(true);
     try {
-      setJob(await approveOssAssetJob(job.job_id));
-      onToast("素材已确认，抽取结果已保留在本次任务中");
+      const approved = await approveOssAssetJob(job.job_id);
+      setJob(approved);
+      setOssAssetJobId(approved.job_id);
+      const created = applyConfirmedJob(approved);
+      await saveDraft();
+      onToast(created > 0 ? `素材已确认，已创建 ${created} 条菜品编辑流程` : "素材已确认，但没有可创建的菜品流程");
     } catch (error) {
       onToast(error instanceof Error ? error.message : "素材确认失败");
     } finally {
@@ -141,6 +182,8 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
     setBusy(true);
     try {
       setJob(await cancelOssAssetJob(job.job_id));
+      setOssAssetJobId(null);
+      await saveDraft();
       onToast("素材任务已取消");
     } catch (error) {
       onToast(error instanceof Error ? error.message : "取消素材任务失败");
@@ -165,6 +208,7 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
     </div>
 
     {loadingCategories && <small className="muted">正在读取固定素材库分类...</small>}
+    {restoringJob && <small className="muted">正在恢复上次确认的素材任务...</small>}
     {inventory?.status === "error" && <div className="source-pending">{inventory.error || "OSS 库存扫描失败"}</div>}
     {inventory?.status === "stale" && inventory.refreshing && <div className="source-pending">正在更新 OSS 库存数量，当前显示上次扫描结果；更新完成后会自动刷新。</div>}
     {inventory?.status === "stale" && !inventory.refreshing && inventory.error && <div className="source-pending">{inventory.error}，当前仍显示上次扫描结果。</div>}

@@ -262,6 +262,8 @@ export type DraftPayload = {
   bgmName: string;
   bgmUrl: string;
   composeJob?: ComposeJob | null;
+  /** 当前草稿关联的 OSS 抽取任务，页面切换后用它恢复抽取结果。 */
+  ossAssetJobId?: string | null;
   assetLibraryPlan?: AssetLibraryPlan | null;
 };
 

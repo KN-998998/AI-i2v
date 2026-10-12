@@ -43,6 +43,7 @@ type WorkflowState = {
   bgmName: string;
   bgmUrl: string;
   composeJob: ComposeJob | null;
+  ossAssetJobId: string | null;
   assetLibraryPlan: AssetLibraryPlan | null;
   nextNodeNumber: number;
   draftId: string;
@@ -100,6 +101,7 @@ type WorkflowState = {
   removeWorkspaceClip: (workspaceId: string, clipId: string) => void;
   addWorkspaceClip: (workspaceId: string, clipId: string) => void;
   setWorkspaceJob: (workspaceId: string, job: ComposeJob | null) => void;
+  setOssAssetJobId: (jobId: string | null) => void;
   setAssetLibraryPlan: (plan: AssetLibraryPlan | null) => void;
   updateAssetLibraryReviewClassification: (dishName: string, category: string, foodType: FoodType | "" | null, visualSubjectType?: VisualSubjectType) => void;
   loadDraft: () => Promise<void>;
@@ -357,6 +359,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   bgmName: workflowSeed.bgmName,
   bgmUrl: "",
   composeJob: null,
+  ossAssetJobId: null,
   assetLibraryPlan: null,
   nextNodeNumber: 1,
   draftId: browserDraftId(),
@@ -1166,6 +1169,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     composeJob: job,
     revision: state.revision + 1,
   })),
+  setOssAssetJobId: ossAssetJobId => set(state => ({ ossAssetJobId, revision: state.revision + 1 })),
   setAssetLibraryPlan: assetLibraryPlan => set(state => ({ assetLibraryPlan, revision: state.revision + 1 })),
   updateAssetLibraryReviewClassification: (dishName, category, foodType, visualSubjectType) => set(state => {
     if (!state.assetLibraryPlan) return {};
@@ -1212,6 +1216,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
        bgmName: draft.bgmName ?? "",
       bgmUrl: draft.bgmUrl ?? "",
       composeJob: draft.composeJob ?? null,
+      ossAssetJobId: draft.ossAssetJobId ?? null,
       assetLibraryPlan: draft.assetLibraryPlan ?? null,
       activePanel: draft.activePanel as Panel,
       nextNodeNumber: draft.nextNodeNumber,
@@ -1240,6 +1245,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         bgmName: state.bgmName,
         bgmUrl: state.bgmUrl,
         composeJob: state.composeJob,
+        ossAssetJobId: state.ossAssetJobId,
         assetLibraryPlan: state.assetLibraryPlan
           ? {
             ...state.assetLibraryPlan,

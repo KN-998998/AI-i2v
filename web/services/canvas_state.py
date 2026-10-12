@@ -263,6 +263,7 @@ def save_draft(draft_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         "bgmName": payload.get("bgmName", "默认 BGM"),
         "bgmUrl": payload.get("bgmUrl", ""),
         "composeJob": compose_job,
+        "ossAssetJobId": payload.get("ossAssetJobId"),
         "assetLibraryPlan": payload.get("assetLibraryPlan"),
     }
     temporary = directory / f"draft.{uuid.uuid4().hex}.tmp"

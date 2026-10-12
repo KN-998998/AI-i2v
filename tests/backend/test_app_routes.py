@@ -203,6 +203,7 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
         ],
         "bgmName": "默认 BGM",
         "bgmUrl": "",
+        "ossAssetJobId": "0123456789abcdef0123456789abcdef",
         "assetLibraryPlan": {
             "assetRoot": "F:\\assets",
             "backgroundRoot": "F:\\backgrounds",
@@ -227,6 +228,7 @@ def test_canvas_draft_and_file_persistence(monkeypatch, tmp_path):
     assert client.get("/api/canvas/drafts/default").json()["nextNodeNumber"] == 3
     assert client.get("/api/canvas/drafts/default").json()["composeBatchCount"] == 2
     assert len(client.get("/api/canvas/drafts/default").json()["composeWorkspaces"]) == 2
+    assert client.get("/api/canvas/drafts/default").json()["ossAssetJobId"] == "0123456789abcdef0123456789abcdef"
     persisted_plan = client.get("/api/canvas/drafts/default").json()["assetLibraryPlan"]
     assert persisted_plan["assetRoot"] == "F:\\assets"
     assert persisted_plan["reviewItems"][0]["dishName"] == "炙烧寿司"

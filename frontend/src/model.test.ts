@@ -11,6 +11,7 @@ import { DEFAULT_EFFECT_RULES, EFFECT_CLASS_LABELS, EFFECT_COPY, effectClassFor,
 import { tutorialChapters } from "./tutorial.ts";
 import { readFileSync } from "node:fs";
 import { reconcileDraftClips } from "./clipLibrary.ts";
+import { ossAssetsToPlanItems } from "./ossAssetWorkflow.ts";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -130,6 +131,18 @@ assert(inferDishCategory("抹茶布丁") === "甜品", "dessert fallback classif
 assert(inferDishCategory("冷食三文鱼") === "其他", "food temperature must not imply fruit classification");
 assert(normalizeDishCategory("正餐") === "主菜" && normalizeDishCategory("小吃") === "前菜/小菜", "legacy categories were not migrated");
 assert(resolveDishCategory({ dish: "冷食三文鱼", dishCategory: "主菜" }) === "主菜", "explicit dish category was ignored");
+
+const ossPlanItems = ossAssetsToPlanItems("0123456789abcdef0123456789abcdef", [{
+  asset_id: "asset_001",
+  category: "刺身",
+  dish_name: "三文鱼刺身",
+  filename: "001_三文鱼刺身.jpg",
+  status: "completed",
+  normalized_url: "/api/jobs/0123456789abcdef0123456789abcdef/assets/asset_001/normalized",
+}]);
+assert(ossPlanItems.length === 1, "confirmed OSS assets were not converted into workflow items");
+assert(ossPlanItems[0].dishName === "三文鱼刺身" && ossPlanItems[0].dishCategory === "刺身", "OSS dish metadata was not preserved");
+assert(ossPlanItems[0].imagePreview === "/api/jobs/0123456789abcdef0123456789abcdef/assets/asset_001/normalized", "OSS preview URL was not portable");
 
 const overlays = overlayItemsFromData({ overlayMain: "开胃钩子", overlayCta: "现在预订", overlayPosition: "中上钩子区", overlayStart: "0s", overlayEnd: "2.5s" });
 assert(overlays.length === 2 && overlays[0].position === "upper" && overlays[1].position === "top", "legacy overlay fields were not migrated");
