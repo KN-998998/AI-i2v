@@ -20,11 +20,14 @@ def test_canvas_routes_serve_react_page_only():
 
     root_page = client.get("/")
     assert root_page.status_code == 200
-    assert root_page.headers["cache-control"] == "no-cache, must-revalidate"
+    assert root_page.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
+    assert root_page.headers["pragma"] == "no-cache"
+    assert root_page.headers["expires"] == "0"
     assert_react_entry(root_page.text)
 
     react_page = client.get("/canvas-mvp")
     assert react_page.status_code == 200
+    assert react_page.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
     assert_react_entry(react_page.text)
 
     assert client.get("/canvas-mvp-legacy").status_code == 404
@@ -35,6 +38,7 @@ def test_workflow_pages_use_react_spa_fallback():
     for step in ("assets", "asset-library-review", "image-processing", "prompts", "generator", "timeline", "compose", "sound", "output", "tasks"):
         response = client.get(f"/workflow/{step}")
         assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
         assert_react_entry(response.text)
     assert client.get("/workflow/unknown").status_code == 404
 
