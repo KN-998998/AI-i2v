@@ -52,6 +52,8 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [busy, setBusy] = useState(false);
   const [refreshingLibrary, setRefreshingLibrary] = useState(false);
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [jobCompletedAt, setJobCompletedAt] = useState<number | null>(null);
   const categories = inventory?.categories ?? [];
 
   const applyConfirmedJob = useCallback((nextJob: OssAssetJob): number => {
@@ -116,6 +118,19 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
     return () => { cancelled = true; };
   }, [applyConfirmedJob, onToast, saveDraft, savedJobId]);
 
+  // 任务完成后10秒自动隐藏状态徽章
+  useEffect(() => {
+    if (!job) return undefined;
+    const wasActive = ACTIVE_STATUSES.has(job.status);
+    const isNowComplete = job.status === "completed" || job.status === "cancelled";
+    if (!wasActive && isNowComplete && jobCompletedAt === null) {
+      setJobCompletedAt(Date.now());
+    }
+    if (jobCompletedAt !== null && Date.now() - jobCompletedAt >= 10000) {
+      setJobCompletedAt(null);
+    }
+  }, [job, jobCompletedAt]);
+
   const selectedCount = useMemo(() => Object.values(counts).reduce((total, count) => total + count, 0), [counts]);
   const isActive = Boolean(job && ACTIVE_STATUSES.has(job.status));
   const canSubmit = selectedCount > 0 && !busy && !restoringJob && !isActive && !inventory?.refreshing && categories.length > 0 && inventory?.status !== "scanning";
@@ -153,6 +168,11 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
       setInventory(next);
       setCounts(current => Object.fromEntries(next.categories.map(item => [item.category, Math.min(current[item.category] ?? 0, item.dish_count)])));
       onToast(next.refreshing ? "已开始刷新 OSS 素材库，完成后会更新分类数量" : "OSS 素材库已刷新");
+      // 显示成功提示条，3秒后自动隐藏
+      if (!next.refreshing) {
+        setShowSuccessBanner(true);
+        setTimeout(() => setShowSuccessBanner(false), 3000);
+      }
     } catch (error) {
       onToast(error instanceof Error ? error.message : "刷新 OSS 素材库失败");
     } finally {
@@ -195,17 +215,21 @@ export function OssAssetExtractionPanel({ onToast }: { onToast: (message: string
   return <section className="step-panel asset-library-batch-panel">
     <div className="panel-section-head">
       <div>
-        <span className="panel-label">FIXED OSS ASSET LIBRARY</span>
-        <h2>从云端素材库抽取</h2>
-        <p className="muted">素材库由服务器固定配置，系统会按分类数量随机抽取不同菜品文件夹中的一张图片。</p>
+        <span className="panel-label">CLOUD ASSET LIBRARY</span>
+        <h2>云端素材抽取</h2>
+        <p className="muted">从阿里云 OSS 固定素材库按分类抽取，系统自动选择不同菜品文件夹的图片。</p>
       </div>
       <div className="panel-actions">
         <button type="button" className="btn" disabled={loadingCategories || busy || isActive || refreshingLibrary || Boolean(inventory?.refreshing)} onClick={() => void refreshLibrary()}>
           {refreshingLibrary || inventory?.refreshing ? "正在刷新..." : "刷新素材库"}
         </button>
-        {job && <span className={`node-status ${job.status === "error" ? "source-pending" : "source-ready"}`}>{STATUS_LABELS[job.status]}</span>}
+        {job && (ACTIVE_STATUSES.has(job.status) || (jobCompletedAt !== null && Date.now() - jobCompletedAt < 10000)) && (
+          <span className={`node-status ${job.status === "error" ? "source-pending" : "source-ready"}`}>{STATUS_LABELS[job.status]}</span>
+        )}
       </div>
     </div>
+
+    {showSuccessBanner && <div className="success-banner">✓ 素材库已刷新，分类数量已更新</div>}
 
     {loadingCategories && <small className="muted">正在读取固定素材库分类...</small>}
     {restoringJob && <small className="muted">正在恢复上次确认的素材任务...</small>}
